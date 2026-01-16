@@ -116,16 +116,17 @@ export async function setup() {
 
   console.log('API key saved.\n')
 
-  const setupClaude = await question('Configure Claude Code integration? (Y/n): ')
-  if (setupClaude.toLowerCase() !== 'n') {
-    await enableHooks(true)
+  const setupHooks = await question('Configure CLI integrations (Claude Code, Gemini CLI)? (Y/n): ')
+  if (setupHooks.toLowerCase() !== 'n') {
+    await enableHooks(null, true)
     console.log('Global settings configured (SessionStart/Stop hooks).')
   }
 
   console.log('\nSetup complete!')
-  console.log('Auto-sync enabled: .lk updates after each Claude response.')
-  console.log('\nStart Claude Code:')
-  console.log('  claude')
+  console.log('Auto-sync enabled: .lk updates after each AI response.')
+  console.log('\nNext steps:')
+  console.log('  lk sync      # Initialize project context')
+  console.log('  claude       # or: gemini')
 
   rl.close()
 }

@@ -93,14 +93,14 @@ export function generateLicense(options = {}) {
   sign.update(payload)
   const signature = sign.sign(privateKey, 'base64url')
 
-  // Format: CLK-{payload}.{signature}
-  return `CLK-${payload}.${signature}`
+  // Format: LK-{payload}.{signature}
+  return `LK-${payload}.${signature}`
 }
 
 // Validate a license key (offline, uses public key)
 export function validateLicenseOffline(key) {
   try {
-    if (!key || !key.startsWith('CLK-')) {
+    if (!key || !key.startsWith('LK-')) {
       return { valid: false, error: 'Invalid format' }
     }
 
@@ -136,7 +136,7 @@ export function validateLicenseOffline(key) {
 // Parse license to see its data (without full validation)
 export function parseLicense(key) {
   try {
-    if (!key || !key.startsWith('CLK-')) return null
+    if (!key || !key.startsWith('LK-')) return null
     const payload = key.slice(4).split('.')[0]
     return JSON.parse(Buffer.from(payload, 'base64url').toString())
   } catch {
