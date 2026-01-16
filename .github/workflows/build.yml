@@ -47,9 +47,9 @@ jobs:
           INSTALL_DIR="/usr/local/bin"
 
           echo "Installing lk $VERSION..."
-          sudo curl -fsSL "$URL" -o "$INSTALL_DIR/claude-lk"
-          sudo chmod +x "$INSTALL_DIR/claude-lk"
-          echo "Installed to $INSTALL_DIR/claude-lk"
+          sudo curl -fsSL "$URL" -o "$INSTALL_DIR/lk"
+          sudo chmod +x "$INSTALL_DIR/lk"
+          echo "Installed to $INSTALL_DIR/lk"
           lk --version
           SCRIPT
           sed -i "s/__VERSION__/$VERSION/" dist/install.sh
