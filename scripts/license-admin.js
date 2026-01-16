@@ -101,7 +101,7 @@ export function validateLicenseOffline(key) {
       return { valid: false, error: 'Invalid format' }
     }
 
-    const parts = key.slice(4).split('.')
+    const parts = key.slice(3).split('.')
     if (parts.length !== 2) {
       return { valid: false, error: 'Invalid format' }
     }
@@ -132,7 +132,7 @@ export function validateLicenseOffline(key) {
 export function parseLicense(key) {
   try {
     if (!key || !key.startsWith('LK-')) return null
-    const payload = key.slice(4).split('.')[0]
+    const payload = key.slice(3).split('.')[0]
     return JSON.parse(Buffer.from(payload, 'base64url').toString())
   } catch {
     return null
