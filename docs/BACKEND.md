@@ -11,7 +11,7 @@ Valida una licencia existente.
 **Request:**
 ```json
 {
-  "key": "CLK-XXXX-XXXX-XXXX",
+  "key": "LK-XXXX-XXXX-XXXX",
   "device": "a1b2c3d4e5f6"
 }
 ```
@@ -40,7 +40,7 @@ Activa una licencia en un nuevo dispositivo.
 **Request:**
 ```json
 {
-  "key": "CLK-XXXX-XXXX-XXXX",
+  "key": "LK-XXXX-XXXX-XXXX",
   "device": "a1b2c3d4e5f6"
 }
 ```
@@ -125,7 +125,7 @@ CREATE TABLE subscriptions (
 
 ## Seguridad
 
-- License keys: formato `CLK-XXXX-XXXX-XXXX` (UUID-based)
+- License keys: formato `LK-XXXX-XXXX-XXXX` (UUID-based)
 - Device hash: SHA256 de hostname (no PII)
 - Rate limiting: 10 req/min por IP
 - Cache: validación cacheada 24h en cliente

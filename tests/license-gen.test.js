@@ -11,7 +11,7 @@ describe.skipIf(!hasPrivateKey)('license-gen', () => {
   describe('generateLicense', () => {
     it('should generate a valid license key', () => {
       const license = generateLicense()
-      expect(license).toMatch(/^CLK-[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
+      expect(license).toMatch(/^LK-[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
     })
 
     it('should include email in license data', () => {
