@@ -1,0 +1,340 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { extractExports } from '../src/lib/parser.js'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+
+const tmpDir = path.join(os.tmpdir(), 'lk-test-parser')
+
+beforeAll(() => {
+  fs.mkdirSync(tmpDir, { recursive: true })
+})
+
+afterAll(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true })
+})
+
+function writeTestFile(name, content) {
+  const filePath = path.join(tmpDir, name)
+  fs.writeFileSync(filePath, content)
+  return filePath
+}
+
+describe('extractExports', () => {
+  it('returns empty array for non-existent file', () => {
+    expect(extractExports('/nonexistent/file.js')).toEqual([])
+  })
+
+  it('returns empty array for unknown extension', () => {
+    const file = writeTestFile('test.xyz', 'some content')
+    expect(extractExports(file)).toEqual([])
+  })
+})
+
+describe('JavaScript extraction', () => {
+  it('extracts export function', () => {
+    const file = writeTestFile('test1.js', 'export function foo() {}')
+    expect(extractExports(file)).toEqual(['foo'])
+  })
+
+  it('extracts export const', () => {
+    const file = writeTestFile('test2.js', 'export const bar = 123')
+    expect(extractExports(file)).toEqual(['bar'])
+  })
+
+  it('extracts export class', () => {
+    const file = writeTestFile('test3.js', 'export class MyClass {}')
+    expect(extractExports(file)).toEqual(['MyClass'])
+  })
+
+  it('extracts async function', () => {
+    const file = writeTestFile('test4.js', 'export async function fetchData() {}')
+    expect(extractExports(file)).toEqual(['fetchData'])
+  })
+
+  it('extracts named exports', () => {
+    const file = writeTestFile('test5.js', `
+      const a = 1
+      const b = 2
+      export { a, b }
+    `)
+    expect(extractExports(file)).toEqual(['a', 'b'])
+  })
+
+  it('extracts module.exports object', () => {
+    const file = writeTestFile('test6.js', `
+      function foo() {}
+      function bar() {}
+      module.exports = { foo, bar }
+    `)
+    expect(extractExports(file)).toEqual(['bar', 'foo'])
+  })
+
+  it('extracts module.exports.name', () => {
+    const file = writeTestFile('test7.js', `
+      module.exports.myFunc = function() {}
+      exports.otherFunc = function() {}
+    `)
+    expect(extractExports(file)).toEqual(['myFunc', 'otherFunc'])
+  })
+
+  it('ignores comments', () => {
+    const file = writeTestFile('test8.js', `
+      // export function commented() {}
+      /* export function blockCommented() {} */
+      export function real() {}
+    `)
+    expect(extractExports(file)).toEqual(['real'])
+  })
+
+  it('handles multiple exports', () => {
+    const file = writeTestFile('test9.js', `
+      export function one() {}
+      export const two = 2
+      export class Three {}
+      export async function four() {}
+    `)
+    expect(extractExports(file)).toEqual(['Three', 'four', 'one', 'two'])
+  })
+
+  it('handles TypeScript files', () => {
+    const file = writeTestFile('test.ts', `
+      export interface User {}
+      export function getUser() {}
+      export const API_URL = 'http://...'
+    `)
+    const exports = extractExports(file)
+    expect(exports).toContain('getUser')
+    expect(exports).toContain('API_URL')
+  })
+})
+
+describe('Python extraction', () => {
+  it('extracts def functions', () => {
+    const file = writeTestFile('test.py', `
+def foo():
+    pass
+
+def bar():
+    pass
+`)
+    expect(extractExports(file)).toEqual(['bar', 'foo'])
+  })
+
+  it('extracts class definitions', () => {
+    const file = writeTestFile('test2.py', `
+class MyClass:
+    pass
+
+class AnotherClass:
+    pass
+`)
+    expect(extractExports(file)).toEqual(['AnotherClass', 'MyClass'])
+  })
+
+  it('extracts async def', () => {
+    const file = writeTestFile('test3.py', `
+async def fetch_data():
+    pass
+`)
+    expect(extractExports(file)).toEqual(['fetch_data'])
+  })
+
+  it('ignores private functions', () => {
+    const file = writeTestFile('test4.py', `
+def public():
+    pass
+
+def _private():
+    pass
+
+def __dunder__():
+    pass
+`)
+    expect(extractExports(file)).toEqual(['public'])
+  })
+
+  it('ignores comments', () => {
+    const file = writeTestFile('test5.py', `
+# def commented():
+#     pass
+"""
+def docstring_commented():
+    pass
+"""
+def real():
+    pass
+`)
+    expect(extractExports(file)).toEqual(['real'])
+  })
+})
+
+describe('Go extraction', () => {
+  it('extracts exported functions (capitalized)', () => {
+    const file = writeTestFile('test.go', `
+package main
+
+func ExportedFunc() {}
+func privateFunc() {}
+`)
+    expect(extractExports(file)).toEqual(['ExportedFunc'])
+  })
+
+  it('extracts exported types', () => {
+    const file = writeTestFile('test2.go', `
+package main
+
+type MyStruct struct {}
+type myPrivate struct {}
+`)
+    expect(extractExports(file)).toEqual(['MyStruct'])
+  })
+
+  it('extracts method receivers', () => {
+    const file = writeTestFile('test3.go', `
+package main
+
+func (s *Server) HandleRequest() {}
+func (s *Server) internal() {}
+`)
+    expect(extractExports(file)).toEqual(['HandleRequest'])
+  })
+})
+
+describe('PHP extraction', () => {
+  it('extracts functions', () => {
+    const file = writeTestFile('test.php', `<?php
+function myFunction() {}
+`)
+    expect(extractExports(file)).toEqual(['myFunction'])
+  })
+
+  it('extracts public methods', () => {
+    const file = writeTestFile('test2.php', `<?php
+class MyClass {
+    public function publicMethod() {}
+    private function privateMethod() {}
+}
+`)
+    expect(extractExports(file)).toContain('publicMethod')
+    expect(extractExports(file)).toContain('MyClass')
+  })
+
+  it('ignores magic methods', () => {
+    const file = writeTestFile('test3.php', `<?php
+class MyClass {
+    public function __construct() {}
+    public function __toString() {}
+    public function realMethod() {}
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('realMethod')
+    expect(exports).not.toContain('__construct')
+  })
+})
+
+describe('Ruby extraction', () => {
+  it('extracts methods', () => {
+    const file = writeTestFile('test.rb', `
+def my_method
+end
+
+def another_method
+end
+`)
+    expect(extractExports(file)).toEqual(['another_method', 'my_method'])
+  })
+
+  it('extracts class methods', () => {
+    const file = writeTestFile('test2.rb', `
+def self.class_method
+end
+`)
+    expect(extractExports(file)).toEqual(['class_method'])
+  })
+
+  it('extracts classes and modules', () => {
+    const file = writeTestFile('test3.rb', `
+class MyClass
+end
+
+module MyModule
+end
+`)
+    expect(extractExports(file)).toEqual(['MyClass', 'MyModule'])
+  })
+
+  it('ignores initialize and private', () => {
+    const file = writeTestFile('test4.rb', `
+def initialize
+end
+
+def _private_method
+end
+
+def public_method
+end
+`)
+    expect(extractExports(file)).toEqual(['public_method'])
+  })
+})
+
+describe('Rust extraction', () => {
+  it('extracts pub fn', () => {
+    const file = writeTestFile('test.rs', `
+pub fn exported() {}
+fn private() {}
+`)
+    expect(extractExports(file)).toEqual(['exported'])
+  })
+
+  it('extracts pub async fn', () => {
+    const file = writeTestFile('test2.rs', `
+pub async fn async_func() {}
+`)
+    expect(extractExports(file)).toEqual(['async_func'])
+  })
+
+  it('extracts pub struct/enum/trait', () => {
+    const file = writeTestFile('test3.rs', `
+pub struct MyStruct {}
+pub enum MyEnum {}
+pub trait MyTrait {}
+struct PrivateStruct {}
+`)
+    expect(extractExports(file)).toEqual(['MyEnum', 'MyStruct', 'MyTrait'])
+  })
+})
+
+describe('Java extraction', () => {
+  it('extracts public classes', () => {
+    const file = writeTestFile('Test.java', `
+public class MyClass {}
+class PackagePrivate {}
+`)
+    expect(extractExports(file)).toEqual(['MyClass'])
+  })
+
+  it('extracts public methods', () => {
+    const file = writeTestFile('Test2.java', `
+public class MyClass {
+    public void myMethod() {}
+    private void privateMethod() {}
+    public static String staticMethod() {}
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('MyClass')
+    expect(exports).toContain('myMethod')
+    expect(exports).toContain('staticMethod')
+  })
+
+  it('extracts interfaces and enums', () => {
+    const file = writeTestFile('Test3.java', `
+public interface MyInterface {}
+public enum MyEnum {}
+`)
+    expect(extractExports(file)).toEqual(['MyEnum', 'MyInterface'])
+  })
+})
