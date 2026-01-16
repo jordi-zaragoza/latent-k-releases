@@ -1,12 +1,12 @@
 import { execSync } from 'child_process'
 import { existsSync, createWriteStream, unlinkSync, chmodSync, accessSync, constants, mkdirSync } from 'fs'
-import { dirname, join } from 'path'
-import { platform, arch, homedir } from 'os'
+import { dirname } from 'path'
+import { platform, arch } from 'os'
 import https from 'https'
 import { VERSION } from '../lib/version.js'
 
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
-const LK_BIN_PATH = join(homedir(), '.lk', 'bin', 'lk')
+const LK_BIN_PATH = '/usr/local/bin/lk'
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
 
 function canWrite(path) {
@@ -153,7 +153,7 @@ export async function update() {
     const tempPath = binaryPath + '.new'
     const backupPath = binaryPath + '.backup'
 
-    // Ensure ~/.lk/bin directory exists
+    // Ensure /usr/local/bin directory exists
     const binDir = dirname(binaryPath)
     if (!existsSync(binDir)) {
       mkdirSync(binDir, { recursive: true })

@@ -83,7 +83,7 @@ async function enableSingleCli(cli, silent = false) {
     settings.hooks = settings.hooks || {}
 
     let contextCmd, syncCmd
-    const lkBin = '$HOME/.lk/bin/lk'
+    const lkBin = '/usr/local/bin/lk'
     if (DEV_MODE) {
       const sourcePath = getSourcePath()
       contextCmd = `LK_DEV=1 node ${sourcePath} context || true`
