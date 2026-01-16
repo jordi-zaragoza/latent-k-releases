@@ -9,13 +9,13 @@ const PUBLIC_KEY_PATH = join(KEYS_DIR, 'public.pem')
 
 // Public key embedded in binary (for validation)
 const EMBEDDED_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvSKE5KY5RfFKiHTwL7F2
-yarK/geo9Y+iAqio4f/JowIpVTbYDUVUhZVwnZZhJdgqWsyPlY4j2yQ4BeTXeae6
-K4neZ+ZCIh+XkIdizByHpZ84+vWHVeqLxqm7aElTHTx23DsqUmnGNxsv4ZSBfPci
-eLxVbjhTJtOC79fZtA4Fw7v3WfaF26tWuch49mFVs7eVl5pXen50oKsaeL1GR+jF
-mf9E+V2OIWrtoV73axx28N/VrGR9OAs4RA33C+kMvGaiTvkjjBOxICEbzGDFrhDQ
-mnm6+TSUhM2ebxmGB5ZIF+nM6xdCYhOoE9zpN5hlJdcKJHsnHzRTnmsmziDnPdGo
-gQIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx9GbsLiv2hshCLjPSyaS
+9cwh6MWlw9ck916siSPg4rFn+OaExxZXLHGAnaCeq/payXYFDrYOLm94RIgg0Re0
+X+NPkWcDK5c3EG42kboRYLS5/uyyQ1kbHcapCqxQ0s4gxhLgiFQNCjLUjNjnl5Yi
+Uo9hbrXdZEvFCmwVTigW7o2Mrk5jJLdUn85r/V73mNZ1Lz11muHaDeZRiw4F8v1c
+5qXjcdxr8kixAB6Kqd6sP9oXPoRkbfgswpihFzv2XCrBZm+z/9K4NBMFXx/R/y24
+R19BlU2aIqUKz1ubdrCxlTLNBiVuXRYLAYoTi+Vb7mOheYHgszddgIFxk8AutXD0
+KQIDAQAB
 -----END PUBLIC KEY-----`
 
 // Generate RSA key pair (run once, keep private key safe!)
