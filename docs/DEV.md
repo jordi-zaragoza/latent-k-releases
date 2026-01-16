@@ -8,12 +8,12 @@ Uses the local source code directly. Changes are reflected immediately.
 
 ```bash
 # Link local project to global npm
-cd ~/projects/personal/claude-lk
+cd ~/projects/personal/latent_k
 npm link
 
 # Verify it points to local
-ls -la $(which claude-lk)
-# Should show: -> ../lib/node_modules/claude-lk/src/cli.js
+ls -la $(which lk)
+# Should show: -> ../lib/node_modules/latent-k/src/cli.js
 ```
 
 ### Binary Mode (production)
@@ -26,12 +26,12 @@ npm run build          # Current platform only
 npm run build:all      # All platforms (linux, macos, win)
 
 # Install binary (replaces npm link)
-sudo cp dist/claude-lk-linux /usr/local/bin/claude-lk
-chmod +x /usr/local/bin/claude-lk
+sudo cp dist/lk-linux /usr/local/bin/lk
+chmod +x /usr/local/bin/lk
 
 # Verify
-which claude-lk
-# Should show: /usr/local/bin/claude-lk
+which lk
+# Should show: /usr/local/bin/lk
 ```
 
 ## Switching Between Modes
@@ -40,10 +40,10 @@ which claude-lk
 
 ```bash
 # Remove binary if installed
-sudo rm /usr/local/bin/claude-lk
+sudo rm /usr/local/bin/lk
 
 # Re-link local project
-cd ~/projects/personal/claude-lk
+cd ~/projects/personal/latent_k
 npm link
 ```
 
@@ -51,10 +51,10 @@ npm link
 
 ```bash
 # Unlink npm
-npm unlink -g claude-lk
+npm unlink -g latent-k
 
 # Install binary
-sudo cp dist/claude-lk-linux /usr/local/bin/claude-lk
+sudo cp dist/lk-linux /usr/local/bin/lk
 ```
 
 ## Logs
