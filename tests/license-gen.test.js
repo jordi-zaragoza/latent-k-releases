@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
-import { generateLicense, validateLicenseOffline, parseLicense, generateBatch } from '../src/lib/license-gen.js'
+
+// Generation functions from admin script (never in binary)
+import { generateLicense, generateBatch } from '../scripts/license-admin.js'
+// Validation functions from client library (included in binary)
+import { validateLicenseOffline, parseLicense } from '../src/lib/license-gen.js'
 
 const PRIVATE_KEY_PATH = join(homedir(), '.lk-keys', 'private.pem')
 const hasPrivateKey = existsSync(PRIVATE_KEY_PATH)

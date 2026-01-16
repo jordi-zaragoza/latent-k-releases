@@ -163,60 +163,18 @@ program
     process.exit(0)
   })
 
-// Dev-only commands (license generation)
+// Dev-only commands
 if (DEV_MODE) {
   program
     .command('dev [action]')
     .description('[DEV] Toggle between source and binary mode (status|toggle|source|binary)')
     .action(dev)
-  program
-    .command('generate-keys')
-    .description('[DEV] Generate RSA key pair for license signing')
-    .action(async () => {
-      const { generateKeyPair } = await import('./lib/license-gen.js')
-      const keys = generateKeyPair()
-      console.log('\nPublic key (embed in license.js):')
-      console.log(keys.publicKey)
-    })
 
-  program
-    .command('generate-license')
-    .description('[DEV] Generate a license key')
-    .option('-e, --email <email>', 'Customer email')
-    .option('-t, --type <type>', 'License type (standard/pro)', 'standard')
-    .option('-n, --count <n>', 'Generate multiple licenses', parseInt)
-    .option('-d, --days <n>', 'License duration in days', parseInt)
-    .option('-m, --monthly', 'Generate 30-day license')
-    .action(async (options) => {
-      const { generateKeyPair, generateLicense, generateBatch, parseLicense } = await import('./lib/license-gen.js')
-      try {
-        // Determine duration: --monthly takes precedence, then --days
-        const durationDays = options.monthly ? 30 : options.days || null
-
-        if (options.count && options.count > 1) {
-          const licenses = generateBatch(options.count, {
-            email: options.email,
-            type: options.type,
-            durationDays
-          })
-          console.log(`Generated ${licenses.length} licenses${durationDays ? ` (${durationDays} days)` : ' (lifetime)'}:\n`)
-          licenses.forEach(l => console.log(l))
-        } else {
-          const license = generateLicense({
-            email: options.email,
-            type: options.type,
-            durationDays
-          })
-          console.log(`Generated license${durationDays ? ` (${durationDays} days)` : ' (lifetime)'}:\n`)
-          console.log(license)
-          console.log('\nLicense data:')
-          console.log(parseLicense(license))
-        }
-      } catch (err) {
-        console.error(`✗ ${err.message}`)
-        console.log('\nRun first: lk generate-keys')
-      }
-    })
+  // License generation commands removed from CLI.
+  // Use scripts/license-admin.js directly:
+  //   node scripts/license-admin.js keys
+  //   node scripts/license-admin.js generate --email user@example.com
+  //   node scripts/license-admin.js batch 10 --type pro --days 365
 }
 
 program.parse()
