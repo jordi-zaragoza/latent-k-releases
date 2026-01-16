@@ -83,13 +83,14 @@ async function enableSingleCli(cli, silent = false) {
     settings.hooks = settings.hooks || {}
 
     let contextCmd, syncCmd
+    const lkBin = '$HOME/.lk/bin/lk'
     if (DEV_MODE) {
       const sourcePath = getSourcePath()
       contextCmd = `LK_DEV=1 node ${sourcePath} context || true`
       syncCmd = `LK_DEV=1 node ${sourcePath} sync`
     } else {
-      contextCmd = 'LK_INTERNAL=1 lk context || true'
-      syncCmd = 'lk sync'
+      contextCmd = `LK_INTERNAL=1 ${lkBin} context || true`
+      syncCmd = `${lkBin} sync`
     }
 
     let added = false

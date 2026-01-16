@@ -173,15 +173,15 @@ async function updateClaudeHooks(mode) {
     return false
   }
 
-  const binaryPath = getBinaryPath()
+  const lkBin = '$HOME/.lk/bin/lk'
   const sourcePath = getSourcePath()
 
   const contextCmd = mode === 'binary'
-    ? `LK_INTERNAL=1 ${binaryPath} context || true`
+    ? `LK_INTERNAL=1 ${lkBin} context || true`
     : `LK_DEV=1 node ${sourcePath} context || true`
 
   const syncCmd = mode === 'binary'
-    ? `${binaryPath} sync`
+    ? `${lkBin} sync`
     : `LK_DEV=1 node ${sourcePath} sync`
 
   // Update SessionStart hook

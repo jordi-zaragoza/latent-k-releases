@@ -1,11 +1,12 @@
 import { execSync } from 'child_process'
-import { existsSync, createWriteStream, unlinkSync, chmodSync, accessSync, constants } from 'fs'
-import { dirname } from 'path'
-import { platform, arch } from 'os'
+import { existsSync, createWriteStream, unlinkSync, chmodSync, accessSync, constants, mkdirSync } from 'fs'
+import { dirname, join } from 'path'
+import { platform, arch, homedir } from 'os'
 import https from 'https'
 import { VERSION } from '../lib/version.js'
 
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
+const LK_BIN_PATH = join(homedir(), '.lk', 'bin', 'lk')
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
 
 function canWrite(path) {
@@ -148,14 +149,19 @@ export async function update() {
       process.exit(1)
     }
 
-    const binaryPath = process.argv[0]
+    const binaryPath = LK_BIN_PATH
     const tempPath = binaryPath + '.new'
     const backupPath = binaryPath + '.backup'
 
+    // Ensure ~/.lk/bin directory exists
+    const binDir = dirname(binaryPath)
+    if (!existsSync(binDir)) {
+      mkdirSync(binDir, { recursive: true })
+    }
+
     // Check permissions before downloading
     if (!canWrite(binaryPath)) {
-      console.log('\nPermission denied. Run with sudo:')
-      console.log('  sudo lk update')
+      console.log('\nPermission denied writing to:', binaryPath)
       process.exit(1)
     }
 
