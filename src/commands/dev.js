@@ -17,7 +17,7 @@ function getModeFilePath() {
 }
 
 function getBinaryDir() {
-  return join(homedir(), '.lk', 'bin')
+  return '/usr/local/bin'
 }
 
 function getBinaryPath() {
@@ -173,7 +173,7 @@ async function updateClaudeHooks(mode) {
     return false
   }
 
-  const lkBin = '$HOME/.lk/bin/lk'
+  const lkBin = '/usr/local/bin/lk'
   const sourcePath = getSourcePath()
 
   const contextCmd = mode === 'binary'
