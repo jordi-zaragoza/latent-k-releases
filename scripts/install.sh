@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# Claude-LK Installer
-# Usage: curl -fsSL https://tu-dominio.com/install.sh | bash
+# Latent-K Installer
+# Usage: curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download/install.sh | bash
 
 REPO="jordi-zaragoza/latent-k-releases"
-VERSION="v1.1.0"
+VERSION="v1.0.0"
 INSTALL_DIR="/usr/local/bin"
 
 # Colors
@@ -53,8 +53,8 @@ get_download_url() {
 # Main installation
 main() {
     echo ""
-    echo "  Claude-LK Installer"
-    echo "  ==================="
+    echo "  Latent-K Installer"
+    echo "  =================="
     echo ""
 
     # Detect platform
