@@ -88,7 +88,8 @@ export const statePath = root => path.join(root, LK_DIR, STATE_FILE)
 // State tracking for deferred project regeneration
 export function loadState(root) {
   try {
-    const content = fs.readFileSync(statePath(root), 'utf8')
+    const raw = fs.readFileSync(statePath(root), 'utf8')
+    const content = decrypt(raw)
     return JSON.parse(content)
   } catch {
     return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
@@ -96,20 +97,22 @@ export function loadState(root) {
 }
 
 export function saveState(root, state) {
-  fs.writeFileSync(statePath(root), JSON.stringify(state, null, 2))
+  fs.writeFileSync(statePath(root), encrypt(JSON.stringify(state, null, 2)))
 }
 
 // Ignore file handling
 export function loadIgnore(root) {
   const p = ignorePath(root)
   if (!fs.existsSync(p)) return []
-  return fs.readFileSync(p, 'utf8').split('\n').filter(l => l.trim() && !l.startsWith('#'))
+  const raw = fs.readFileSync(p, 'utf8')
+  const content = decrypt(raw)
+  return content.split('\n').filter(l => l.trim() && !l.startsWith('#'))
 }
 
 export function saveIgnore(root, patterns) {
   const dir = lkPath(root)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(ignorePath(root), patterns.join('\n') + '\n')
+  fs.writeFileSync(ignorePath(root), encrypt(patterns.join('\n') + '\n'))
   log('CONTEXT', `Saved ${patterns.length} ignore patterns`)
 }
 
