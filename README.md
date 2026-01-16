@@ -13,7 +13,7 @@ Auto-sync context for AI coding assistants (Claude Code, Gemini CLI).
 ## Installation
 
 ```bash
-curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.0.4/install.sh | bash
+curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.0.5/install.sh | bash
 ```
 
 ## Quick Start
