@@ -179,21 +179,27 @@ async function disableSingleCli(cli, silent = false) {
 
     let removed = false
 
-    // Remove from UserPromptSubmit
+    // Remove all LK hooks from UserPromptSubmit
     if (hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
       settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'context')
       if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit
       removed = true
     }
-    // Remove SessionStart LK hooks (both context and print message)
+
+    // Remove all LK hooks from SessionStart (session-info, context, LK context)
     if (settings.hooks.SessionStart) {
       settings.hooks.SessionStart = settings.hooks.SessionStart.filter(h =>
-        !h.hooks?.some(hh => hh.command?.includes('LK context') || hh.command?.includes('context'))
+        !h.hooks?.some(hh =>
+          hh.command?.includes('session-info') ||
+          hh.command?.includes('LK context') ||
+          isLkHook(hh.command, 'context')
+        )
       )
       if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart
       removed = true
     }
 
+    // Remove sync hooks from Stop/SessionEnd
     if (hasLkHook(settings.hooks[stopEvent], 'sync')) {
       settings.hooks[stopEvent] = removeLkHooks(settings.hooks[stopEvent], 'sync')
       if (settings.hooks[stopEvent].length === 0) delete settings.hooks[stopEvent]
