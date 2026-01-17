@@ -181,7 +181,7 @@ program
     }
   })
 
-// context command only available when running from source (not compiled binary)
+// Dev/hook commands only available when running from source (not compiled binary)
 if (!IS_BINARY) {
   program
     .command('context')
@@ -206,13 +206,13 @@ if (!IS_BINARY) {
         console.log(context)
       }
     })
-}
 
-program
-  .command('expand [prompt]')
-  .description('Expand prompt with context (JSON output for hooks)')
-  .option('--debug', 'Show debug info to stderr')
-  .action((prompt, options) => expandCommand(prompt, { debug: options.debug }))
+  program
+    .command('expand [prompt]')
+    .description('[DEV] Expand prompt with context (for hooks)')
+    .option('--debug', 'Show debug info to stderr')
+    .action((prompt, options) => expandCommand(prompt, { debug: options.debug }))
+}
 
 program
   .command('session-info')
