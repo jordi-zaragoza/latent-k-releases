@@ -52,6 +52,10 @@ function isLkHook(command, type) {
   if (!command) return false
   // Match lk command but not other commands containing 'lk'
   const isLk = /\blk\b/.test(command) || command.includes('cli.js')
+  // 'expand' also matches legacy 'context' hooks
+  if (type === 'expand') {
+    return isLk && (command.includes('expand') || command.includes('context'))
+  }
   return isLk && command.includes(type)
 }
 
@@ -82,14 +86,14 @@ async function enableSingleCli(cli, silent = false) {
     const settings = await loadSettings(cli)
     settings.hooks = settings.hooks || {}
 
-    let contextCmd, syncCmd
+    let expandCmd, syncCmd
     const lkBin = '/usr/local/bin/lk'
     if (DEV_MODE) {
       const sourcePath = getSourcePath()
-      contextCmd = `LK_DEV=1 node ${sourcePath} context || true`
+      expandCmd = `LK_DEV=1 node ${sourcePath} expand || true`
       syncCmd = `LK_DEV=1 node ${sourcePath} sync`
     } else {
-      contextCmd = `${lkBin} context || true`
+      expandCmd = `${lkBin} expand || true`
       syncCmd = `${lkBin} sync`
     }
 
@@ -116,12 +120,12 @@ async function enableSingleCli(cli, silent = false) {
       added = true
     }
 
-    // UserPromptSubmit hook (inject context on every prompt)
+    // UserPromptSubmit hook (expand prompt with context)
     settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit || []
-    if (!hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
+    if (!hasLkHook(settings.hooks.UserPromptSubmit, 'expand') && !hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
       settings.hooks.UserPromptSubmit.push({
         matcher: '',
-        hooks: [{ type: 'command', command: contextCmd }]
+        hooks: [{ type: 'command', command: expandCmd }]
       })
       added = true
     }
@@ -138,10 +142,19 @@ async function enableSingleCli(cli, silent = false) {
 
     // Remove legacy hooks
     if (settings.hooks.Start) delete settings.hooks.Start
-    // Migrate from SessionStart to UserPromptSubmit
+    // Migrate from SessionStart to UserPromptSubmit (remove old context hooks)
     if (hasLkHook(settings.hooks.SessionStart, 'context')) {
       settings.hooks.SessionStart = removeLkHooks(settings.hooks.SessionStart, 'context')
       if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart
+    }
+    // Migrate from old context to new expand in UserPromptSubmit
+    if (hasLkHook(settings.hooks.UserPromptSubmit, 'context') && !settings.hooks.UserPromptSubmit.some(h => h.hooks?.some(hh => hh.command?.includes('expand')))) {
+      settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'context')
+      settings.hooks.UserPromptSubmit.push({
+        matcher: '',
+        hooks: [{ type: 'command', command: expandCmd }]
+      })
+      added = true
     }
 
     await saveSettings(cli, settings)
@@ -179,8 +192,9 @@ async function disableSingleCli(cli, silent = false) {
 
     let removed = false
 
-    // Remove all LK hooks from UserPromptSubmit
-    if (hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
+    // Remove all LK hooks from UserPromptSubmit (both expand and legacy context)
+    if (hasLkHook(settings.hooks.UserPromptSubmit, 'expand') || hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
+      settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'expand')
       settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'context')
       if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit
       removed = true

@@ -6,6 +6,8 @@ import {
   buildProjectPrompt,
   buildDescribeLkPrompt,
   buildIgnorePrompt,
+  buildClassifyPrompt,
+  buildExpandPrompt,
   parseJsonResponse,
   generateDefaultResults,
   logLlmCall,
@@ -166,4 +168,64 @@ export async function generateIgnore({ files, globalPatterns = [] }) {
   log('ANTHROPIC', `Generated ${lines.length} ignore lines`)
 
   return lines
+}
+
+/**
+ * Classify a user prompt for context routing
+ * @param {string} userPrompt - The user's prompt
+ * @param {string} projectLk - Project metadata in LK format
+ * @param {string[]} availableDomains - List of available domain names
+ * @returns {Promise<{is_project: boolean, direct_answer: string|null, needs_domains: string[]|null, block_reason: string|null}>}
+ */
+export async function classifyPrompt(userPrompt, projectLk, availableDomains = []) {
+  if (!client) initClient()
+
+  log('ANTHROPIC', `classifyPrompt: ${userPrompt.slice(0, 100)}...`)
+
+  const prompt = buildClassifyPrompt(userPrompt, projectLk, availableDomains)
+  const text = await callApi(prompt, 512)
+
+  if (!text) {
+    log('ANTHROPIC', 'Empty response - defaulting to passthrough')
+    return { is_project: false, direct_answer: null, needs_domains: null, block_reason: null }
+  }
+
+  const parsed = parseJsonResponse(text)
+  if (parsed) {
+    log('ANTHROPIC', `Classification: ${JSON.stringify(parsed)}`)
+    return parsed
+  }
+
+  log('ANTHROPIC', 'Parse failed - defaulting to passthrough')
+  return { is_project: false, direct_answer: null, needs_domains: null, block_reason: null }
+}
+
+/**
+ * Expand a user prompt with domain context
+ * @param {string} userPrompt - The user's prompt
+ * @param {string} projectLk - Project metadata in LK format
+ * @param {string} domainLk - Domain details in LK format
+ * @returns {Promise<{direct_answer: string|null, files: Array<{path: string, functions?: string[]}>}>}
+ */
+export async function expandPrompt(userPrompt, projectLk, domainLk) {
+  if (!client) initClient()
+
+  log('ANTHROPIC', `expandPrompt: ${userPrompt.slice(0, 100)}...`)
+
+  const prompt = buildExpandPrompt(userPrompt, projectLk, domainLk)
+  const text = await callApi(prompt, 1024)
+
+  if (!text) {
+    log('ANTHROPIC', 'Empty response - returning empty result')
+    return { direct_answer: null, files: [] }
+  }
+
+  const parsed = parseJsonResponse(text)
+  if (parsed) {
+    log('ANTHROPIC', `Expansion: ${JSON.stringify(parsed)}`)
+    return parsed
+  }
+
+  log('ANTHROPIC', 'Parse failed - returning empty result')
+  return { direct_answer: null, files: [] }
 }

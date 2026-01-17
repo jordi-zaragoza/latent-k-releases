@@ -9,6 +9,8 @@ import {
   buildProjectPrompt,
   buildDescribeLkPrompt,
   buildIgnorePrompt,
+  buildClassifyPrompt,
+  buildExpandPrompt,
   parseJsonResponse,
   extractJsonFromText,
   generateDefaultResults
@@ -333,5 +335,111 @@ describe('generateDefaultResults', () => {
 
   it('returns empty array for empty input', () => {
     expect(generateDefaultResults([])).toEqual([])
+  })
+})
+
+describe('buildClassifyPrompt', () => {
+  const sampleProjectLk = `⦓ID: PROJECT⦔
+⟪VIBE: minimal⟫ ⟪NAME: test-project⟫ ⟪VERSION: 1.0.0⟫
+⟦Δ: Purpose⟧
+A test project for unit tests.
+⟦Δ: Stack⟧
+∑ Tech [Runtime⇨node, Type⇨CLI]`
+
+  it('includes user prompt', () => {
+    const prompt = buildClassifyPrompt('add tests for parser', sampleProjectLk, ['core', 'cli'])
+    expect(prompt).toContain('add tests for parser')
+  })
+
+  it('includes project metadata', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'])
+    expect(prompt).toContain('test-project')
+    expect(prompt).toContain('⦓ID: PROJECT⦔')
+  })
+
+  it('includes available domains', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core', 'cli'])
+    expect(prompt).toContain('AVAILABLE DOMAINS')
+    expect(prompt).toContain('core, cli')
+  })
+
+  it('includes JSON response format', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'])
+    expect(prompt).toContain('"is_project"')
+    expect(prompt).toContain('"direct_answer"')
+    expect(prompt).toContain('"needs_domains"')
+    expect(prompt).toContain('"block_reason"')
+  })
+
+  it('shows none when no domains available', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, [])
+    expect(prompt).toContain('AVAILABLE DOMAINS: [none]')
+  })
+
+  it('includes examples', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'])
+    expect(prompt).toContain('EXAMPLES')
+    expect(prompt).toContain('hello')
+    expect(prompt).toContain('meta_question')
+  })
+})
+
+describe('buildExpandPrompt', () => {
+  const sampleProjectLk = `⦓ID: PROJECT⦔
+⟪NAME: test-project⟫
+⟦Δ: Purpose⟧
+A CLI tool for testing.`
+
+  const sampleDomainLk = `⦓ID: CORE⦔
+⟦Δ: Domain ⫸ Core⟧
+∑ Lib [
+  @src/lib/
+  λ parser.js [⦗abc1234⦘ "parses input" {parse, validate}]
+  λ utils.js [⦗def5678⦘ "helper functions" {format, clean}]
+]`
+
+  it('includes user prompt', () => {
+    const prompt = buildExpandPrompt('add tests', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('add tests')
+  })
+
+  it('includes project section', () => {
+    const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('test-project')
+    expect(prompt).toContain('PROJECT:')
+  })
+
+  it('includes domain files section', () => {
+    const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('DOMAIN FILES:')
+    expect(prompt).toContain('parser.js')
+    expect(prompt).toContain('utils.js')
+  })
+
+  it('includes JSON response format', () => {
+    const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('"direct_answer"')
+    expect(prompt).toContain('"files"')
+    expect(prompt).toContain('"path"')
+    expect(prompt).toContain('"functions"')
+  })
+
+  it('includes file selection rules', () => {
+    const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('FILE SELECTION PRIORITY')
+    expect(prompt).toContain('specific functionality')
+    expect(prompt).toContain('implementation file')
+  })
+
+  it('includes examples', () => {
+    const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('EXAMPLES')
+    expect(prompt).toContain('classifyPrompt')
+    expect(prompt).toContain('add a new command')
+  })
+
+  it('instructs to return only JSON', () => {
+    const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
+    expect(prompt).toContain('Return ONLY JSON')
   })
 })

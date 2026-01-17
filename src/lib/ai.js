@@ -35,3 +35,11 @@ export async function validateApiKey(provider, apiKey) {
   const providerModule = provider === 'anthropic' ? anthropic : gemini
   return providerModule.validateApiKey(apiKey)
 }
+
+export async function classifyPrompt(userPrompt, projectLk, availableDomains = []) {
+  return getProvider().classifyPrompt(userPrompt, projectLk, availableDomains)
+}
+
+export async function expandPrompt(userPrompt, projectLk, domainLk) {
+  return getProvider().expandPrompt(userPrompt, projectLk, domainLk)
+}

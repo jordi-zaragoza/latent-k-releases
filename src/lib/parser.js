@@ -94,3 +94,177 @@ export function extractExports(filePath) {
   if (['java', 'kt', 'kts'].includes(ext)) return extractJava(stripJava(content))
   return []
 }
+
+// ========== Function body extraction ==========
+
+/**
+ * Extract function/class body from source code
+ * @param {string} content - File content
+ * @param {string} name - Function/class name to extract
+ * @param {string} ext - File extension
+ * @returns {string|null} Function body or null if not found
+ */
+export function extractFunctionBody(content, name, ext) {
+  if (['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx'].includes(ext)) {
+    return extractJSFunction(content, name)
+  }
+  if (['py'].includes(ext)) {
+    return extractPyFunction(content, name)
+  }
+  // For other languages, return null (full file will be used)
+  return null
+}
+
+/**
+ * Extract JS/TS function, class, or const arrow function
+ */
+function extractJSFunction(content, name) {
+  const lines = content.split('\n')
+
+  // Patterns to match function/class declaration start
+  const patterns = [
+    new RegExp(`^(export\\s+)?(async\\s+)?function\\s+${name}\\s*\\(`),
+    new RegExp(`^(export\\s+)?(const|let|var)\\s+${name}\\s*=`),
+    new RegExp(`^(export\\s+)?class\\s+${name}\\b`),
+    new RegExp(`^\\s*${name}\\s*\\(`),  // Method in object/class
+    new RegExp(`^\\s*(async\\s+)?${name}\\s*\\(`),  // Method shorthand
+  ]
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (patterns.some(p => p.test(line))) {
+      // Found start, now find end using brace counting
+      return extractBraceBlock(lines, i)
+    }
+  }
+  return null
+}
+
+/**
+ * Extract Python function or class using indentation
+ */
+function extractPyFunction(content, name) {
+  const lines = content.split('\n')
+  const pattern = new RegExp(`^(async\\s+)?def\\s+${name}\\s*\\(|^class\\s+${name}\\b`)
+
+  for (let i = 0; i < lines.length; i++) {
+    if (pattern.test(lines[i])) {
+      return extractIndentBlock(lines, i)
+    }
+  }
+  return null
+}
+
+/**
+ * Extract block using brace counting (JS/TS/Go/Rust/Java/C-style)
+ */
+function extractBraceBlock(lines, startLine) {
+  let braceCount = 0
+  let started = false
+  const result = []
+
+  for (let i = startLine; i < lines.length; i++) {
+    const line = lines[i]
+    result.push(line)
+
+    for (const char of line) {
+      if (char === '{') {
+        braceCount++
+        started = true
+      } else if (char === '}') {
+        braceCount--
+      }
+    }
+
+    // If we started and braces are balanced, we're done
+    if (started && braceCount === 0) {
+      break
+    }
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * Extract block using indentation (Python/Ruby)
+ */
+function extractIndentBlock(lines, startLine) {
+  const result = [lines[startLine]]
+  const defLine = lines[startLine]
+  // Get base indentation (leading whitespace)
+  const baseIndent = defLine.match(/^(\s*)/)[1].length
+
+  for (let i = startLine + 1; i < lines.length; i++) {
+    const line = lines[i]
+    // Empty lines or lines more indented than base belong to block
+    if (line.trim() === '' || line.match(/^(\s*)/)[1].length > baseIndent) {
+      result.push(line)
+    } else {
+      // First line at same or less indentation ends the block
+      break
+    }
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * Extract multiple functions from a file
+ * @param {string} filePath - Path to file
+ * @param {string[]} functionNames - Functions to extract
+ * @returns {Object} Map of function name to code
+ */
+export function extractFunctions(filePath, functionNames) {
+  if (!fs.existsSync(filePath)) return {}
+  const ext = getFileExtension(filePath)
+  const content = fs.readFileSync(filePath, 'utf8')
+  const result = {}
+
+  for (const name of functionNames) {
+    const body = extractFunctionBody(content, name, ext)
+    if (body) {
+      result[name] = body.trim()
+    }
+  }
+
+  return result
+}
+
+/**
+ * Get file content, optionally extracting only specified functions
+ * @param {string} filePath - Path to file
+ * @param {string[]|null} functionNames - Functions to extract, or null for full file
+ * @param {number} maxLength - Max content length
+ * @returns {string} File content or extracted functions
+ */
+export function getFileContext(filePath, functionNames = null, maxLength = 4000) {
+  if (!fs.existsSync(filePath)) return null
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  if (!functionNames || functionNames.length === 0) {
+    // Return trimmed full file
+    if (content.length <= maxLength) return content
+    return content.slice(0, maxLength) + '\n... (truncated)'
+  }
+
+  // Extract specified functions
+  const ext = getFileExtension(filePath)
+  const extracted = []
+
+  for (const name of functionNames) {
+    const body = extractFunctionBody(content, name, ext)
+    if (body) {
+      extracted.push(body.trim())
+    }
+  }
+
+  if (extracted.length === 0) {
+    // No functions found, return trimmed full file
+    if (content.length <= maxLength) return content
+    return content.slice(0, maxLength) + '\n... (truncated)'
+  }
+
+  const result = extracted.join('\n\n')
+  if (result.length <= maxLength) return result
+  return result.slice(0, maxLength) + '\n... (truncated)'
+}
