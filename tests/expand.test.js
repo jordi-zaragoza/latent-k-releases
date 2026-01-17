@@ -82,7 +82,7 @@ A test project.`
 
       expect(result.type).toBe('blocked')
       expect(result.calls).toBe(1)
-      expect(result.context._instruction).toBe('respond_generic')
+      expect(result.context).toBeNull()
     })
 
     it('handles passthrough for non-project questions', async () => {
@@ -93,7 +93,7 @@ A test project.`
         block_reason: null
       })
 
-      const result = await expand('/test', 'hello')
+      const result = await expand('/test', 'hello how are you today')
 
       expect(result).toEqual({
         type: 'passthrough',
@@ -130,7 +130,7 @@ A test project.`
         block_reason: null
       })
 
-      const result = await expand('/test', 'some question')
+      const result = await expand('/test', 'some random question here')
 
       expect(result).toEqual({
         type: 'passthrough',
@@ -218,7 +218,7 @@ A test project.`
       })
       listDomains.mockReturnValue(['core'])
 
-      const result = await expand('/test', 'add tests')
+      const result = await expand('/test', 'add tests to the project')
 
       expect(result.type).toBe('passthrough')
       expect(result.calls).toBe(1)
@@ -236,7 +236,7 @@ A test project.`
         files: []
       })
 
-      const result = await expand('/test', 'my prompt')
+      const result = await expand('/test', 'my longer test prompt here')
 
       expect(result.type).toBe('passthrough')
       expect(result.calls).toBe(2)
@@ -255,7 +255,7 @@ A test project.`
       })
       getFileContext.mockReturnValue('code')
 
-      await expand('/test', 'test')
+      await expand('/test', 'test the core and cli modules')
 
       expect(loadDomain).toHaveBeenCalledWith('/test', 'core')
       expect(loadDomain).toHaveBeenCalledWith('/test', 'cli')

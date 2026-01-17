@@ -83,17 +83,20 @@ ${context.message}
   // Direct answer - instruct LLM to use it
   if (type === 'direct' && context.answer) {
     return `<system-reminder>
-READY ANSWER - USE DIRECTLY:
+⚠️ INSTRUCTION: This answer is complete. DO NOT call Read, Glob, Grep or other tools. Respond directly.
 
+READY ANSWER:
 ${context.answer}
-
-IMPORTANT: This answer is complete. DO NOT call Read, Glob, Grep or other tools. Respond to the user directly with this information.
 </system-reminder>`
   }
 
   // Code context - provide files with instruction
   if (type === 'code_context' && context.files) {
     const parts = ['<system-reminder>']
+
+    // Instruction FIRST - so LLM sees it before code
+    parts.push('⚠️ INSTRUCTION: Use this code to respond. DO NOT call Read, Glob, or Grep unless explicitly needed.')
+    parts.push('')
 
     // Add navigation guide if present
     if (context.navigation_guide) {
@@ -118,7 +121,6 @@ IMPORTANT: This answer is complete. DO NOT call Read, Glob, Grep or other tools.
       parts.push('')
     }
 
-    parts.push('INSTRUCTION: Use this code to respond. Only use Read if the user asks for details not present here.')
     parts.push('</system-reminder>')
 
     return parts.join('\n')
