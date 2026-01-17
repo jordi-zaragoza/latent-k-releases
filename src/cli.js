@@ -39,12 +39,9 @@ function minify(text) {
     .replace(/\s+\[\]/g, '')
 }
 
-// Build project-only context (syntax + project.lk, no domains)
+// Build project-only context (project.lk + nav, no syntax)
 function buildProjectContext(root, verbose = false) {
   const parts = []
-
-  const syntax = getSyntax(root)
-  if (syntax) parts.push(syntax)
 
   const project = getProject(root)
   if (project) parts.push(project)
@@ -58,6 +55,13 @@ Domains: ${domains.join(', ')}`)
 
   const full = parts.join('\n\n')
   return verbose ? full : minify(full)
+}
+
+// Build syntax-only context (for session start)
+function buildSyntaxContext(root, verbose = false) {
+  const syntax = getSyntax(root)
+  if (!syntax) return ''
+  return verbose ? syntax : minify(syntax)
 }
 
 // Build domain-only context (just the domain, no syntax/project)
@@ -275,24 +279,31 @@ program
 
 program
   .command('session-info')
-  .description('Print session start info (for hooks)')
+  .description('Print session start info with syntax (for hooks)')
   .action(() => {
-    const parts = ['[LK context loaded]']
+    const cwd = process.cwd()
+    const infoParts = ['[LK context loaded]']
 
     if (!DEV_MODE) {
       const exp = getLicenseExpiration()
       if (exp) {
         if (exp.inGrace) {
-          parts.push(`⚠ License expired - grace period: ${exp.graceDaysLeft}d left`)
+          infoParts.push(`⚠ License expired - grace period: ${exp.graceDaysLeft}d left`)
         } else if (exp.expired) {
-          parts.push('⚠ License expired')
+          infoParts.push('⚠ License expired')
         } else if (exp.daysLeft !== null && exp.daysLeft <= 30) {
-          parts.push(`License: ${exp.daysLeft}d remaining`)
+          infoParts.push(`License: ${exp.daysLeft}d remaining`)
         }
       }
     }
 
-    terminalPrint(parts.join(' | '))
+    terminalPrint(infoParts.join(' | '))
+
+    // Output syntax to stdout (for hook to inject)
+    if (exists(cwd)) {
+      const syntax = buildSyntaxContext(cwd)
+      if (syntax) console.log(syntax)
+    }
   })
 
 // Dev-only commands
