@@ -272,11 +272,13 @@ A test project.`
         direct_answer: null,
         files: [{ path: 'src/lib/parser.js', functions: ['parse', 'extract'] }]
       })
-      getFileContext.mockReturnValue('function parse() {}\n\nfunction extract() {}')
+      getFileContext.mockReturnValue('function code() {}')
 
       const result = await expand('/test', 'how does parse work')
 
-      expect(getFileContext).toHaveBeenCalledWith(expect.stringContaining('parser.js'), ['parse', 'extract'])
+      // Each function is extracted separately to avoid split issues
+      expect(getFileContext).toHaveBeenCalledWith(expect.stringContaining('parser.js'), ['parse'])
+      expect(getFileContext).toHaveBeenCalledWith(expect.stringContaining('parser.js'), ['extract'])
       expect(result.type).toBe('code_context')
     })
   })

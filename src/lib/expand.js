@@ -187,26 +187,44 @@ export async function expand(root, prompt) {
   const fileContext = {}
 
   for (const file of files) {
-    const filePath = path.join(root, file.path)
+    // Remove @ prefix from path aliases (e.g. @app/... -> app/...)
+    const cleanPath = file.path.startsWith('@') ? file.path.slice(1) : file.path
+    const filePath = path.join(root, cleanPath)
     const functions = file.functions || null
 
-    const content = getFileContext(filePath, functions)
-    if (content) {
-      if (functions && functions.length > 0) {
-        // Structure by function names
-        fileContext[file.path] = {}
-        const lines = content.split('\n\n')
-        for (let i = 0; i < functions.length && i < lines.length; i++) {
-          fileContext[file.path][functions[i]] = lines[i] || ''
+    if (functions && functions.length > 0) {
+      // Extract each function separately to avoid split issues
+      fileContext[file.path] = {}
+      for (const fnName of functions) {
+        const fnContent = getFileContext(filePath, [fnName])
+        if (fnContent) {
+          fileContext[file.path][fnName] = fnContent
         }
-      } else {
-        // Full file content
+      }
+      // If no functions extracted, skip this file
+      if (Object.keys(fileContext[file.path]).length === 0) {
+        delete fileContext[file.path]
+      }
+    } else {
+      // Full file content
+      const content = getFileContext(filePath, null)
+      if (content) {
         fileContext[file.path] = content
       }
     }
   }
 
   log('EXPAND', `Context built for ${Object.keys(fileContext).length} file(s)`)
+
+  // If no files could be loaded, return passthrough
+  if (Object.keys(fileContext).length === 0) {
+    log('EXPAND', 'No file context extracted, returning passthrough')
+    return {
+      type: 'passthrough',
+      calls: 2,
+      context: null
+    }
+  }
 
   return {
     type: 'code_context',
