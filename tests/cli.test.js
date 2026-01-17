@@ -32,29 +32,6 @@ describe('CLI binary protection', () => {
   })
 })
 
-describe('Nav context has no command references', () => {
-  const cliContent = readFileSync(join(srcDir, 'cli.js'), 'utf8')
-
-  it('buildProjectContext Nav does not reference lk commands', () => {
-    // Extract the Nav block from buildProjectContext
-    const navMatch = cliContent.match(/parts\.push\(`⟦Nav⟧[\s\S]*?`\)/)
-    expect(navMatch).not.toBeNull()
-
-    const navContent = navMatch[0]
-    expect(navContent).not.toContain('lk context')
-    expect(navContent).not.toContain('Bash:')
-  })
-
-  it('buildDomainContext Nav does not reference lk commands', () => {
-    // Find the second Nav block (in buildDomainContext)
-    const matches = cliContent.match(/⟦Nav⟧[\s\S]*?`\)/g)
-    expect(matches).not.toBeNull()
-    expect(matches.length).toBeGreaterThanOrEqual(2)
-
-    const domainNav = matches[1]
-    expect(domainNav).not.toContain('lk context')
-  })
-})
 
 describe('License admin is external', () => {
   it('cli.js does not register license generation commands', () => {

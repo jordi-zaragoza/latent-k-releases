@@ -134,7 +134,6 @@ export async function expand(root, prompt) {
   log('EXPAND', `Expanding with ${domainContents.length} domain(s)...`)
 
   const expansion = await ai.expandPrompt(prompt, projectLk, domainLk)
-  log('EXPAND', `Expansion: ${JSON.stringify(expansion)}`)
 
   // Direct answer with domain context
   if (expansion.direct_answer) {

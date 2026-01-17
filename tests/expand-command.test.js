@@ -93,29 +93,29 @@ describe('expand command', () => {
     })
   })
 
-  describe('passthrough conditions', () => {
-    it('outputs JSON passthrough when no .lk directory exists', async () => {
+  describe('passthrough conditions (silent - no output)', () => {
+    it('outputs nothing when no .lk directory exists', async () => {
       exists.mockReturnValue(false)
 
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('my prompt', {})
 
-      expect(consoleSpy).toHaveBeenCalledWith('{"type":"passthrough","context":null}')
+      expect(consoleSpy).not.toHaveBeenCalled()
       expect(expand).not.toHaveBeenCalled()
     })
 
-    it('outputs JSON passthrough when AI not configured', async () => {
+    it('outputs nothing when AI not configured', async () => {
       exists.mockReturnValue(true)
       isConfigured.mockReturnValue(false)
 
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('my prompt', {})
 
-      expect(consoleSpy).toHaveBeenCalledWith('{"type":"passthrough","context":null}')
+      expect(consoleSpy).not.toHaveBeenCalled()
       expect(expand).not.toHaveBeenCalled()
     })
 
-    it('outputs JSON passthrough when license check fails', async () => {
+    it('outputs nothing when license check fails', async () => {
       exists.mockReturnValue(true)
       isConfigured.mockReturnValue(true)
       checkAccess.mockImplementation(() => {
@@ -125,11 +125,11 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('my prompt', {})
 
-      expect(consoleSpy).toHaveBeenCalledWith('{"type":"passthrough","context":null}')
+      expect(consoleSpy).not.toHaveBeenCalled()
       expect(expand).not.toHaveBeenCalled()
     })
 
-    it('outputs JSON error on expand error', async () => {
+    it('outputs nothing on expand error', async () => {
       exists.mockReturnValue(true)
       isConfigured.mockReturnValue(true)
       checkAccess.mockReturnValue({ allowed: true })
@@ -138,8 +138,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('my prompt', {})
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('"type":"error"'))
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('API error'))
+      expect(consoleSpy).not.toHaveBeenCalled()
     })
   })
 
@@ -150,7 +149,7 @@ describe('expand command', () => {
       checkAccess.mockReturnValue({ allowed: true })
     })
 
-    it('outputs JSON result', async () => {
+    it('outputs system-reminder with direct answer', async () => {
       expand.mockResolvedValue({
         type: 'direct',
         calls: 1,
@@ -163,15 +162,64 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('original prompt', {})
 
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('"type":"direct"'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('<system-reminder>'))
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('This is the answer'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('RESPUESTA LISTA'))
+    })
+
+    it('outputs system-reminder with code context', async () => {
+      expand.mockResolvedValue({
+        type: 'code_context',
+        calls: 2,
+        context: {
+          files: {
+            'src/test.js': 'function test() { return 1 }'
+          }
+        }
+      })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('test', {})
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('<system-reminder>'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('CONTEXTO DE CÓDIGO'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('src/test.js'))
+    })
+
+    it('outputs system-reminder for blocked questions', async () => {
+      expand.mockResolvedValue({
+        type: 'blocked',
+        calls: 1,
+        context: {
+          message: 'I use context from the project.'
+        }
+      })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('what is lk', {})
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('<system-reminder>'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('I use context from the project'))
+    })
+
+    it('outputs nothing for passthrough result', async () => {
+      expand.mockResolvedValue({
+        type: 'passthrough',
+        calls: 1,
+        context: null
+      })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('test', {})
+
+      expect(consoleSpy).not.toHaveBeenCalled()
     })
 
     it('shows debug info when debug flag is set', async () => {
       expand.mockResolvedValue({
         type: 'code_context',
         calls: 2,
-        context: { files: {} }
+        context: { files: { 'a.js': 'code' } }
       })
 
       const { expandCommand } = await import('../src/commands/expand.js')
@@ -200,11 +248,11 @@ describe('expand command', () => {
   })
 
   describe('empty input handling', () => {
-    it('outputs JSON passthrough when no input provided', async () => {
+    it('outputs nothing when no input provided', async () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand(undefined, {})
 
-      expect(consoleSpy).toHaveBeenCalledWith('{"type":"passthrough","context":null}')
+      expect(consoleSpy).not.toHaveBeenCalled()
       expect(expand).not.toHaveBeenCalled()
     })
 
