@@ -21,6 +21,9 @@ const LK_GENERIC_RESPONSE = "I use context from the project to help you better. 
 // Minimum prompt length to trigger expansion (skip short confirmations)
 const MIN_PROMPT_LENGTH = 18
 
+// Maximum prompt length to trigger expansion (skip very long prompts)
+const MAX_PROMPT_LENGTH = 500
+
 /**
  * Serialize domain object back to LK format string
  */
@@ -45,6 +48,16 @@ export async function expand(root, prompt) {
   // Skip short prompts (confirmations like "ok", "yes", "hazlo", etc.)
   if (prompt.trim().length < MIN_PROMPT_LENGTH) {
     log('EXPAND', `Prompt too short (${prompt.trim().length} chars), bypassing`)
+    return {
+      type: 'passthrough',
+      calls: 0,
+      context: null
+    }
+  }
+
+  // Skip very long prompts (likely contain their own context)
+  if (prompt.trim().length > MAX_PROMPT_LENGTH) {
+    log('EXPAND', `Prompt too long (${prompt.trim().length} chars), bypassing`)
     return {
       type: 'passthrough',
       calls: 0,

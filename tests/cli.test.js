@@ -19,10 +19,11 @@ describe('CLI binary protection', () => {
     expect(contextBlock).not.toBeNull()
   })
 
-  it('expand command is protected with !IS_BINARY', () => {
-    // The expand command block should be inside if (!IS_BINARY)
-    const expandBlock = cliContent.match(/if\s*\(\s*!IS_BINARY\s*\)\s*\{[\s\S]*?command\('expand/)
-    expect(expandBlock).not.toBeNull()
+  it('expand command is available in binary (used by hooks)', () => {
+    // The expand command should be OUTSIDE if (!IS_BINARY) so it's available in the binary
+    // It's registered before the if (!IS_BINARY) block
+    const expandBeforeBlock = cliContent.match(/\.command\('expand[\s\S]*?if\s*\(\s*!IS_BINARY\s*\)/)
+    expect(expandBeforeBlock).not.toBeNull()
   })
 
   it('benchmark command is protected with !IS_BINARY', () => {
