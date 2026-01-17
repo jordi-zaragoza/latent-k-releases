@@ -12,6 +12,12 @@ describe('Binary path configuration', () => {
     expect(content).toContain("const lkBin = '/usr/local/bin/lk'")
   })
 
+  it('hooks.js configures session-info for SessionStart', () => {
+    const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
+    expect(content).toContain('session-info')
+    expect(content).toContain('SessionStart')
+  })
+
   it('dev.js uses /usr/local/bin/lk', () => {
     const content = readFileSync(join(srcDir, 'commands', 'dev.js'), 'utf8')
     expect(content).toContain("const lkBin = '/usr/local/bin/lk'")
@@ -25,5 +31,11 @@ describe('Binary path configuration', () => {
   it('update.js uses /usr/local/bin/lk', () => {
     const content = readFileSync(join(srcDir, 'commands', 'update.js'), 'utf8')
     expect(content).toContain("const LK_BIN_PATH = '/usr/local/bin/lk'")
+  })
+
+  it('cli.js has session-info command', () => {
+    const content = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+    expect(content).toContain("command('session-info')")
+    expect(content).toContain('getLicenseExpiration')
   })
 })
