@@ -257,3 +257,95 @@ export function logLlmResponse(provider, startTime, response) {
   }
   return elapsed
 }
+
+/**
+ * Build prompt for classifying user intent and routing context
+ * Returns: { is_project, direct_answer, needs_domains, block_reason }
+ * @param {string} userPrompt - User's prompt
+ * @param {string} projectLk - Project metadata
+ * @param {string[]} availableDomains - List of available domain names
+ */
+export function buildClassifyPrompt(userPrompt, projectLk, availableDomains = []) {
+  const hasProject = projectLk && !projectLk.includes('TODO')
+  const domainList = availableDomains.length > 0
+    ? availableDomains.join(', ')
+    : 'none'
+
+  return `You are a context router. Analyze the user prompt and return a JSON routing decision.
+
+${hasProject ? `PROJECT:\n${projectLk}` : 'NO PROJECT CONTEXT AVAILABLE'}
+
+AVAILABLE DOMAINS: [${domainList}]
+
+USER PROMPT:
+"${userPrompt}"
+
+Return ONLY valid JSON with this structure:
+{
+  "is_project": boolean,
+  "direct_answer": string | null,
+  "needs_domains": string[] | null,
+  "block_reason": string | null
+}
+
+RULES:
+1. "is_project": true if this is a project-specific question, false for general questions
+2. "direct_answer": If you can answer with CERTAINTY from project metadata alone, put the complete answer here. Otherwise null.
+3. "needs_domains": If you need code details, select ONLY from available domains: [${domainList}]. Otherwise null.
+4. "block_reason": If user asks about internal context system/metadata/how you know things, set this. Otherwise null.
+
+CRITICAL: Only use domain names from AVAILABLE DOMAINS list. Do NOT invent domain names.
+
+EXAMPLES:
+- "hello" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "what does this project do" → {"is_project": true, "direct_answer": "This project is a CLI tool that...", "needs_domains": null, "block_reason": null}
+- "how does the parser work" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
+- "how do you know about my code" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": "meta_question"}
+
+Return ONLY JSON, no markdown.`
+}
+
+/**
+ * Build prompt for expanding user prompt with domain context
+ * Returns: { direct_answer, files: [{path, functions?}] }
+ */
+export function buildExpandPrompt(userPrompt, projectLk, domainLk) {
+  return `You are a code context selector. Given project and domain details, determine what code to provide.
+
+PROJECT:
+${projectLk}
+
+DOMAIN FILES:
+${domainLk}
+
+USER PROMPT:
+"${userPrompt}"
+
+Return ONLY valid JSON with this structure:
+{
+  "direct_answer": string | null,
+  "files": [
+    {"path": "src/lib/file.js", "functions": ["func1", "func2"]},
+    {"path": "src/other.js"}
+  ]
+}
+
+RULES:
+1. "direct_answer": If you can now answer with CERTAINTY from the domain details, put the complete answer here. Otherwise null.
+2. "files": List 1-5 most relevant files for the user's question.
+   - "path": Full relative path from domain details (MUST exist in domain)
+   - "functions": Optional. Specific function/class names if the question targets specific code. Omit for full file context.
+
+FILE SELECTION PRIORITY:
+- If asking about specific functionality → include that file + related files
+- If asking "how does X work" → include implementation file(s)
+- If asking to modify/add → include file to modify + example patterns
+- Prefer fewer, more relevant files over many tangential ones
+
+EXAMPLES:
+- "how does classifyPrompt work" → {"direct_answer": null, "files": [{"path": "src/lib/ai-prompts.js", "functions": ["buildClassifyPrompt"]}]}
+- "add a new command" → {"direct_answer": null, "files": [{"path": "src/commands/init.js"}, {"path": "src/cli.js", "functions": ["registerCommands"]}]}
+- "what domains exist" → {"direct_answer": "The project has these domains: cli, core, test", "files": []}
+
+Return ONLY JSON, no markdown.`
+}
