@@ -12,8 +12,7 @@ import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { writeFileSync } from 'fs'
-import { buildVerboseContext, countTokens, exists, getSyntax, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
-import { log } from './lib/config.js'
+import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration } from './lib/license.js'
 
@@ -24,28 +23,7 @@ function terminalPrint(message) {
 }
 
 const DEV_MODE = process.env.LK_DEV === '1'
-const INTERNAL_MODE = process.env.LK_INTERNAL === '1'
 const IS_BINARY = !!process.pkg  // true when running as compiled binary
-
-// Minify LK context to single line
-function minify(text) {
-  return text
-    .split('\n').map(l => l.trim()).filter(l => l).join(' ')
-    .replace(/  +/g, ' ')
-    .replace(/⦓ID: DOMAIN-/g, '⦓').replace(/⦓ID: /g, '⦓')
-    .replace(/⟦Δ: Domain ⫸ /g, '⟦').replace(/⟦Δ: /g, '⟦')
-    .replace(/∑ /g, '∑')
-    .replace(/\[\s+/g, '[').replace(/\s+\]/g, ']').replace(/,\s+/g, ',')
-    .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[')
-    .replace(/\s+\[\]/g, '')
-}
-
-// Build syntax-only context (for session start)
-function buildSyntaxContext(root, verbose = false) {
-  const syntax = getSyntax(root)
-  if (!syntax) return ''
-  return verbose ? syntax : minify(syntax)
-}
 
 program
   .name('lk')
@@ -118,18 +96,6 @@ program
     logs: options.logs,
     all: options.all,
     yes: options.yes
-  }))
-
-program
-  .command('benchmark [question]')
-  .description('Compare token usage with/without LK context')
-  .option('-s, --scenarios', 'Run all predefined scenarios')
-  .option('-r, --run', 'Actually call the API (not just estimate)')
-  .option('-v, --verbose', 'Show full responses')
-  .action((question, options) => benchmark(question, {
-    scenarios: options.scenarios,
-    run: options.run,
-    verbose: options.verbose
   }))
 
 program
@@ -212,13 +178,24 @@ if (!IS_BINARY) {
     .description('[DEV] Expand prompt with context (for hooks)')
     .option('--debug', 'Show debug info to stderr')
     .action((prompt, options) => expandCommand(prompt, { debug: options.debug }))
+
+  program
+    .command('benchmark [question]')
+    .description('[DEV] Compare token usage with/without LK context')
+    .option('-s, --scenarios', 'Run all predefined scenarios')
+    .option('-r, --run', 'Actually call the API (not just estimate)')
+    .option('-v, --verbose', 'Show full responses')
+    .action((question, options) => benchmark(question, {
+      scenarios: options.scenarios,
+      run: options.run,
+      verbose: options.verbose
+    }))
 }
 
 program
   .command('session-info')
-  .description('Print session start info with syntax (for hooks)')
+  .description('Print session start info (for hooks)')
   .action(() => {
-    const cwd = process.cwd()
     const infoParts = ['[LK context loaded]']
 
     if (!DEV_MODE) {
@@ -235,12 +212,6 @@ program
     }
 
     terminalPrint(infoParts.join(' | '))
-
-    // Output syntax to stdout (for hook to inject)
-    if (exists(cwd)) {
-      const syntax = buildSyntaxContext(cwd)
-      if (syntax) console.log(syntax)
-    }
   })
 
 // Dev-only commands (only from source, never in compiled binary)
