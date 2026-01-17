@@ -10,6 +10,7 @@ import { dev } from './commands/dev.js'
 import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
+import { expandCommand } from './commands/expand.js'
 import { writeFileSync, readFileSync, existsSync } from 'fs'
 import { buildContext, buildVerboseContext, countTokens, exists, getSyntax, getProject, domainPath, listDomains, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { decrypt } from './lib/crypto.js'
@@ -25,6 +26,7 @@ function terminalPrint(message) {
 
 const DEV_MODE = process.env.LK_DEV === '1'
 const INTERNAL_MODE = process.env.LK_INTERNAL === '1'
+const IS_BINARY = !!process.pkg  // true when running as compiled binary
 
 // Minify LK context to single line
 function minify(text) {
@@ -47,11 +49,8 @@ function buildProjectContext(root, verbose = false) {
   if (project) parts.push(project)
 
   const domains = listDomains(root)
-  const cmd = DEV_MODE ? `LK_DEV=1 node ${process.argv[1]}` : 'lk'
   parts.push(`⟦Nav⟧
-⦗INV⦘ Before Read/Grep/Glob, get domain context:
-  Bash: ${cmd} context -d <domain>
-Domains: ${domains.join(', ')}`)
+⦗INV⦘ Use domain map. Domains: ${domains.join(', ')}`)
 
   const full = parts.join('\n\n')
   return verbose ? full : minify(full)
@@ -77,9 +76,7 @@ function buildDomainContext(root, domainName, verbose = false) {
   }
 
   parts.push(`⟦Nav⟧
-⦗USE⦘ Domain map above.
-1. Read @path files directly
-2. For project overview: lk context -p`)
+⦗USE⦘ Read @path files directly from domain map above.`)
 
   const full = parts.join('\n\n')
   return verbose ? full : minify(full)
@@ -219,63 +216,72 @@ program
     }
   })
 
-program
-  .command('context')
-  .description('Output .lk context')
-  .option('-t, --tokens', 'Count tokens')
-  .option('-v, --verbose', 'Verbose output')
-  .option('-p, --project', 'Output full project context')
-  .option('-d, --domain <name>', 'Output specific domain only')
-  .action(async (options) => {
-    log('HOOK', '#### UserPromptSubmit hook started ####')
+// context command only available when running from source (not compiled binary)
+if (!IS_BINARY) {
+  program
+    .command('context')
+    .description('[DEV] Output raw .lk context')
+    .option('-t, --tokens', 'Count tokens')
+    .option('-v, --verbose', 'Verbose output')
+    .option('-p, --project', 'Output full project context')
+    .option('-d, --domain <name>', 'Output specific domain only')
+    .action(async (options) => {
+      log('HOOK', '#### UserPromptSubmit hook started ####')
 
-    // Check license (DEV mode bypasses this check inside checkAccess)
-    const { checkAccess } = await import('./lib/license.js')
-    const access = await checkAccess()
-    if (!access.allowed) {
-      process.exit(1)
-    }
+      // Check license (DEV mode bypasses this check inside checkAccess)
+      const { checkAccess } = await import('./lib/license.js')
+      const access = await checkAccess()
+      if (!access.allowed) {
+        process.exit(1)
+      }
 
-    const cwd = process.cwd()
+      const cwd = process.cwd()
 
-    if (!exists(cwd)) {
-      log('HOOK', '#### No LK context found, exiting ####')
-      console.log('[No LK context - run: lk sync]')
+      if (!exists(cwd)) {
+        log('HOOK', '#### No LK context found, exiting ####')
+        console.log('[No LK context - run: lk sync]')
+        process.exit(0)
+      }
+
+      log('SESSION', '')
+      log('SESSION', '═'.repeat(70))
+      log('SESSION', 'NEW SESSION')
+      log('SESSION', '═'.repeat(70))
+
+      const useVerbose = options.verbose || process.env.LK_VERBOSE === '1'
+      let context
+      let contextType
+
+      if (options.domain) {
+        // -d: domain only
+        context = buildDomainContext(cwd, options.domain, useVerbose)
+        contextType = `domain:${options.domain}`
+      } else {
+        // Default/-p: project only (syntax + project.lk, no domains)
+        context = buildProjectContext(cwd, useVerbose)
+        contextType = 'project'
+      }
+
+      log('CONTEXT', `Injected: ${contextType} (${context.length} chars)`)
+
+      if (options.tokens) {
+        const stats = countTokens(context)
+        console.log(`Tokens: ~${stats.tokens.toLocaleString()}`)
+        console.log(`Chars:  ${stats.chars.toLocaleString()}`)
+        console.log(`Lines:  ${stats.lines.toLocaleString()}`)
+      } else {
+        console.log(context)
+      }
+
       process.exit(0)
-    }
+    })
+}
 
-    log('SESSION', '')
-    log('SESSION', '═'.repeat(70))
-    log('SESSION', 'NEW SESSION')
-    log('SESSION', '═'.repeat(70))
-
-    const useVerbose = options.verbose || process.env.LK_VERBOSE === '1'
-    let context
-    let contextType
-
-    if (options.domain) {
-      // -d: domain only
-      context = buildDomainContext(cwd, options.domain, useVerbose)
-      contextType = `domain:${options.domain}`
-    } else {
-      // Default/-p: project only (syntax + project.lk, no domains)
-      context = buildProjectContext(cwd, useVerbose)
-      contextType = 'project'
-    }
-
-    log('CONTEXT', `Injected: ${contextType} (${context.length} chars)`)
-
-    if (options.tokens) {
-      const stats = countTokens(context)
-      console.log(`Tokens: ~${stats.tokens.toLocaleString()}`)
-      console.log(`Chars:  ${stats.chars.toLocaleString()}`)
-      console.log(`Lines:  ${stats.lines.toLocaleString()}`)
-    } else {
-      console.log(context)
-    }
-
-    process.exit(0)
-  })
+program
+  .command('expand [prompt]')
+  .description('Expand prompt with context (JSON output for hooks)')
+  .option('--debug', 'Show debug info to stderr')
+  .action((prompt, options) => expandCommand(prompt, { debug: options.debug }))
 
 program
   .command('session-info')
@@ -306,18 +312,14 @@ program
     }
   })
 
-// Dev-only commands
-if (DEV_MODE) {
+// Dev-only commands (only from source, never in compiled binary)
+if (!IS_BINARY) {
   program
     .command('dev [action]')
     .description('[DEV] Toggle between source and binary mode (status|toggle|source|binary)')
     .action(dev)
 
-  // License generation commands removed from CLI.
-  // Use scripts/license-admin.js directly:
-  //   node scripts/license-admin.js keys
-  //   node scripts/license-admin.js generate --email user@example.com
-  //   node scripts/license-admin.js batch 10 --type pro --days 365
+  // License generation: use scripts/license-admin.js directly (external to binary)
 }
 
 program.parse()
