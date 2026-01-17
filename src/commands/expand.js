@@ -93,7 +93,16 @@ IMPORTANTE: Esta respuesta ya está completa. NO llames a Read, Glob, Grep ni ot
 
   // Code context - provide files with instruction
   if (type === 'code_context' && context.files) {
-    const parts = ['<system-reminder>', 'CONTEXTO DE CÓDIGO RELEVANTE:', '']
+    const parts = ['<system-reminder>']
+
+    // Add navigation guide if present
+    if (context.navigation_guide) {
+      parts.push('GUÍA DE NAVEGACIÓN:')
+      parts.push(context.navigation_guide)
+      parts.push('')
+    }
+
+    parts.push('CONTEXTO DE CÓDIGO RELEVANTE:', '')
 
     for (const [filePath, content] of Object.entries(context.files)) {
       parts.push(`--- ${filePath} ---`)
@@ -109,7 +118,7 @@ IMPORTANTE: Esta respuesta ya está completa. NO llames a Read, Glob, Grep ni ot
       parts.push('')
     }
 
-    parts.push('INSTRUCCIÓN: Usa este código para responder la pregunta del usuario.')
+    parts.push('INSTRUCCIÓN: Usa este código para responder. Solo usa Read si el usuario pide detalles que no están aquí.')
     parts.push('</system-reminder>')
 
     return parts.join('\n')

@@ -324,6 +324,7 @@ USER PROMPT:
 Return ONLY valid JSON with this structure:
 {
   "direct_answer": string | null,
+  "navigation_guide": string | null,
   "files": [
     {"path": "src/lib/file.js", "functions": ["func1", "func2"]},
     {"path": "src/other.js"}
@@ -332,7 +333,8 @@ Return ONLY valid JSON with this structure:
 
 RULES:
 1. "direct_answer": If you can now answer with CERTAINTY from the domain details, put the complete answer here. Otherwise null.
-2. "files": List 1-5 most relevant files for the user's question.
+2. "navigation_guide": Brief guidance for the LLM on how to approach this task. Explain which file does what and how they connect. Example: "Parser logic is in parser.js (extractExports). It's called from batch.js during sync. To add a new language, add a strip* and extract* function."
+3. "files": List 1-5 most relevant files for the user's question.
    - "path": Full relative path from domain details (MUST exist in domain)
    - "functions": Optional. Specific function/class names if the question targets specific code. Omit for full file context.
 
@@ -343,9 +345,8 @@ FILE SELECTION PRIORITY:
 - Prefer fewer, more relevant files over many tangential ones
 
 EXAMPLES:
-- "how does classifyPrompt work" → {"direct_answer": null, "files": [{"path": "src/lib/ai-prompts.js", "functions": ["buildClassifyPrompt"]}]}
-- "add a new command" → {"direct_answer": null, "files": [{"path": "src/commands/init.js"}, {"path": "src/cli.js", "functions": ["registerCommands"]}]}
-- "what domains exist" → {"direct_answer": "The project has these domains: cli, core, test", "files": []}
+- "how does classifyPrompt work" → {"direct_answer": null, "navigation_guide": "Classification happens in ai-prompts.js. buildClassifyPrompt creates the prompt, then gemini.js or anthropic.js calls the API.", "files": [{"path": "src/lib/ai-prompts.js", "functions": ["buildClassifyPrompt"]}]}
+- "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/. Each exports a function. Register in cli.js. See init.js as a template.", "files": [{"path": "src/commands/init.js"}, {"path": "src/cli.js", "functions": ["registerCommands"]}]}
 
 Return ONLY JSON, no markdown.`
 }
