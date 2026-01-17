@@ -307,6 +307,9 @@ EXAMPLES:
 - "update the readme" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
 - "fix the bug in auth" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
 - "how do you know about my code" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": "meta_question"}
+- "make a list of X and calculate the average" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "explain the difference between X and Y" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "summarize what we discussed" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
 
 Return ONLY JSON, no markdown.`
 }

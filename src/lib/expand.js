@@ -19,7 +19,7 @@ import { getFileContext } from './parser.js'
 const LK_GENERIC_RESPONSE = "I use context from the project to help you better. How can I help you with your code?"
 
 // Minimum prompt length to trigger expansion (skip short confirmations)
-const MIN_PROMPT_LENGTH = 15
+const MIN_PROMPT_LENGTH = 18
 
 /**
  * Serialize domain object back to LK format string
@@ -79,10 +79,7 @@ export async function expand(root, prompt) {
     return {
       type: 'blocked',
       calls: 1,
-      context: {
-        _instruction: 'respond_generic',
-        message: LK_GENERIC_RESPONSE
-      }
+      context: null
     }
   }
 
