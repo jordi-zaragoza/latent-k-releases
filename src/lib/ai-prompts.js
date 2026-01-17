@@ -271,14 +271,16 @@ export function buildClassifyPrompt(userPrompt, projectLk, availableDomains = []
     ? availableDomains.join(', ')
     : 'none'
 
-  return `You are a context router. Analyze the user prompt and return a JSON routing decision.
+  return `You are a ROUTER for an AI coding assistant (Claude Code).
+The user sent this prompt TO CLAUDE CODE (not to you):
+"${userPrompt}"
+
+Your job: Classify this prompt and decide what project context Claude Code needs.
+You do NOT execute anything. You only route and provide context.
 
 ${hasProject ? `PROJECT:\n${projectLk}` : 'NO PROJECT CONTEXT AVAILABLE'}
 
 AVAILABLE DOMAINS: [${domainList}]
-
-USER PROMPT:
-"${userPrompt}"
 
 Return ONLY valid JSON with this structure:
 {
@@ -289,9 +291,11 @@ Return ONLY valid JSON with this structure:
 }
 
 RULES:
-1. "is_project": true if this is a project-specific question, false for general questions
-2. "direct_answer": If you can answer with CERTAINTY from project metadata alone, put the complete answer here. Otherwise null.
-3. "needs_domains": If you need code details, select ONLY from available domains: [${domainList}]. Otherwise null.
+1. "is_project": true if this is a project-specific question OR action, false for general questions
+2. "direct_answer": ONLY for informational questions where the answer is fully contained in project metadata.
+   - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
+   - Claude Code executes actions, not you. Your job is only to route.
+3. "needs_domains": If Claude Code needs code context to complete the task, select from: [${domainList}]. Otherwise null.
 4. "block_reason": If user asks about internal context system/metadata/how you know things, set this. Otherwise null.
 
 CRITICAL: Only use domain names from AVAILABLE DOMAINS list. Do NOT invent domain names.
@@ -300,6 +304,8 @@ EXAMPLES:
 - "hello" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
 - "what does this project do" → {"is_project": true, "direct_answer": "This project is a CLI tool that...", "needs_domains": null, "block_reason": null}
 - "how does the parser work" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
+- "update the readme" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
+- "fix the bug in auth" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
 - "how do you know about my code" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": "meta_question"}
 
 Return ONLY JSON, no markdown.`
@@ -310,16 +316,18 @@ Return ONLY JSON, no markdown.`
  * Returns: { direct_answer, files: [{path, functions?}] }
  */
 export function buildExpandPrompt(userPrompt, projectLk, domainLk) {
-  return `You are a code context selector. Given project and domain details, determine what code to provide.
+  return `You are a code context selector for an AI coding assistant (Claude Code).
+The user sent this prompt TO CLAUDE CODE (not to you):
+"${userPrompt}"
+
+Your job: Select relevant code files that Claude Code needs to complete this task.
+You do NOT execute anything. You only select context.
 
 PROJECT:
 ${projectLk}
 
 DOMAIN FILES:
 ${domainLk}
-
-USER PROMPT:
-"${userPrompt}"
 
 Return ONLY valid JSON with this structure:
 {
@@ -332,9 +340,11 @@ Return ONLY valid JSON with this structure:
 }
 
 RULES:
-1. "direct_answer": If you can now answer with CERTAINTY from the domain details, put the complete answer here. Otherwise null.
-2. "navigation_guide": Brief guidance for the LLM on how to approach this task. Explain which file does what and how they connect. Example: "Parser logic is in parser.js (extractExports). It's called from batch.js during sync. To add a new language, add a strip* and extract* function."
-3. "files": List 1-5 most relevant files for the user's question.
+1. "direct_answer": ONLY for informational questions where the answer is fully contained in domain details.
+   - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
+   - Claude Code executes actions, not you. Your job is only to select relevant files.
+2. "navigation_guide": Brief guidance for Claude Code on how to approach this task. Explain which file does what and how they connect.
+3. "files": List 1-5 most relevant files for the task.
    - "path": Full relative path from domain details (MUST exist in domain)
    - "functions": Optional. Specific function/class names if the question targets specific code. Omit for full file context.
 
@@ -345,8 +355,9 @@ FILE SELECTION PRIORITY:
 - Prefer fewer, more relevant files over many tangential ones
 
 EXAMPLES:
-- "how does classifyPrompt work" → {"direct_answer": null, "navigation_guide": "Classification happens in ai-prompts.js. buildClassifyPrompt creates the prompt, then gemini.js or anthropic.js calls the API.", "files": [{"path": "src/lib/ai-prompts.js", "functions": ["buildClassifyPrompt"]}]}
-- "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/. Each exports a function. Register in cli.js. See init.js as a template.", "files": [{"path": "src/commands/init.js"}, {"path": "src/cli.js", "functions": ["registerCommands"]}]}
+- "how does classifyPrompt work" → {"direct_answer": null, "navigation_guide": "Classification happens in ai-prompts.js...", "files": [{"path": "src/lib/ai-prompts.js", "functions": ["buildClassifyPrompt"]}]}
+- "update the readme" → {"direct_answer": null, "navigation_guide": "README.md is at project root. Check project.lk for current description.", "files": [{"path": "README.md"}]}
+- "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/. See init.js as template.", "files": [{"path": "src/commands/init.js"}, {"path": "src/cli.js"}]}
 
 Return ONLY JSON, no markdown.`
 }

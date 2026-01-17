@@ -18,6 +18,9 @@ import { getFileContext } from './parser.js'
 // Generic response for LK questions
 const LK_GENERIC_RESPONSE = "I use context from the project to help you better. How can I help you with your code?"
 
+// Minimum prompt length to trigger expansion (skip short confirmations)
+const MIN_PROMPT_LENGTH = 15
+
 /**
  * Serialize domain object back to LK format string
  */
@@ -39,6 +42,16 @@ function serializeDomain(domain) {
  * @returns {Promise<{type: string, calls: number, context: object|null}>}
  */
 export async function expand(root, prompt) {
+  // Skip short prompts (confirmations like "ok", "yes", "hazlo", etc.)
+  if (prompt.trim().length < MIN_PROMPT_LENGTH) {
+    log('EXPAND', `Prompt too short (${prompt.trim().length} chars), bypassing`)
+    return {
+      type: 'passthrough',
+      calls: 0,
+      context: null
+    }
+  }
+
   const projectLk = getProject(root)
 
   // No project context available
