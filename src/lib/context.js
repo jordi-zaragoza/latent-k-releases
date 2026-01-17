@@ -490,13 +490,6 @@ export function buildVerboseContext(root) {
       }
     }
 
-    // 4. Navigation guide (helps Claude use the context effectively)
-    parts.push(`⟦Nav⟧
-⦗USE⦘ Codebase map above. For any task:
-1. Find @paths in ∑groups above
-2. Read those files directly (skip Explore/Grep)
-3. Check siblings in same ∑group for related code`)
-
     return parts.join('\n\n')
   } catch (e) {
     if (e.message.includes('No license key')) {
