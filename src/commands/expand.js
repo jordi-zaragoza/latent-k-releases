@@ -91,7 +91,8 @@ ${context.answer}
   }
 
   // Code context - provide files with instruction
-  if (type === 'code_context' && context.files) {
+  // Check that files object has content (not just exists)
+  if (type === 'code_context' && context.files && Object.keys(context.files).length > 0) {
     const parts = ['<system-reminder>']
 
     // Instruction FIRST - so LLM sees it before code
