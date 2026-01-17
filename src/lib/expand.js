@@ -190,6 +190,7 @@ export async function expand(root, prompt) {
     calls: 2,
     context: {
       _instruction: 'read_context',
+      navigation_guide: expansion.navigation_guide || null,
       files: fileContext
     }
   }
