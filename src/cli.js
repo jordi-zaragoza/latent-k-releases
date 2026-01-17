@@ -11,7 +11,7 @@ import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { writeFileSync, readFileSync, existsSync } from 'fs'
-import { buildContext, buildVerboseContext, countTokens, exists, getSyntax, getProject, domainPath, listDomains } from './lib/context.js'
+import { buildContext, buildVerboseContext, countTokens, exists, getSyntax, getProject, domainPath, listDomains, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { decrypt } from './lib/crypto.js'
 import { log } from './lib/config.js'
 import { VERSION } from './lib/version.js'
@@ -165,6 +165,55 @@ program
     run: options.run,
     verbose: options.verbose
   }))
+
+program
+  .command('ignore [pattern]')
+  .description('Manage ignore patterns')
+  .option('-a, --add <pattern>', 'Add pattern to ignore list')
+  .option('-r, --remove <pattern>', 'Remove pattern from ignore list')
+  .action((pattern, options) => {
+    const cwd = process.cwd()
+
+    if (!ignoreExists(cwd)) {
+      console.log('No ignore file found. Run "lk sync" first.')
+      return
+    }
+
+    const patterns = loadIgnore(cwd)
+
+    // Add pattern
+    if (options.add) {
+      if (patterns.includes(options.add)) {
+        console.log(`Pattern already exists: ${options.add}`)
+      } else {
+        patterns.push(options.add)
+        saveIgnore(cwd, patterns)
+        console.log(`Added: ${options.add}`)
+      }
+      return
+    }
+
+    // Remove pattern
+    if (options.remove) {
+      const idx = patterns.indexOf(options.remove)
+      if (idx === -1) {
+        console.log(`Pattern not found: ${options.remove}`)
+      } else {
+        patterns.splice(idx, 1)
+        saveIgnore(cwd, patterns)
+        console.log(`Removed: ${options.remove}`)
+      }
+      return
+    }
+
+    // Show patterns
+    if (patterns.length === 0) {
+      console.log('No ignore patterns configured.')
+    } else {
+      console.log('Ignore patterns:\n')
+      patterns.forEach(p => console.log(`  ${p}`))
+    }
+  })
 
 program
   .command('context')
