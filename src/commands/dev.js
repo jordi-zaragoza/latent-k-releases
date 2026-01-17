@@ -160,33 +160,29 @@ async function ensureBinary() {
   return binaryPath
 }
 
-async function updateClaudeHooks(mode) {
-  const claudeDir = join(homedir(), '.claude')
-  const settingsPath = join(claudeDir, 'settings.json')
-
-  let settings = {}
-  try {
-    const content = await readFile(settingsPath, 'utf8')
-    settings = JSON.parse(content)
-  } catch {
-    console.log('Claude settings not found. Run: lk setup')
-    return false
-  }
-
+function getHookCommands(mode) {
   const lkBin = '/usr/local/bin/lk'
   const sourcePath = getSourcePath()
 
   const contextCmd = mode === 'binary'
-    ? `LK_INTERNAL=1 ${lkBin} context || true`
+    ? `${lkBin} context || true`
     : `LK_DEV=1 node ${sourcePath} context || true`
 
   const syncCmd = mode === 'binary'
     ? `${lkBin} sync`
     : `LK_DEV=1 node ${sourcePath} sync`
 
-  // Update SessionStart hook
-  if (settings.hooks?.SessionStart) {
-    settings.hooks.SessionStart = settings.hooks.SessionStart.map(h => {
+  const sessionCmd = mode === 'binary'
+    ? `${lkBin} session-info || true`
+    : `LK_DEV=1 node ${sourcePath} session-info || true`
+
+  return { contextCmd, syncCmd, sessionCmd }
+}
+
+function updateHooksInSettings(settings, stopEvent, contextCmd, syncCmd, sessionCmd) {
+  // Update UserPromptSubmit hook (context on every prompt)
+  if (settings.hooks?.UserPromptSubmit) {
+    settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit.map(h => {
       if (h.hooks?.some(hh => hh.command?.includes('context'))) {
         return {
           ...h,
@@ -202,9 +198,35 @@ async function updateClaudeHooks(mode) {
     })
   }
 
-  // Update Stop hook
-  if (settings.hooks?.Stop) {
-    settings.hooks.Stop = settings.hooks.Stop.map(h => {
+  // Update SessionStart hooks: session-info and remove legacy context hooks
+  if (settings.hooks?.SessionStart) {
+    // Update session-info hooks
+    settings.hooks.SessionStart = settings.hooks.SessionStart.map(h => {
+      if (h.hooks?.some(hh => hh.command?.includes('session-info'))) {
+        return {
+          ...h,
+          hooks: h.hooks.map(hh => {
+            if (hh.command?.includes('session-info')) {
+              return { ...hh, command: sessionCmd }
+            }
+            return hh
+          })
+        }
+      }
+      return h
+    })
+    // Remove legacy context hooks from SessionStart (they should be in UserPromptSubmit now)
+    settings.hooks.SessionStart = settings.hooks.SessionStart.filter(h =>
+      !h.hooks?.some(hh => hh.command?.includes('context') && !hh.command?.includes('session-info'))
+    )
+    if (settings.hooks.SessionStart.length === 0) {
+      delete settings.hooks.SessionStart
+    }
+  }
+
+  // Update stop hook (Stop for Claude, SessionEnd for Gemini)
+  if (settings.hooks?.[stopEvent]) {
+    settings.hooks[stopEvent] = settings.hooks[stopEvent].map(h => {
       if (h.hooks?.some(hh => hh.command?.includes('sync'))) {
         return {
           ...h,
@@ -219,6 +241,41 @@ async function updateClaudeHooks(mode) {
       return h
     })
   }
+
+  return settings
+}
+
+async function updateClaudeHooks(mode) {
+  const settingsPath = join(homedir(), '.claude', 'settings.json')
+
+  let settings = {}
+  try {
+    const content = await readFile(settingsPath, 'utf8')
+    settings = JSON.parse(content)
+  } catch {
+    return false
+  }
+
+  const { contextCmd, syncCmd, sessionCmd } = getHookCommands(mode)
+  settings = updateHooksInSettings(settings, 'Stop', contextCmd, syncCmd, sessionCmd)
+
+  await writeFile(settingsPath, JSON.stringify(settings, null, 2))
+  return true
+}
+
+async function updateGeminiHooks(mode) {
+  const settingsPath = join(homedir(), '.gemini', 'settings.json')
+
+  let settings = {}
+  try {
+    const content = await readFile(settingsPath, 'utf8')
+    settings = JSON.parse(content)
+  } catch {
+    return false
+  }
+
+  const { contextCmd, syncCmd, sessionCmd } = getHookCommands(mode)
+  settings = updateHooksInSettings(settings, 'SessionEnd', contextCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true
@@ -252,23 +309,31 @@ export async function dev(action) {
 
     await setMode(newMode)
 
-    if (await updateClaudeHooks(newMode)) {
+    const claudeUpdated = await updateClaudeHooks(newMode)
+    const geminiUpdated = await updateGeminiHooks(newMode)
+
+    if (claudeUpdated || geminiUpdated) {
       console.log(`Switched to: ${newMode}`)
       if (newMode === 'binary') {
         console.log(`Using: ${getBinaryPath()}`)
       } else {
         console.log(`Using: node ${getSourcePath()}`)
       }
+      if (claudeUpdated) console.log('✓ Claude hooks updated')
+      if (geminiUpdated) console.log('✓ Gemini hooks updated')
     }
     return
   }
 
   if (action === 'use-source' || action === 'source') {
     await setMode('source')
-    if (await updateClaudeHooks('source')) {
-      console.log('Switched to: source')
-      console.log(`Using: node ${getSourcePath()}`)
-    }
+    const claudeUpdated = await updateClaudeHooks('source')
+    const geminiUpdated = await updateGeminiHooks('source')
+
+    console.log('Switched to: source')
+    console.log(`Using: node ${getSourcePath()}`)
+    if (claudeUpdated) console.log('✓ Claude hooks updated')
+    if (geminiUpdated) console.log('✓ Gemini hooks updated')
     return
   }
 
@@ -281,10 +346,13 @@ export async function dev(action) {
     }
 
     await setMode('binary')
-    if (await updateClaudeHooks('binary')) {
-      console.log('Switched to: binary')
-      console.log(`Using: ${getBinaryPath()}`)
-    }
+    const claudeUpdated = await updateClaudeHooks('binary')
+    const geminiUpdated = await updateGeminiHooks('binary')
+
+    console.log('Switched to: binary')
+    console.log(`Using: ${getBinaryPath()}`)
+    if (claudeUpdated) console.log('✓ Claude hooks updated')
+    if (geminiUpdated) console.log('✓ Gemini hooks updated')
     return
   }
 
