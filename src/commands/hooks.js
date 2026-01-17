@@ -89,16 +89,37 @@ async function enableSingleCli(cli, silent = false) {
       contextCmd = `LK_DEV=1 node ${sourcePath} context || true`
       syncCmd = `LK_DEV=1 node ${sourcePath} sync`
     } else {
-      contextCmd = `LK_INTERNAL=1 ${lkBin} context || true`
+      contextCmd = `${lkBin} context || true`
       syncCmd = `${lkBin} sync`
     }
 
     let added = false
 
-    // SessionStart hook
+    // SessionStart hook (print message + license info)
+    let sessionCmd
+    if (DEV_MODE) {
+      const sourcePath = getSourcePath()
+      sessionCmd = `LK_DEV=1 node ${sourcePath} session-info || true`
+    } else {
+      sessionCmd = `${lkBin} session-info || true`
+    }
+
     settings.hooks.SessionStart = settings.hooks.SessionStart || []
-    if (!hasLkHook(settings.hooks.SessionStart, 'context')) {
+    const hasSessionHook = settings.hooks.SessionStart.some(h => h.hooks?.some(hh =>
+      hh.command?.includes('session-info') || hh.command?.includes('LK context loaded')
+    ))
+    if (!hasSessionHook) {
       settings.hooks.SessionStart.push({
+        matcher: '',
+        hooks: [{ type: 'command', command: sessionCmd }]
+      })
+      added = true
+    }
+
+    // UserPromptSubmit hook (inject context on every prompt)
+    settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit || []
+    if (!hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
+      settings.hooks.UserPromptSubmit.push({
         matcher: '',
         hooks: [{ type: 'command', command: contextCmd }]
       })
@@ -115,8 +136,13 @@ async function enableSingleCli(cli, silent = false) {
       added = true
     }
 
-    // Remove legacy 'Start' hook
+    // Remove legacy hooks
     if (settings.hooks.Start) delete settings.hooks.Start
+    // Migrate from SessionStart to UserPromptSubmit
+    if (hasLkHook(settings.hooks.SessionStart, 'context')) {
+      settings.hooks.SessionStart = removeLkHooks(settings.hooks.SessionStart, 'context')
+      if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart
+    }
 
     await saveSettings(cli, settings)
 
@@ -153,8 +179,17 @@ async function disableSingleCli(cli, silent = false) {
 
     let removed = false
 
-    if (hasLkHook(settings.hooks.SessionStart, 'context')) {
-      settings.hooks.SessionStart = removeLkHooks(settings.hooks.SessionStart, 'context')
+    // Remove from UserPromptSubmit
+    if (hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
+      settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'context')
+      if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit
+      removed = true
+    }
+    // Remove SessionStart LK hooks (both context and print message)
+    if (settings.hooks.SessionStart) {
+      settings.hooks.SessionStart = settings.hooks.SessionStart.filter(h =>
+        !h.hooks?.some(hh => hh.command?.includes('LK context') || hh.command?.includes('context'))
+      )
       if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart
       removed = true
     }
