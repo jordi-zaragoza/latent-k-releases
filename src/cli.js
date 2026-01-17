@@ -10,10 +10,12 @@ import { dev } from './commands/dev.js'
 import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
-import { writeFileSync } from 'fs'
-import { buildContext, buildVerboseContext, countTokens, exists } from './lib/context.js'
+import { writeFileSync, readFileSync, existsSync } from 'fs'
+import { buildContext, buildVerboseContext, countTokens, exists, getSyntax, getProject, domainPath, listDomains } from './lib/context.js'
+import { decrypt } from './lib/crypto.js'
 import { log } from './lib/config.js'
 import { VERSION } from './lib/version.js'
+import { getLicenseExpiration } from './lib/license.js'
 
 function terminalPrint(message) {
   try {
@@ -23,6 +25,61 @@ function terminalPrint(message) {
 
 const DEV_MODE = process.env.LK_DEV === '1'
 const INTERNAL_MODE = process.env.LK_INTERNAL === '1'
+
+// Minify LK context to single line
+function minify(text) {
+  return text
+    .split('\n').map(l => l.trim()).filter(l => l).join(' ')
+    .replace(/  +/g, ' ')
+    .replace(/⦓ID: DOMAIN-/g, '⦓').replace(/⦓ID: /g, '⦓')
+    .replace(/⟦Δ: Domain ⫸ /g, '⟦').replace(/⟦Δ: /g, '⟦')
+    .replace(/∑ /g, '∑')
+    .replace(/\[\s+/g, '[').replace(/\s+\]/g, ']').replace(/,\s+/g, ',')
+    .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[')
+    .replace(/\s+\[\]/g, '')
+}
+
+// Build project-only context (syntax + project.lk, no domains)
+function buildProjectContext(root, verbose = false) {
+  const parts = []
+
+  const syntax = getSyntax(root)
+  if (syntax) parts.push(syntax)
+
+  const project = getProject(root)
+  if (project) parts.push(project)
+
+  const domains = listDomains(root)
+  const cmd = DEV_MODE ? `LK_DEV=1 node ${process.argv[1]}` : 'lk'
+  parts.push(`⟦Nav⟧
+⦗INV⦘ Before Read/Grep/Glob, get domain context:
+  Bash: ${cmd} context -d <domain>
+Domains: ${domains.join(', ')}`)
+
+  const full = parts.join('\n\n')
+  return verbose ? full : minify(full)
+}
+
+// Build domain-only context (just the domain, no syntax/project)
+function buildDomainContext(root, domainName, verbose = false) {
+  const parts = []
+
+  const dp = domainPath(root, domainName)
+  if (existsSync(dp)) {
+    const raw = readFileSync(dp, 'utf8').trim()
+    parts.push(decrypt(raw))
+  } else {
+    parts.push(`[Domain '${domainName}' not found]`)
+  }
+
+  parts.push(`⟦Nav⟧
+⦗USE⦘ Domain map above.
+1. Read @path files directly
+2. For project overview: lk context -p`)
+
+  const full = parts.join('\n\n')
+  return verbose ? full : minify(full)
+}
 
 program
   .name('lk')
@@ -114,23 +171,16 @@ program
   .description('Output .lk context')
   .option('-t, --tokens', 'Count tokens')
   .option('-v, --verbose', 'Verbose output')
+  .option('-p, --project', 'Output full project context')
+  .option('-d, --domain <name>', 'Output specific domain only')
   .action(async (options) => {
     log('HOOK', '#### UserPromptSubmit hook started ####')
-
-    if (!DEV_MODE && !INTERNAL_MODE) {
-      console.log("error: unknown command 'context'")
-      process.exit(1)
-    }
 
     // Check license (DEV mode bypasses this check inside checkAccess)
     const { checkAccess } = await import('./lib/license.js')
     const access = await checkAccess()
     if (!access.allowed) {
-      terminalPrint(`[LK: ${access.message}]`)
       process.exit(1)
-    }
-    if (access.message) {
-      terminalPrint(`[LK: ${access.message}]`)
     }
 
     const cwd = process.cwd()
@@ -145,11 +195,22 @@ program
     log('SESSION', '═'.repeat(70))
     log('SESSION', 'NEW SESSION')
     log('SESSION', '═'.repeat(70))
-    log('CONTEXT', 'Context loaded and injected')
-    terminalPrint('[LK context loaded]')
 
     const useVerbose = options.verbose || process.env.LK_VERBOSE === '1'
-    const context = useVerbose ? buildVerboseContext(cwd) : buildContext(cwd)
+    let context
+    let contextType
+
+    if (options.domain) {
+      // -d: domain only
+      context = buildDomainContext(cwd, options.domain, useVerbose)
+      contextType = `domain:${options.domain}`
+    } else {
+      // Default/-p: project only (syntax + project.lk, no domains)
+      context = buildProjectContext(cwd, useVerbose)
+      contextType = 'project'
+    }
+
+    log('CONTEXT', `Injected: ${contextType} (${context.length} chars)`)
 
     if (options.tokens) {
       const stats = countTokens(context)
@@ -161,6 +222,28 @@ program
     }
 
     process.exit(0)
+  })
+
+program
+  .command('session-info')
+  .description('Print session start info (for hooks)')
+  .action(() => {
+    const parts = ['[LK context loaded]']
+
+    if (!DEV_MODE) {
+      const exp = getLicenseExpiration()
+      if (exp) {
+        if (exp.inGrace) {
+          parts.push(`⚠ License expired - grace period: ${exp.graceDaysLeft}d left`)
+        } else if (exp.expired) {
+          parts.push('⚠ License expired')
+        } else if (exp.daysLeft !== null && exp.daysLeft <= 30) {
+          parts.push(`License: ${exp.daysLeft}d remaining`)
+        }
+      }
+    }
+
+    terminalPrint(parts.join(' | '))
   })
 
 // Dev-only commands
