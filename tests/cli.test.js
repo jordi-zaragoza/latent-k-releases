@@ -25,6 +25,12 @@ describe('CLI binary protection', () => {
     expect(expandBlock).not.toBeNull()
   })
 
+  it('benchmark command is protected with !IS_BINARY', () => {
+    // The benchmark command block should be inside if (!IS_BINARY)
+    const benchmarkBlock = cliContent.match(/if\s*\(\s*!IS_BINARY\s*\)\s*\{[\s\S]*?command\('benchmark/)
+    expect(benchmarkBlock).not.toBeNull()
+  })
+
   it('dev command is protected with !IS_BINARY', () => {
     // The dev command block should be inside if (!IS_BINARY)
     const devBlock = cliContent.match(/if\s*\(\s*!IS_BINARY\s*\)\s*\{[\s\S]*?command\('dev/)
