@@ -83,11 +83,11 @@ ${context.message}
   // Direct answer - instruct LLM to use it
   if (type === 'direct' && context.answer) {
     return `<system-reminder>
-RESPUESTA LISTA - USA DIRECTAMENTE:
+READY ANSWER - USE DIRECTLY:
 
 ${context.answer}
 
-IMPORTANTE: Esta respuesta ya está completa. NO llames a Read, Glob, Grep ni otras herramientas. Responde al usuario directamente con esta información.
+IMPORTANT: This answer is complete. DO NOT call Read, Glob, Grep or other tools. Respond to the user directly with this information.
 </system-reminder>`
   }
 
@@ -97,12 +97,12 @@ IMPORTANTE: Esta respuesta ya está completa. NO llames a Read, Glob, Grep ni ot
 
     // Add navigation guide if present
     if (context.navigation_guide) {
-      parts.push('GUÍA DE NAVEGACIÓN:')
+      parts.push('NAVIGATION GUIDE:')
       parts.push(context.navigation_guide)
       parts.push('')
     }
 
-    parts.push('CONTEXTO DE CÓDIGO RELEVANTE:', '')
+    parts.push('RELEVANT CODE CONTEXT:', '')
 
     for (const [filePath, content] of Object.entries(context.files)) {
       parts.push(`--- ${filePath} ---`)
@@ -118,7 +118,7 @@ IMPORTANTE: Esta respuesta ya está completa. NO llames a Read, Glob, Grep ni ot
       parts.push('')
     }
 
-    parts.push('INSTRUCCIÓN: Usa este código para responder. Solo usa Read si el usuario pide detalles que no están aquí.')
+    parts.push('INSTRUCTION: Use this code to respond. Only use Read if the user asks for details not present here.')
     parts.push('</system-reminder>')
 
     return parts.join('\n')

@@ -164,7 +164,7 @@ describe('expand command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('<system-reminder>'))
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('This is the answer'))
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('RESPUESTA LISTA'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('READY ANSWER'))
     })
 
     it('outputs system-reminder with code context', async () => {
@@ -182,7 +182,7 @@ describe('expand command', () => {
       await expandCommand('test', {})
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('<system-reminder>'))
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('CONTEXTO DE CÓDIGO'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('RELEVANT CODE CONTEXT'))
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('src/test.js'))
     })
 
