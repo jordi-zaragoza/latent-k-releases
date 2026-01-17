@@ -4,6 +4,8 @@ Auto-sync context for AI coding assistants (Claude Code, Gemini CLI).
 
 ## Features
 
+- **Prompt expansion**: AI analyzes your prompt and injects relevant code context
+- **Direct answers**: Simple questions get instant answers without file reads
 - Automatic context injection at session start
 - Auto-sync on session end
 - Multi-CLI support (Claude Code, Gemini CLI)
@@ -14,7 +16,7 @@ Auto-sync context for AI coding assistants (Claude Code, Gemini CLI).
 ## Installation
 
 ```bash
-curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.2.0/install.sh | bash
+curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.3.0/install.sh | bash
 ```
 
 Binary is installed to `/usr/local/bin/lk`.
@@ -39,6 +41,15 @@ lk sync      # Initial sync
     ├── cli.lk     # CLI domain files (encrypted)
     └── core.lk    # Core domain files (encrypted)
 ```
+
+### Prompt Expansion
+
+When you ask a question, LK analyzes your prompt and:
+
+1. **Direct answer**: If the answer is in project metadata, returns it instantly
+2. **Code context**: If code is needed, extracts only the relevant functions
+
+The context is injected as `<system-reminder>` with clear instructions for the LLM.
 
 ### LK Format
 
@@ -68,6 +79,7 @@ Files are classified with symbols:
 | `lk ignore <pattern>` | Add ignore pattern |
 | `lk update` | Update to latest version |
 | `lk clean` | Remove lk data |
+| `lk expand` | Expand prompt with context (used by hooks) |
 
 ## Ignore Patterns
 
