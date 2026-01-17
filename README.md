@@ -74,12 +74,20 @@ Files are classified with symbols:
 | `lk enable -t claude` | Enable for Claude Code only |
 | `lk enable -t gemini` | Enable for Gemini CLI only |
 | `lk disable` | Disable hooks |
-| `lk context -p` | Print full context |
-| `lk context -d <domain>` | Print domain context |
 | `lk ignore <pattern>` | Add ignore pattern |
 | `lk update` | Update to latest version |
 | `lk clean` | Remove lk data |
+
+### Development Commands (source only)
+
+These commands are only available when running from source (`node src/cli.js`), not in the compiled binary:
+
+| Command | Description |
+|---------|-------------|
+| `lk context` | Print full .lk context |
 | `lk expand` | Expand prompt with context (used by hooks) |
+| `lk benchmark` | Compare token usage with/without LK |
+| `lk dev` | Toggle between source and binary mode |
 
 ## Ignore Patterns
 
@@ -107,7 +115,7 @@ lk ignore "**/fixtures/**"
 
 ```bash
 npm install      # Install dependencies
-npm test         # Run tests (294 tests)
+npm test         # Run tests (342 tests)
 npm run build    # Build binaries
 ```
 
