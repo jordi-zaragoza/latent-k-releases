@@ -7,7 +7,7 @@ import { clearLicense } from '../lib/license.js'
 import { config } from '../lib/config.js'
 
 const CONFIG_DIR = path.join(homedir(), '.config', 'lk')
-const LICENSE_DIR = path.join(homedir(), '.config", "lk-license')
+const LICENSE_DIR = path.join(homedir(), '.config', 'lk-license')
 const DEVICE_FILE = path.join(homedir(), '.lk-device')
 const LOG_DIR = path.join(homedir(), '.lk')
 
