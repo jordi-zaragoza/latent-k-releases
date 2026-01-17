@@ -11,9 +11,8 @@ import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
-import { writeFileSync, readFileSync, existsSync } from 'fs'
-import { buildContext, buildVerboseContext, countTokens, exists, getSyntax, getProject, domainPath, listDomains, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
-import { decrypt } from './lib/crypto.js'
+import { writeFileSync } from 'fs'
+import { buildVerboseContext, countTokens, exists, getSyntax, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { log } from './lib/config.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration } from './lib/license.js'
@@ -41,45 +40,11 @@ function minify(text) {
     .replace(/\s+\[\]/g, '')
 }
 
-// Build project-only context (project.lk + nav, no syntax)
-function buildProjectContext(root, verbose = false) {
-  const parts = []
-
-  const project = getProject(root)
-  if (project) parts.push(project)
-
-  const domains = listDomains(root)
-  parts.push(`⟦Nav⟧
-⦗INV⦘ Use domain map. Domains: ${domains.join(', ')}`)
-
-  const full = parts.join('\n\n')
-  return verbose ? full : minify(full)
-}
-
 // Build syntax-only context (for session start)
 function buildSyntaxContext(root, verbose = false) {
   const syntax = getSyntax(root)
   if (!syntax) return ''
   return verbose ? syntax : minify(syntax)
-}
-
-// Build domain-only context (just the domain, no syntax/project)
-function buildDomainContext(root, domainName, verbose = false) {
-  const parts = []
-
-  const dp = domainPath(root, domainName)
-  if (existsSync(dp)) {
-    const raw = readFileSync(dp, 'utf8').trim()
-    parts.push(decrypt(raw))
-  } else {
-    parts.push(`[Domain '${domainName}' not found]`)
-  }
-
-  parts.push(`⟦Nav⟧
-⦗USE⦘ Read @path files directly from domain map above.`)
-
-  const full = parts.join('\n\n')
-  return verbose ? full : minify(full)
 }
 
 program
@@ -220,49 +185,17 @@ program
 if (!IS_BINARY) {
   program
     .command('context')
-    .description('[DEV] Output raw .lk context')
+    .description('[DEV] Output full .lk context (syntax + project + domains)')
     .option('-t, --tokens', 'Count tokens')
-    .option('-v, --verbose', 'Verbose output')
-    .option('-p, --project', 'Output full project context')
-    .option('-d, --domain <name>', 'Output specific domain only')
-    .action(async (options) => {
-      log('HOOK', '#### UserPromptSubmit hook started ####')
-
-      // Check license (DEV mode bypasses this check inside checkAccess)
-      const { checkAccess } = await import('./lib/license.js')
-      const access = await checkAccess()
-      if (!access.allowed) {
-        process.exit(1)
-      }
-
+    .action((options) => {
       const cwd = process.cwd()
 
       if (!exists(cwd)) {
-        log('HOOK', '#### No LK context found, exiting ####')
         console.log('[No LK context - run: lk sync]')
         process.exit(0)
       }
 
-      log('SESSION', '')
-      log('SESSION', '═'.repeat(70))
-      log('SESSION', 'NEW SESSION')
-      log('SESSION', '═'.repeat(70))
-
-      const useVerbose = options.verbose || process.env.LK_VERBOSE === '1'
-      let context
-      let contextType
-
-      if (options.domain) {
-        // -d: domain only
-        context = buildDomainContext(cwd, options.domain, useVerbose)
-        contextType = `domain:${options.domain}`
-      } else {
-        // Default/-p: project only (syntax + project.lk, no domains)
-        context = buildProjectContext(cwd, useVerbose)
-        contextType = 'project'
-      }
-
-      log('CONTEXT', `Injected: ${contextType} (${context.length} chars)`)
+      const context = buildVerboseContext(cwd)
 
       if (options.tokens) {
         const stats = countTokens(context)
@@ -272,8 +205,6 @@ if (!IS_BINARY) {
       } else {
         console.log(context)
       }
-
-      process.exit(0)
     })
 }
 
