@@ -1,6 +1,6 @@
 {
   "name": "latent-k",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Auto-sync context for AI coding assistants (Claude Code, Gemini CLI)",
   "type": "module",
   "main": "src/cli.js",
