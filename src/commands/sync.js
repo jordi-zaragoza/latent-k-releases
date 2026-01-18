@@ -4,7 +4,7 @@ import { isConfigured, log, getIgnorePatterns } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
 import { generateProject, generateIgnore } from '../lib/ai.js'
 import {
-  init, buildContext, removeEntry,
+  init, buildContext, buildContextForFiles, removeEntry,
   getAllEntries, getUnsyncedFiles, getDeletedFiles,
   getProject, setProject, ignoreExists, loadIgnore, saveIgnore, isIgnored,
   loadState, saveState, getAllFiles
@@ -153,8 +153,6 @@ function removeFiles(cwd, deleted, nowIgnored, affectedDomains, print) {
 }
 
 async function processFiles(cwd, unsynced, all, affectedDomains, print, printErr) {
-  const lkContent = buildContext(cwd)
-
   // Sort: modified first (by mtime), then new files
   // Uses try/catch to handle files that may have been deleted between discovery and sort
   const getMtime = (file) => {
@@ -187,6 +185,10 @@ async function processFiles(cwd, unsynced, all, affectedDomains, print, printErr
     if (all && totalBatches > 1) print(`\n[Batch ${batch + 1}/${totalBatches}]`)
 
     try {
+      // Build context filtered for this batch's files (reduces tokens ~50%)
+      const batchFiles = filesToAnalyze.map(f => f.file)
+      const lkContent = buildContextForFiles(cwd, batchFiles)
+
       const { filesForAI } = prepareBatch(cwd, filesToAnalyze)
       const results = await analyzeBatch(lkContent, filesForAI)
       const analyzedFiles = filesToAnalyze.slice(0, filesForAI.length)

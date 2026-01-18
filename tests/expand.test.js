@@ -8,17 +8,17 @@ vi.mock('../src/lib/config.js', () => ({
 
 vi.mock('../src/lib/context.js', () => ({
   getProject: vi.fn(),
-  loadDomain: vi.fn(),
   listDomains: vi.fn(),
-  buildDomain: vi.fn()
+  getProjectSummary: vi.fn(),
+  getDomainIndex: vi.fn()
 }))
 
 vi.mock('../src/lib/ai.js', () => ({
   classifyPrompt: vi.fn(),
-  expandPrompt: vi.fn()
+  expandPromptCompact: vi.fn()
 }))
 
-import { getProject, loadDomain, listDomains, buildDomain } from '../src/lib/context.js'
+import { getProject, listDomains, getProjectSummary, getDomainIndex } from '../src/lib/context.js'
 import * as ai from '../src/lib/ai.js'
 
 describe('expand', () => {
@@ -139,23 +139,17 @@ A test project.`
     const sampleProjectLk = `⦓ID: PROJECT⦔
 ⟪NAME: test-project⟫`
 
-    const sampleDomain = {
-      id: 'DOMAIN-CORE',
-      domain: 'Core',
-      vibe: 'minimal',
-      groups: {
-        Lib: [
-          { symbol: 'λ', file: 'parser.js', hash: 'abc1234', path: 'src/lib/parser.js', desc: 'parses input' }
-        ]
-      },
-      invariants: []
-    }
+    const sampleProjectSummary = `⦓ID: PROJECT⦔
+⟪NAME: test-project⟫`
+
+    const sampleDomainIndex = `⟦Core⟧
+Lib:[λsrc/lib/parser.js]`
 
     beforeEach(() => {
       getProject.mockReturnValue(sampleProjectLk)
       listDomains.mockReturnValue(['core', 'cli'])
-      loadDomain.mockReturnValue(sampleDomain)
-      buildDomain.mockReturnValue('⦓CORE⦔\n∑ Lib [λ parser.js]')
+      getProjectSummary.mockReturnValue(sampleProjectSummary)
+      getDomainIndex.mockReturnValue(sampleDomainIndex)
     })
 
     it('loads domain and returns code context', async () => {
@@ -165,7 +159,7 @@ A test project.`
         needs_domains: ['core'],
         block_reason: null
       })
-      ai.expandPrompt.mockResolvedValue({
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         navigation_guide: 'Parser module contains parsing logic',
         files: [{ path: 'src/lib/parser.js', reason: 'Contains parse function to test' }]
@@ -173,8 +167,8 @@ A test project.`
 
       const result = await expand('/test', 'add tests for parser')
 
-      expect(loadDomain).toHaveBeenCalledWith('/test', 'core')
-      expect(ai.expandPrompt).toHaveBeenCalled()
+      expect(getDomainIndex).toHaveBeenCalledWith('/test', ['core'])
+      expect(ai.expandPromptCompact).toHaveBeenCalled()
       expect(result.type).toBe('code_context')
       expect(result.calls).toBe(2)
       expect(result.context._instruction).toBe('read_files')
@@ -190,7 +184,7 @@ A test project.`
         needs_domains: ['core'],
         block_reason: null
       })
-      ai.expandPrompt.mockResolvedValue({
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: 'The parser uses regex to extract exports.',
         files: []
       })
@@ -229,7 +223,7 @@ A test project.`
         needs_domains: ['core'],
         block_reason: null
       })
-      ai.expandPrompt.mockResolvedValue({
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         files: []
       })
@@ -247,15 +241,14 @@ A test project.`
         needs_domains: ['core', 'cli'],
         block_reason: null
       })
-      ai.expandPrompt.mockResolvedValue({
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         files: [{ path: 'src/lib/parser.js', reason: 'Core parsing' }]
       })
 
       await expand('/test', 'test the core and cli modules')
 
-      expect(loadDomain).toHaveBeenCalledWith('/test', 'core')
-      expect(loadDomain).toHaveBeenCalledWith('/test', 'cli')
+      expect(getDomainIndex).toHaveBeenCalledWith('/test', ['core', 'cli'])
     })
 
     it('returns file list with reasons for Claude Code to read', async () => {
@@ -265,7 +258,7 @@ A test project.`
         needs_domains: ['core'],
         block_reason: null
       })
-      ai.expandPrompt.mockResolvedValue({
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         navigation_guide: 'Check the parser module',
         files: [

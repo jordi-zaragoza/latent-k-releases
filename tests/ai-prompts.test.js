@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   SYMBOLS,
   SYMBOL_DESCRIPTIONS,
+  SYMBOLS_COMPACT,
   DOMAIN_RULES,
   DEFAULT_ANALYSIS,
   buildAnalyzeFilePrompt,
@@ -10,6 +11,7 @@ import {
   buildIgnorePrompt,
   buildClassifyPrompt,
   buildExpandPrompt,
+  buildExpandPromptCompact,
   parseJsonResponse,
   extractJsonFromText,
   generateDefaultResults
@@ -37,6 +39,23 @@ describe('constants', () => {
     expect(SYMBOL_DESCRIPTIONS).toContain('⧫')
     expect(SYMBOL_DESCRIPTIONS).toContain('▸')
     expect(SYMBOL_DESCRIPTIONS).toContain('⊚')
+  })
+
+  it('SYMBOLS_COMPACT contains all symbols in compact format', () => {
+    expect(SYMBOLS_COMPACT).toContain('▸(entry)')
+    expect(SYMBOLS_COMPACT).toContain('⇄(api)')
+    expect(SYMBOLS_COMPACT).toContain('λ(logic)')
+    expect(SYMBOLS_COMPACT).toContain('⚙(config)')
+    expect(SYMBOLS_COMPACT).toContain('⧫(test)')
+    expect(SYMBOLS_COMPACT).toContain('⊚(ui)')
+    expect(SYMBOLS_COMPACT).toContain('⟐(schema)')
+    expect(SYMBOLS_COMPACT).toContain('◈(bg)')
+    expect(SYMBOLS_COMPACT).toContain('⤳(pipe)')
+    expect(SYMBOLS_COMPACT).toContain('⚑(state)')
+  })
+
+  it('SYMBOLS_COMPACT is shorter than SYMBOL_DESCRIPTIONS', () => {
+    expect(SYMBOLS_COMPACT.length).toBeLessThan(SYMBOL_DESCRIPTIONS.length)
   })
 
   it('DOMAIN_RULES contains expected domains', () => {
@@ -447,5 +466,59 @@ A CLI tool for testing.`
   it('instructs to return only JSON', () => {
     const prompt = buildExpandPrompt('test', sampleProjectLk, sampleDomainLk)
     expect(prompt).toContain('Return ONLY JSON')
+  })
+})
+
+describe('buildExpandPromptCompact', () => {
+  const sampleProjectSummary = `⦓ID: PROJECT⦔
+⟪NAME: test-project⟫
+⟦Purpose⟧
+A CLI tool for testing.`
+
+  const sampleDomainIndex = `⟦Core⟧
+Lib:[λsrc/lib/parser.js,λsrc/lib/utils.js]`
+
+  it('includes user prompt', () => {
+    const prompt = buildExpandPromptCompact('add tests', sampleProjectSummary, sampleDomainIndex)
+    expect(prompt).toContain('add tests')
+  })
+
+  it('includes project section', () => {
+    const prompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
+    expect(prompt).toContain('test-project')
+    expect(prompt).toContain('PROJECT:')
+  })
+
+  it('includes compact symbols legend', () => {
+    const prompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
+    expect(prompt).toContain('SYMBOLS:')
+    expect(prompt).toContain('▸(entry)')
+    expect(prompt).toContain('λ(logic)')
+  })
+
+  it('includes domain index as FILES section', () => {
+    const prompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
+    expect(prompt).toContain('FILES:')
+    expect(prompt).toContain('⟦Core⟧')
+    expect(prompt).toContain('parser.js')
+  })
+
+  it('includes JSON response format', () => {
+    const prompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
+    expect(prompt).toContain('"direct_answer"')
+    expect(prompt).toContain('"files"')
+    expect(prompt).toContain('"path"')
+    expect(prompt).toContain('"reason"')
+  })
+
+  it('instructs to return only JSON', () => {
+    const prompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
+    expect(prompt).toContain('Return ONLY JSON')
+  })
+
+  it('is shorter than buildExpandPrompt for same content', () => {
+    const fullPrompt = buildExpandPrompt('test', sampleProjectSummary, sampleDomainIndex)
+    const compactPrompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
+    expect(compactPrompt.length).toBeLessThan(fullPrompt.length)
   })
 })
