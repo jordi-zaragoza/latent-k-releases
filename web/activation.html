@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LATENT-K Activation</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a24;
+            --text-primary: #e0e0e8;
+            --text-secondary: #8888a0;
+            --accent-green: #00ff88;
+            --accent-cyan: #00d4ff;
+            --accent-purple: #a855f7;
+            --accent-yellow: #ffd700;
+            --border-color: #2a2a3a;
+            --glow-green: rgba(0, 255, 136, 0.15);
+            --glow-cyan: rgba(0, 212, 255, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background-image:
+                radial-gradient(ellipse at top, rgba(0, 212, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom, rgba(168, 85, 247, 0.03) 0%, transparent 50%);
+        }
+
+        .container {
+            max-width: 480px;
+            width: 100%;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .logo .delim {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tagline {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        /* Main Card */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+        }
+
+        .card-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-header h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-header p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px var(--glow-cyan);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        /* Plan Selection */
+        .plans {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .plan-option {
+            position: relative;
+        }
+
+        .plan-option input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .plan-card {
+            display: block;
+            padding: 1.25rem;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .plan-option input:checked + .plan-card {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 0 3px var(--glow-green);
+        }
+
+        .plan-card:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .plan-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .plan-price {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        .plan-price span {
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
+
+        .plan-features {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .plan-feature {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            padding-left: 1rem;
+            position: relative;
+        }
+
+        .plan-feature::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.4em;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-green);
+            border-radius: 50%;
+        }
+
+        /* Submit Button */
+        .btn-submit {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        /* Activation Key Display */
+        .key-display {
+            display: none;
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--accent-green);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .key-display.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .key-display .label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .key-value {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 1rem;
+            color: var(--accent-green);
+            letter-spacing: 0.15em;
+            word-break: break-all;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .copy-btn {
+            margin-top: 1rem;
+            padding: 0.625rem 1.5rem;
+            background: transparent;
+            border: 1px solid var(--accent-green);
+            border-radius: 6px;
+            color: var(--accent-green);
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Status Message */
+        .status {
+            display: none;
+            padding: 0.875rem 1rem;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+            border-radius: 8px;
+        }
+
+        .status.error {
+            display: block;
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+
+        .status.success {
+            display: block;
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+            background: var(--glow-green);
+        }
+
+        /* Loading State */
+        .loading .btn-submit {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+
+        .loading .spinner {
+            display: inline-block;
+        }
+
+        .loading .btn-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .plans {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo"><span class="delim">⦓</span> LATENT-K <span class="delim">⦔</span></h1>
+            <p class="tagline">Intelligent Context Management</p>
+        </header>
+
+        <!-- Main Form Card -->
+        <main class="card">
+            <div class="card-header">
+                <h2>Request Activation Key</h2>
+                <p>Get started with your personal license</p>
+            </div>
+
+            <form id="activationForm">
+                <!-- Email -->
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input
+                        type="email"
+                        class="form-input"
+                        id="email"
+                        placeholder="you@example.com"
+                        required
+                    >
+                </div>
+
+                <!-- Name -->
+                <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input
+                        type="text"
+                        class="form-input"
+                        id="name"
+                        placeholder="Your name"
+                        required
+                    >
+                </div>
+
+                <!-- Plan Selection -->
+                <div class="form-group">
+                    <label class="form-label">Select Plan</label>
+                    <div class="plans">
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="monthly" checked>
+                            <div class="plan-card">
+                                <div class="plan-name">Monthly</div>
+                                <div class="plan-price">$9<span>/mo</span></div>
+                                <div class="plan-features">
+                                    <div class="plan-feature">1 month license</div>
+                                    <div class="plan-feature">All features</div>
+                                    <div class="plan-feature">Email support</div>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="yearly">
+                            <div class="plan-card">
+                                <div class="plan-name">Yearly</div>
+                                <div class="plan-price">$79<span>/yr</span></div>
+                                <div class="plan-features">
+                                    <div class="plan-feature">12 month license</div>
+                                    <div class="plan-feature">All features</div>
+                                    <div class="plan-feature">Priority support</div>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <button type="submit" class="btn-submit">
+                    <span class="btn-text">Generate Key</span>
+                    <span class="spinner"></span>
+                </button>
+
+                <!-- Status Messages -->
+                <div class="status" id="status"></div>
+            </form>
+
+            <!-- Key Display -->
+            <div class="key-display" id="keyDisplay">
+                <div class="label">Your Activation Key</div>
+                <div class="key-value" id="keyValue">LK-XXXX-XXXX-XXXX-XXXX</div>
+                <button class="copy-btn" onclick="copyKey()">Copy Key</button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>LATENT-K v1.3.6</p>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('activationForm');
+        const status = document.getElementById('status');
+        const keyDisplay = document.getElementById('keyDisplay');
+        const keyValue = document.getElementById('keyValue');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const name = document.getElementById('name').value;
+            const plan = document.querySelector('input[name="plan"]:checked').value;
+
+            // Start loading state
+            form.classList.add('loading');
+            status.className = 'status';
+            status.textContent = '';
+            keyDisplay.classList.remove('active');
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name, plan })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to generate key');
+                }
+
+                // Show success
+                keyValue.textContent = data.key;
+                keyDisplay.classList.add('active');
+
+                status.className = 'status success';
+                status.textContent = `License generated for ${data.email}. Valid until ${new Date(data.expires).toLocaleDateString()}.`;
+
+            } catch (error) {
+                status.className = 'status error';
+                status.textContent = error.message || 'Failed to generate key. Please try again.';
+            } finally {
+                form.classList.remove('loading');
+            }
+        });
+
+        function copyKey() {
+            const key = keyValue.textContent;
+            navigator.clipboard.writeText(key).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = original;
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
