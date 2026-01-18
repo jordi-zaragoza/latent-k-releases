@@ -1,4 +1,4 @@
-import { loadStats, resetStats, getStatsSummary, statsPath } from '../lib/stats.js'
+import { loadStats, resetStats, getStatsSummary, statsPath, MODEL_PRICING, PRICING_DATE } from '../lib/stats.js'
 import fs from 'fs'
 
 /**
@@ -95,6 +95,19 @@ export async function stats(options = {}) {
   console.log('\n' + '─'.repeat(50))
   console.log(`First recorded: ${formatDate(summary.created)}`)
   console.log(`Last updated: ${formatDate(summary.lastUpdated)}`)
+
+  // Show pricing info for models used
+  const usedModels = Object.keys(summary.byModel)
+  if (usedModels.length > 0) {
+    console.log(`\nCost estimate (prices from ${PRICING_DATE}):`)
+    for (const model of usedModels) {
+      const pricing = MODEL_PRICING[model]
+      if (pricing) {
+        console.log(`  ${model}: $${pricing.input}/1M in, $${pricing.output}/1M out`)
+      }
+    }
+  }
+
   console.log('')
   console.log('Options:')
   console.log('  lk stats --json    Output raw JSON')
