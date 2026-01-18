@@ -113,13 +113,50 @@ const server = createServer(async (req, res) => {
     return
   }
 
-  // API: Generate license (payment module pending)
+  // API: Generate license (protected - admin only)
   if (req.method === 'POST' && req.url === '/api/generate') {
-    res.writeHead(503, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({
-      error: 'Payment module not available',
-      message: 'The payment system is under development. Coming soon!'
-    }))
+    if (!isAuthenticated()) {
+      res.writeHead(401, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Unauthorized' }))
+      return
+    }
+    let body = ''
+    req.on('data', chunk => body += chunk)
+    req.on('end', () => {
+      try {
+        const { email, name, plan } = JSON.parse(body)
+
+        if (!email) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Email is required' }))
+          return
+        }
+
+        const durationDays = PLAN_DAYS[plan] || 365
+        const key = generateLicense({ email, durationDays })
+        const data = parseLicense(key)
+
+        const licenses = loadLicenses()
+        licenses.push({
+          key,
+          email,
+          name: name || '',
+          plan: plan || 'yearly',
+          created: new Date().toISOString(),
+          expires: data.expires ? new Date(data.expires).toISOString() : null,
+          revoked: false
+        })
+        saveLicenses(licenses)
+
+        console.log(`[LICENSE] Generated license for ${email} (${plan || 'yearly'})`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ key, data }))
+      } catch (err) {
+        console.error('[LICENSE] Error:', err.message)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      }
+    })
     return
   }
 

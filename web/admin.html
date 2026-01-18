@@ -943,7 +943,7 @@
             const plan = document.getElementById('new-plan').value;
 
             try {
-                const res = await fetch('/api/generate', {
+                const res = await apiCall('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, name, plan })
