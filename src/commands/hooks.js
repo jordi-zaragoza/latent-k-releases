@@ -1,10 +1,13 @@
-import { writeFile, readFile, mkdir } from 'fs/promises'
+import { writeFile, readFile, mkdir, stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const DEV_MODE = process.env.LK_DEV === '1'
+
+// Max settings file size (1MB) to prevent DoS from corrupted files
+const MAX_SETTINGS_SIZE = 1024 * 1024
 
 // CLI-specific configurations
 const CLI_CONFIG = {
@@ -35,6 +38,12 @@ async function loadSettings(cli) {
   const { dir } = getConfig(cli)
   const settingsPath = join(dir, 'settings.json')
   try {
+    // Check file size before reading to prevent DoS
+    const stats = await stat(settingsPath)
+    if (stats.size > MAX_SETTINGS_SIZE) {
+      console.error(`Warning: ${settingsPath} exceeds size limit, using empty settings`)
+      return {}
+    }
     const content = await readFile(settingsPath, 'utf8')
     return JSON.parse(content)
   } catch {

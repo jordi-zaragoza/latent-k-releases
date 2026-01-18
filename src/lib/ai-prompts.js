@@ -144,26 +144,6 @@ Return ONLY the project.lk content, no markdown, no explanation.`
 }
 
 /**
- * Build prompt for LK entry description
- */
-export function buildDescribeLkPrompt({ file, content }) {
-  return `Analyze this file and generate a .lk entry.
-
-File: ${file}
-Content:
-${content}
-
-Generate a single .lk entry line with:
-- Appropriate symbol (λ for core logic, ⇄ for interface/API, ⚙ for config, ⧫ for test, etc.)
-- Filename
-- Brief description in quotes if not obvious from name
-- Exports in {braces} if applicable
-
-Return ONLY the entry line, nothing else.
-Example: λ auth.js "handles JWT tokens" {login, logout, refresh}`
-}
-
-/**
  * Build prompt for ignore pattern generation
  */
 export function buildIgnorePrompt({ files, globalPatterns = [] }) {
@@ -191,6 +171,35 @@ Return ONLY project-specific patterns, one per line. Empty response is OK.`
 }
 
 /**
+ * Sanitize parsed JSON to prevent prototype pollution attacks
+ * Removes dangerous keys like __proto__, constructor, prototype
+ * @param {*} obj - Object to sanitize
+ * @returns {*} Sanitized object
+ */
+function sanitizeJson(obj) {
+  if (obj === null || typeof obj !== 'object') {
+    return obj
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeJson)
+  }
+
+  const dangerous = ['__proto__', 'constructor', 'prototype']
+  const sanitized = {}
+
+  for (const key of Object.keys(obj)) {
+    if (dangerous.includes(key)) {
+      log('AI-PROMPTS', `Blocked dangerous JSON key: ${key}`)
+      continue
+    }
+    sanitized[key] = sanitizeJson(obj[key])
+  }
+
+  return sanitized
+}
+
+/**
  * Parse JSON response with fallback handling
  * @param {string} text - Text to parse
  * @param {*} fallback - Fallback value if parsing fails
@@ -206,8 +215,10 @@ export function parseJsonResponse(text, fallback = null, trackStats = true) {
     // Clean markdown code blocks if present
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const result = JSON.parse(clean)
+    // Sanitize to prevent prototype pollution
+    const sanitized = sanitizeJson(result)
     if (trackStats) recordParseResult(true)
-    return result
+    return sanitized
   } catch (err) {
     log('AI-PROMPTS', 'JSON parse error:', err.message)
     if (trackStats) recordParseResult(false)
@@ -232,8 +243,10 @@ export function extractJsonFromText(text, isArray = false, trackStats = true) {
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const parsed = JSON.parse(clean)
     if (isArray ? Array.isArray(parsed) : typeof parsed === 'object') {
+      // Sanitize to prevent prototype pollution
+      const sanitized = sanitizeJson(parsed)
       if (trackStats) recordParseResult(true)
-      return parsed
+      return sanitized
     }
   } catch {
     // Fall through to regex extraction
@@ -247,8 +260,10 @@ export function extractJsonFromText(text, isArray = false, trackStats = true) {
     try {
       const parsed = JSON.parse(match[0])
       if (isArray ? Array.isArray(parsed) : typeof parsed === 'object') {
+        // Sanitize to prevent prototype pollution
+        const sanitized = sanitizeJson(parsed)
         if (trackStats) recordParseResult(true)
-        return parsed
+        return sanitized
       }
     } catch (err) {
       log('AI-PROMPTS', 'JSON extraction failed:', err.message)

@@ -156,11 +156,15 @@ async function processFiles(cwd, unsynced, all, affectedDomains, print, printErr
   const lkContent = buildContext(cwd)
 
   // Sort: modified first (by mtime), then new files
-  const sortByMtime = (a, b) => {
-    const statA = fs.statSync(path.join(cwd, a.file))
-    const statB = fs.statSync(path.join(cwd, b.file))
-    return statB.mtimeMs - statA.mtimeMs
+  // Uses try/catch to handle files that may have been deleted between discovery and sort
+  const getMtime = (file) => {
+    try {
+      return fs.statSync(path.join(cwd, file)).mtimeMs
+    } catch {
+      return 0  // Deleted files sort to end
+    }
   }
+  const sortByMtime = (a, b) => getMtime(b.file) - getMtime(a.file)
   const modified = unsynced.filter(f => f.status === 'modified').sort(sortByMtime)
   const newFiles = unsynced.filter(f => f.status === 'new').sort(sortByMtime)
   const allToProcess = [...modified, ...newFiles]
