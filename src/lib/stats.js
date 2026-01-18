@@ -11,6 +11,18 @@ import { log } from './config.js'
 const LK_DIR = '.lk'
 const STATS_FILE = 'stats.json'
 
+// Pricing per 1M tokens (as of January 2025)
+// Source: https://ai.google.dev/pricing, https://www.anthropic.com/pricing
+const MODEL_PRICING = {
+  'gemini-2.5-flash': { input: 0.075, output: 0.30 },    // $/1M tokens
+  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'gemini-1.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-1.5-pro': { input: 1.25, output: 5.00 },
+  'claude-3-5-haiku-20241022': { input: 0.80, output: 4.00 },
+  'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
+  'claude-3-opus-20240229': { input: 15.00, output: 75.00 },
+}
+
 // Get stats file path for a project root
 export const statsPath = root => path.join(root, LK_DIR, STATS_FILE)
 
@@ -66,17 +78,22 @@ function createEmptyStats() {
     totals: {
       sessions: 0,
       calls: 0,
+      errors: 0,
       charsSent: 0,
       charsReceived: 0,
       tokensSentEstimate: 0,
       tokensReceivedEstimate: 0,
-      totalDurationMs: 0
+      totalDurationMs: 0,
+      costUsd: 0,
+      parseSuccess: 0,
+      parseFailed: 0
     },
     byOperation: {},
     byOperationType: {},
     byModel: {},
     sessions: [],
-    calls: []
+    calls: [],
+    errors: []
   }
 }
 
@@ -140,6 +157,22 @@ function estimateTokens(chars) {
 }
 
 /**
+ * Calculate cost for a call based on model pricing
+ * @param {string} model - Model identifier
+ * @param {number} inputTokens - Input tokens
+ * @param {number} outputTokens - Output tokens
+ * @returns {number} Cost in USD
+ */
+function calculateCost(model, inputTokens, outputTokens) {
+  const pricing = MODEL_PRICING[model]
+  if (!pricing) return 0
+
+  const inputCost = (inputTokens / 1_000_000) * pricing.input
+  const outputCost = (outputTokens / 1_000_000) * pricing.output
+  return inputCost + outputCost
+}
+
+/**
  * Update aggregated stats for a category (byOperation or byModel)
  */
 function updateAggregated(aggregated, key, callData) {
@@ -150,7 +183,8 @@ function updateAggregated(aggregated, key, callData) {
       charsReceived: 0,
       tokensSentEstimate: 0,
       tokensReceivedEstimate: 0,
-      totalDurationMs: 0
+      totalDurationMs: 0,
+      costUsd: 0
     }
   }
 
@@ -160,6 +194,7 @@ function updateAggregated(aggregated, key, callData) {
   aggregated[key].tokensSentEstimate += callData.tokensSentEstimate
   aggregated[key].tokensReceivedEstimate += callData.tokensReceivedEstimate
   aggregated[key].totalDurationMs += callData.durationMs
+  aggregated[key].costUsd = (aggregated[key].costUsd || 0) + (callData.costUsd || 0)
 }
 
 /**
@@ -190,6 +225,7 @@ export function recordCall({
 
   const tokensSentEstimate = estimateTokens(charsSent)
   const tokensReceivedEstimate = estimateTokens(charsReceived)
+  const costUsd = calculateCost(model, tokensSentEstimate, tokensReceivedEstimate)
 
   const callData = {
     timestamp: new Date().toISOString(),
@@ -202,6 +238,7 @@ export function recordCall({
     charsReceived,
     tokensSentEstimate,
     tokensReceivedEstimate,
+    costUsd,
     durationMs
   }
 
@@ -211,6 +248,7 @@ export function recordCall({
   stats.totals.charsReceived += charsReceived
   stats.totals.tokensSentEstimate += tokensSentEstimate
   stats.totals.tokensReceivedEstimate += tokensReceivedEstimate
+  stats.totals.costUsd = (stats.totals.costUsd || 0) + costUsd
   stats.totals.totalDurationMs += durationMs
 
   // Update by operation (API type: JSON API call, Text API call, etc.)
@@ -254,25 +292,104 @@ export function getStatsSummary(root = null) {
   const stats = loadStats(root)
 
   const totalSessions = stats.totals.sessions || 0
+  const totalErrors = stats.totals.errors || 0
+  const parseSuccess = stats.totals.parseSuccess || 0
+  const parseFailed = stats.totals.parseFailed || 0
+  const totalParses = parseSuccess + parseFailed
 
   return {
     totalSessions,
     totalCalls: stats.totals.calls,
+    totalErrors,
     avgCallsPerSession: totalSessions > 0
       ? Math.round((stats.totals.calls / totalSessions) * 10) / 10
       : 0,
     totalCharsSent: stats.totals.charsSent,
     totalCharsReceived: stats.totals.charsReceived,
     totalTokensEstimate: stats.totals.tokensSentEstimate + stats.totals.tokensReceivedEstimate,
+    totalCostUsd: stats.totals.costUsd || 0,
     avgDurationMs: stats.totals.calls > 0
       ? Math.round(stats.totals.totalDurationMs / stats.totals.calls)
       : 0,
+    parseSuccessRate: totalParses > 0
+      ? Math.round((parseSuccess / totalParses) * 1000) / 10
+      : 100,
+    parseSuccess,
+    parseFailed,
     byOperation: stats.byOperation,
     byOperationType: stats.byOperationType || {},
     byModel: stats.byModel,
+    recentErrors: (stats.errors || []).slice(-5),
     created: stats.created,
     lastUpdated: stats.lastUpdated
   }
+}
+
+/**
+ * Record an error
+ * @param {Object} params
+ * @param {string} params.provider - Provider name
+ * @param {string} params.operation - Operation that failed
+ * @param {string} params.operationType - Logical operation type
+ * @param {string} params.error - Error message
+ * @param {string} [params.root] - Project root
+ */
+export function recordError({
+  provider,
+  operation,
+  operationType,
+  error,
+  root = null
+}) {
+  const stats = loadStats(root)
+
+  // Initialize if needed (backwards compatibility)
+  if (!stats.totals.errors) stats.totals.errors = 0
+  if (!stats.errors) stats.errors = []
+
+  stats.totals.errors++
+
+  const errorData = {
+    timestamp: new Date().toISOString(),
+    sessionId,
+    provider,
+    operation,
+    operationType,
+    error: String(error).slice(0, 500) // Limit error message length
+  }
+
+  stats.errors.push(errorData)
+
+  // Keep last 100 errors
+  if (stats.errors.length > 100) {
+    stats.errors = stats.errors.slice(-100)
+  }
+
+  saveStats(stats, root)
+  log('STATS', `Recorded error: ${operationType || operation} - ${error}`)
+
+  return errorData
+}
+
+/**
+ * Record a parse result (success or failure)
+ * @param {boolean} success - Whether parsing succeeded
+ * @param {string} [root] - Project root
+ */
+export function recordParseResult(success, root = null) {
+  const stats = loadStats(root)
+
+  // Initialize if needed (backwards compatibility)
+  if (!stats.totals.parseSuccess) stats.totals.parseSuccess = 0
+  if (!stats.totals.parseFailed) stats.totals.parseFailed = 0
+
+  if (success) {
+    stats.totals.parseSuccess++
+  } else {
+    stats.totals.parseFailed++
+  }
+
+  saveStats(stats, root)
 }
 
 /**

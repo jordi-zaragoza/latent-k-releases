@@ -12,6 +12,7 @@ import {
   generateDefaultResults,
   logLlmCall,
   logLlmResponse,
+  recordError,
   DEFAULT_ANALYSIS
 } from './ai-prompts.js'
 
@@ -89,15 +90,25 @@ export async function checkRateLimit() {
 async function callApi(prompt, maxTokens = 256, operationType = null) {
   const tracking = logLlmCall('ANTHROPIC', 'API call', prompt.length, MODEL, operationType)
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: prompt }]
-  })
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }]
+    })
 
-  const text = response.content?.[0]?.text?.trim() || null
-  logLlmResponse(tracking, text)
-  return text
+    const text = response.content?.[0]?.text?.trim() || null
+    logLlmResponse(tracking, text)
+    return text
+  } catch (err) {
+    recordError({
+      provider: 'ANTHROPIC',
+      operation: 'API call',
+      operationType,
+      error: err.message
+    })
+    throw err
+  }
 }
 
 export async function analyzeFile({ lkContent, file, content, action }) {

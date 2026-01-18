@@ -12,6 +12,7 @@ import {
   generateDefaultResults,
   logLlmCall,
   logLlmResponse,
+  recordError,
   DEFAULT_ANALYSIS
 } from './ai-prompts.js'
 
@@ -90,11 +91,21 @@ export async function checkRateLimit() {
 async function callJsonApi(prompt, operationType = null) {
   const tracking = logLlmCall('GEMINI', 'JSON API call', prompt.length, MODEL, operationType)
 
-  const result = await jsonModel.generateContent(prompt)
-  const text = result.response?.text?.()?.trim() || null
+  try {
+    const result = await jsonModel.generateContent(prompt)
+    const text = result.response?.text?.()?.trim() || null
 
-  logLlmResponse(tracking, text)
-  return text
+    logLlmResponse(tracking, text)
+    return text
+  } catch (err) {
+    recordError({
+      provider: 'GEMINI',
+      operation: 'JSON API call',
+      operationType,
+      error: err.message
+    })
+    throw err
+  }
 }
 
 /**
@@ -105,11 +116,21 @@ async function callJsonApi(prompt, operationType = null) {
 async function callTextApi(prompt, operationType = null) {
   const tracking = logLlmCall('GEMINI', 'Text API call', prompt.length, MODEL, operationType)
 
-  const result = await model.generateContent(prompt)
-  const text = result.response?.text?.()?.trim() || null
+  try {
+    const result = await model.generateContent(prompt)
+    const text = result.response?.text?.()?.trim() || null
 
-  logLlmResponse(tracking, text)
-  return text
+    logLlmResponse(tracking, text)
+    return text
+  } catch (err) {
+    recordError({
+      provider: 'GEMINI',
+      operation: 'Text API call',
+      operationType,
+      error: err.message
+    })
+    throw err
+  }
 }
 
 /**
@@ -149,7 +170,7 @@ IMPORTANT: If the file should be IGNORED (generated code, migrations, fixtures, 
 
 Respond with this JSON schema:
 {
-  "symbol": "string (one of: λ, ⇄, ⚙, ⧫, ▸, ⊚)",
+  "symbol": "string (one of: ▸, ⇄, λ, ⚙, ⧫, ⊚, ⟐, ◈, ⤳, ⚑)",
   "description": "string (3-6 keywords) or null",
   "domain": "string"
 }
@@ -173,12 +194,16 @@ Current .lk context:
 ${lkContent}
 
 Symbols (pick ONE per file):
-- "λ": Core logic, utilities, helpers
+- "▸": Entry point, main/index
 - "⇄": Interface, API, commands, entry points
+- "λ": Core logic, utilities, helpers
 - "⚙": Config files
 - "⧫": Test files
-- "▸": Entry point, main/index
 - "⊚": UI Component
+- "⟐": Schema, types, models
+- "◈": Background jobs, workers, queues
+- "⤳": Pipeline, workflow, process
+- "⚑": State management (store, reducer)
 
 Domain rules:
 - src/commands/*, src/cli/* → "cli"
