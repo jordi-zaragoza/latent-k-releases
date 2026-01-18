@@ -365,7 +365,7 @@ RULES:
    - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
    - Claude Code executes actions, not you. Your job is only to select relevant files.
 2. "navigation_guide": Brief guidance for Claude Code on how to approach this task. Explain which file does what and how they connect.
-   - IMPORTANT: If a file is large (>100 lines or complex), add "Use Read tool on [path] for full content" in the guide.
+   - IMPORTANT: If a file is large (>50 lines), tell Claude Code to use the Read tool for full content.
 3. "files": List 1-5 most relevant files for the task.
    - "path": Full relative path from domain details (MUST exist in domain)
    - "functions": Optional. Specific function/class names if the question targets specific code. Omit for full file context.

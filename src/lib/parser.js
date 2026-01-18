@@ -231,8 +231,8 @@ export function extractFunctions(filePath, functionNames) {
 }
 
 // Max lines to show at start/end of large files
-const HEAD_LINES = 50
-const TAIL_LINES = 50
+const HEAD_LINES = 25
+const TAIL_LINES = 25
 const MAX_LINES = HEAD_LINES + TAIL_LINES
 
 /**
