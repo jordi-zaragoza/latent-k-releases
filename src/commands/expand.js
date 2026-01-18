@@ -8,11 +8,42 @@
  */
 
 import fs from 'fs'
-import readline from 'readline'
+import crypto from 'crypto'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
+
+/**
+ * Get marker file path for a session (based on transcript path hash)
+ */
+function getMarkerPath(transcriptPath) {
+  if (!transcriptPath) return null
+  const hash = crypto.createHash('md5').update(transcriptPath).digest('hex').slice(0, 12)
+  return `/tmp/lk-expanded-${hash}`
+}
+
+/**
+ * Check if expansion already ran for this session
+ */
+function wasAlreadyExpanded(transcriptPath) {
+  const markerPath = getMarkerPath(transcriptPath)
+  if (!markerPath) return false
+  return fs.existsSync(markerPath)
+}
+
+/**
+ * Mark session as expanded
+ */
+function markAsExpanded(transcriptPath) {
+  const markerPath = getMarkerPath(transcriptPath)
+  if (!markerPath) return
+  try {
+    fs.writeFileSync(markerPath, Date.now().toString())
+  } catch {
+    // Ignore errors creating marker
+  }
+}
 
 /**
  * Read from stdin with timeout
@@ -70,58 +101,6 @@ function extractInput(input) {
   return { prompt: input, transcriptPath: null }
 }
 
-/**
- * Get the last assistant message from a transcript file
- * @param {string} transcriptPath - Path to the JSONL transcript file
- * @returns {Promise<string|null>} - Last assistant message (truncated if long)
- */
-async function getLastAssistantMessage(transcriptPath) {
-  if (!transcriptPath) return null
-
-  try {
-    if (!fs.existsSync(transcriptPath)) {
-      return null
-    }
-
-    const fileStream = fs.createReadStream(transcriptPath)
-    const rl = readline.createInterface({
-      input: fileStream,
-      crlfDelay: Infinity
-    })
-
-    let lastAssistantMessage = null
-
-    for await (const line of rl) {
-      if (!line.trim()) continue
-      try {
-        const entry = JSON.parse(line)
-        if (entry.role === 'assistant' && entry.message) {
-          lastAssistantMessage = entry.message
-        }
-      } catch {
-        // Skip invalid JSON lines
-      }
-    }
-
-    if (!lastAssistantMessage) return null
-
-    // Truncate if too long: head + ... + tail (final part often has the question)
-    const maxLen = 600
-    const headLen = 300
-    const tailLen = 300
-
-    if (lastAssistantMessage.length > maxLen) {
-      const head = lastAssistantMessage.slice(0, headLen)
-      const tail = lastAssistantMessage.slice(-tailLen)
-      return `${head}\n...[truncated]...\n${tail}`
-    }
-
-    return lastAssistantMessage
-  } catch (err) {
-    log('EXPAND', `Error reading transcript: ${err.message}`)
-    return null
-  }
-}
 
 /**
  * Format result as system-reminder for LLM consumption
@@ -211,6 +190,12 @@ export async function expandCommand(prompt, options = {}) {
     return
   }
 
+  // Skip if already expanded for this session
+  if (wasAlreadyExpanded(transcriptPath)) {
+    if (debug) console.error('[lk expand] Already expanded this session, skipping')
+    return
+  }
+
   // Check if .lk directory exists
   if (!exists(root)) {
     if (debug) console.error('[lk expand] No .lk directory, passing through')
@@ -232,13 +217,7 @@ export async function expandCommand(prompt, options = {}) {
   }
 
   try {
-    // Get previous assistant message for context (if available)
-    const previousContext = await getLastAssistantMessage(transcriptPath)
-    if (debug && previousContext) {
-      console.error(`[lk expand] Previous context available (${previousContext.length} chars)`)
-    }
-
-    const result = await expand(root, input, previousContext)
+    const result = await expand(root, input)
 
     if (debug) {
       console.error(`[lk expand] ${result.calls} API call(s), type: ${result.type}`)
@@ -249,6 +228,8 @@ export async function expandCommand(prompt, options = {}) {
     if (output) {
       log('EXPAND', `Output to LLM (${output.length} chars):\n${output}`)
       console.log(output)
+      // Mark as expanded only if we actually provided context (not passthrough)
+      markAsExpanded(transcriptPath)
     }
   } catch (err) {
     if (debug) {
