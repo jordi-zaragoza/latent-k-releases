@@ -144,13 +144,17 @@ export async function expand(root, prompt, previousContext = null) {
     }
   }
 
-  // 2. Load requested domains
+  // 2. Load requested domains (normalize to lowercase for case-insensitive matching)
   log('EXPAND', `Loading domains: ${domainNames.join(', ')}`)
   const domainContents = []
+  const availableLower = availableDomains.map(d => d.toLowerCase())
 
   for (const name of domainNames) {
-    if (availableDomains.includes(name)) {
-      const domain = loadDomain(root, name)
+    const nameLower = name.toLowerCase()
+    const idx = availableLower.indexOf(nameLower)
+    if (idx >= 0) {
+      // Use actual filename from availableDomains (preserves case for file access)
+      const domain = loadDomain(root, availableDomains[idx])
       if (domain) {
         domainContents.push(serializeDomain(domain))
       }

@@ -197,10 +197,8 @@ program
   .command('session-info')
   .description('Print session start info (for hooks)')
   .action(() => {
-    // Only show banner if .lk directory exists
-    if (!existsSync('.lk')) return
-
     const green = '\x1b[32m'
+    const yellow = '\x1b[33m'
     const reset = '\x1b[0m'
 
     // ASCII banner with lk symbols
@@ -213,6 +211,12 @@ program
 
     // Print banner in green
     banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
+
+    // Check if .lk directory exists
+    if (!existsSync('.lk')) {
+      terminalPrint(`${yellow}No context - It will sync dynamically during conversation${reset}`)
+      return
+    }
 
     // Build info line
     const infoParts = ['Context loaded']

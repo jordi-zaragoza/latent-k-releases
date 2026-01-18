@@ -87,7 +87,8 @@ export function processBatchResults(cwd, analyzedFiles, results, print, printErr
       const fullPath = path.join(cwd, file)
       const exports = extractExports(fullPath)
       const group = inferGroup(file)
-      const domain = analysis.domain || 'core'
+      // Normalize domain to lowercase to avoid case-sensitive duplicates (Data.lk vs data.lk)
+      const domain = (analysis.domain || 'core').toLowerCase()
 
       addEntry(
         cwd,
@@ -133,7 +134,8 @@ export function processDeferredFiles(cwd, deferredNew, print, printErr) {
       const fullPath = path.join(cwd, file)
       const exports = extractExports(fullPath)
       const group = inferGroup(file)
-      const domain = inferDomainFromPath(file) || 'core'
+      // Normalize domain to lowercase for consistency
+      const domain = (inferDomainFromPath(file) || 'core').toLowerCase()
       const symbol = inferSymbolFromPath(file) || 'λ'
       // Placeholder hash so it reappears as "modified" for AI analysis next sync
       addEntry(cwd, domain, group, symbol, '0000000', file, '', exports)
