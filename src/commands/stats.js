@@ -37,11 +37,11 @@ export async function stats(options = {}) {
 
   console.log('\nTotals:')
   console.log(`  Sessions: ${summary.totalSessions}`)
-  console.log(`  Calls: ${summary.totalCalls}`)
+  console.log(`  Calls: ${summary.totalCalls}${summary.totalErrors > 0 ? ` (${summary.totalErrors} errors)` : ''}`)
   console.log(`  Avg calls/session: ${summary.avgCallsPerSession}`)
-  console.log(`  Characters sent: ${formatNumber(summary.totalCharsSent)}`)
-  console.log(`  Characters received: ${formatNumber(summary.totalCharsReceived)}`)
   console.log(`  Tokens (estimate): ${formatNumber(summary.totalTokensEstimate)}`)
+  console.log(`  Cost: $${formatCost(summary.totalCostUsd)}`)
+  console.log(`  Parse success rate: ${summary.parseSuccessRate}%`)
   console.log(`  Avg duration: ${summary.avgDurationMs}ms`)
 
   // By operation type (logical operations like analyzeFile, classifyPrompt)
@@ -77,9 +77,18 @@ export async function stats(options = {}) {
       const data = summary.byModel[model]
       console.log(`  ${model}:`)
       console.log(`    Calls: ${data.calls}`)
-      console.log(`    Tokens sent: ${formatNumber(data.tokensSentEstimate)}`)
-      console.log(`    Tokens received: ${formatNumber(data.tokensReceivedEstimate)}`)
+      console.log(`    Tokens: ${formatNumber(data.tokensSentEstimate + data.tokensReceivedEstimate)}`)
+      console.log(`    Cost: $${formatCost(data.costUsd || 0)}`)
       console.log(`    Avg duration: ${Math.round(data.totalDurationMs / data.calls)}ms`)
+    }
+  }
+
+  // Recent errors
+  if (summary.recentErrors && summary.recentErrors.length > 0) {
+    console.log('\nRecent Errors:')
+    for (const err of summary.recentErrors) {
+      const time = formatDate(err.timestamp).split(',')[0] // Just date
+      console.log(`  [${time}] ${err.operationType || err.operation}: ${err.error.slice(0, 60)}`)
     }
   }
 
@@ -94,6 +103,15 @@ export async function stats(options = {}) {
 
 function formatNumber(n) {
   return n.toLocaleString()
+}
+
+function formatCost(cost) {
+  if (cost < 0.01) {
+    return cost.toFixed(4)
+  } else if (cost < 1) {
+    return cost.toFixed(3)
+  }
+  return cost.toFixed(2)
 }
 
 function formatDate(isoString) {

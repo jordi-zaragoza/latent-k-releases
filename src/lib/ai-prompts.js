@@ -4,7 +4,10 @@
  */
 
 import { log } from './config.js'
-import { recordCall } from './stats.js'
+import { recordCall, recordError, recordParseResult } from './stats.js'
+
+// Re-export for use by providers
+export { recordError }
 
 // Available symbols for file classification (matches VALID_SYMBOLS in context.js, except ◇ which is internal)
 export const SYMBOLS = {
@@ -189,31 +192,47 @@ Return ONLY project-specific patterns, one per line. Empty response is OK.`
 
 /**
  * Parse JSON response with fallback handling
+ * @param {string} text - Text to parse
+ * @param {*} fallback - Fallback value if parsing fails
+ * @param {boolean} trackStats - Whether to record parse result in stats
  */
-export function parseJsonResponse(text, fallback = null) {
-  if (!text) return fallback
+export function parseJsonResponse(text, fallback = null, trackStats = true) {
+  if (!text) {
+    if (trackStats) recordParseResult(false)
+    return fallback
+  }
 
   try {
     // Clean markdown code blocks if present
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    return JSON.parse(clean)
+    const result = JSON.parse(clean)
+    if (trackStats) recordParseResult(true)
+    return result
   } catch (err) {
     log('AI-PROMPTS', 'JSON parse error:', err.message)
+    if (trackStats) recordParseResult(false)
     return fallback
   }
 }
 
 /**
  * Extract JSON from text with regex fallback
+ * @param {string} text - Text to extract JSON from
+ * @param {boolean} isArray - Whether to expect an array
+ * @param {boolean} trackStats - Whether to record parse result in stats
  */
-export function extractJsonFromText(text, isArray = false) {
-  if (!text) return null
+export function extractJsonFromText(text, isArray = false, trackStats = true) {
+  if (!text) {
+    if (trackStats) recordParseResult(false)
+    return null
+  }
 
   try {
     // Try direct parse first
     const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const parsed = JSON.parse(clean)
     if (isArray ? Array.isArray(parsed) : typeof parsed === 'object') {
+      if (trackStats) recordParseResult(true)
       return parsed
     }
   } catch {
@@ -228,6 +247,7 @@ export function extractJsonFromText(text, isArray = false) {
     try {
       const parsed = JSON.parse(match[0])
       if (isArray ? Array.isArray(parsed) : typeof parsed === 'object') {
+        if (trackStats) recordParseResult(true)
         return parsed
       }
     } catch (err) {
@@ -235,6 +255,7 @@ export function extractJsonFromText(text, isArray = false) {
     }
   }
 
+  if (trackStats) recordParseResult(false)
   return null
 }
 
