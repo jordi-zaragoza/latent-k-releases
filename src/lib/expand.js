@@ -42,9 +42,10 @@ function serializeDomain(domain) {
  * Main expand function - returns structured JSON context
  * @param {string} root - Project root directory
  * @param {string} prompt - User's prompt
+ * @param {string|null} previousContext - Last assistant message for continuation detection
  * @returns {Promise<{type: string, calls: number, context: object|null}>}
  */
-export async function expand(root, prompt) {
+export async function expand(root, prompt, previousContext = null) {
   // Skip short prompts (confirmations like "ok", "yes", "hazlo", etc.)
   if (prompt.trim().length < MIN_PROMPT_LENGTH) {
     log('EXPAND', `Prompt too short (${prompt.trim().length} chars), bypassing`)
@@ -81,9 +82,12 @@ export async function expand(root, prompt) {
   const availableDomains = listDomains(root)
   log('EXPAND', `Available domains: ${availableDomains.join(', ') || 'none'}`)
 
-  // 1. First call - classify prompt
+  // 1. First call - classify prompt (with previous context for continuation detection)
   log('EXPAND', 'Classifying prompt...')
-  const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains)
+  if (previousContext) {
+    log('EXPAND', `Previous context available (${previousContext.length} chars)`)
+  }
+  const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains, previousContext)
   log('EXPAND', `Classification: ${JSON.stringify(classification)}`)
 
   // Block meta questions about the context system
@@ -91,6 +95,16 @@ export async function expand(root, prompt) {
     log('EXPAND', `Blocked: ${classification.block_reason}`)
     return {
       type: 'blocked',
+      calls: 1,
+      context: null
+    }
+  }
+
+  // Continuation of previous conversation - no expansion needed
+  if (classification.is_continuation) {
+    log('EXPAND', 'Continuation detected, passing through')
+    return {
+      type: 'passthrough',
       calls: 1,
       context: null
     }
@@ -185,6 +199,7 @@ export async function expand(root, prompt) {
   // 4. Extract code from files
   log('EXPAND', `Extracting context from ${files.length} file(s)`)
   const fileContext = {}
+  const TRUNCATION_MARKER = '... (truncated)'
 
   for (const file of files) {
     // Remove @ prefix from path aliases (e.g. @app/... -> app/...)
@@ -198,7 +213,12 @@ export async function expand(root, prompt) {
       for (const fnName of functions) {
         const fnContent = getFileContext(filePath, [fnName])
         if (fnContent) {
-          fileContext[file.path][fnName] = fnContent
+          // If truncated, tell Claude Code to read it instead
+          if (fnContent.endsWith(TRUNCATION_MARKER)) {
+            fileContext[file.path][fnName] = `[File too large - use Read tool on: ${file.path}]`
+          } else {
+            fileContext[file.path][fnName] = fnContent
+          }
         }
       }
       // If no functions extracted, skip this file
@@ -209,7 +229,12 @@ export async function expand(root, prompt) {
       // Full file content
       const content = getFileContext(filePath, null)
       if (content) {
-        fileContext[file.path] = content
+        // If truncated, tell Claude Code to read it instead
+        if (content.endsWith(TRUNCATION_MARKER)) {
+          fileContext[file.path] = `[File too large - use Read tool on: ${file.path}]`
+        } else {
+          fileContext[file.path] = content
+        }
       }
     }
   }

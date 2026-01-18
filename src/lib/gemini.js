@@ -280,19 +280,23 @@ export async function generateIgnore({ files, globalPatterns = [] }) {
  * @param {string} userPrompt - The user's prompt
  * @param {string} projectLk - Project metadata in LK format
  * @param {string[]} availableDomains - List of available domain names
- * @returns {Promise<{is_project: boolean, direct_answer: string|null, needs_domains: string[]|null, block_reason: string|null}>}
+ * @param {string|null} previousContext - Last assistant message for continuation detection
+ * @returns {Promise<{is_project: boolean, is_continuation: boolean, direct_answer: string|null, needs_domains: string[]|null, block_reason: string|null}>}
  */
-export async function classifyPrompt(userPrompt, projectLk, availableDomains = []) {
+export async function classifyPrompt(userPrompt, projectLk, availableDomains = [], previousContext = null) {
   if (!model) initClient()
 
   log('GEMINI', `classifyPrompt: ${userPrompt.slice(0, 100)}...`)
+  if (previousContext) {
+    log('GEMINI', `Previous context: ${previousContext.slice(0, 100)}...`)
+  }
 
-  const prompt = buildClassifyPrompt(userPrompt, projectLk, availableDomains)
+  const prompt = buildClassifyPrompt(userPrompt, projectLk, availableDomains, previousContext)
   const text = await callJsonApi(prompt)
 
   if (!text) {
     log('GEMINI', 'Empty response - defaulting to passthrough')
-    return { is_project: false, direct_answer: null, needs_domains: null, block_reason: null }
+    return { is_project: false, is_continuation: false, direct_answer: null, needs_domains: null, block_reason: null }
   }
 
   const parsed = extractJsonFromText(text, false)
@@ -302,7 +306,7 @@ export async function classifyPrompt(userPrompt, projectLk, availableDomains = [
   }
 
   log('GEMINI', 'Parse failed - defaulting to passthrough')
-  return { is_project: false, direct_answer: null, needs_domains: null, block_reason: null }
+  return { is_project: false, is_continuation: false, direct_answer: null, needs_domains: null, block_reason: null }
 }
 
 /**

@@ -7,6 +7,8 @@
  *   lk expand --debug "prompt"  - Show debug info
  */
 
+import fs from 'fs'
+import readline from 'readline'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log } from '../lib/config.js'
@@ -45,23 +47,80 @@ async function readStdin(timeoutMs = 100) {
 }
 
 /**
- * Extract prompt from input
+ * Extract prompt and transcript path from input
  * Handles both direct text and Claude Code JSON format
+ * @returns {{ prompt: string, transcriptPath: string|null }}
  */
-function extractPrompt(input) {
-  if (!input) return ''
+function extractInput(input) {
+  if (!input) return { prompt: '', transcriptPath: null }
 
   // Try to parse as JSON (Claude Code format)
   try {
     const parsed = JSON.parse(input)
     if (parsed.prompt) {
-      return parsed.prompt
+      return {
+        prompt: parsed.prompt,
+        transcriptPath: parsed.transcript_path || null
+      }
     }
   } catch {
     // Not JSON, treat as plain text
   }
 
-  return input
+  return { prompt: input, transcriptPath: null }
+}
+
+/**
+ * Get the last assistant message from a transcript file
+ * @param {string} transcriptPath - Path to the JSONL transcript file
+ * @returns {Promise<string|null>} - Last assistant message (truncated if long)
+ */
+async function getLastAssistantMessage(transcriptPath) {
+  if (!transcriptPath) return null
+
+  try {
+    if (!fs.existsSync(transcriptPath)) {
+      return null
+    }
+
+    const fileStream = fs.createReadStream(transcriptPath)
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    })
+
+    let lastAssistantMessage = null
+
+    for await (const line of rl) {
+      if (!line.trim()) continue
+      try {
+        const entry = JSON.parse(line)
+        if (entry.role === 'assistant' && entry.message) {
+          lastAssistantMessage = entry.message
+        }
+      } catch {
+        // Skip invalid JSON lines
+      }
+    }
+
+    if (!lastAssistantMessage) return null
+
+    // Truncate if too long: head + ... + tail (final part often has the question)
+    const maxLen = 600
+    const headLen = 300
+    const tailLen = 300
+
+    if (lastAssistantMessage.length > maxLen) {
+      const head = lastAssistantMessage.slice(0, headLen)
+      const tail = lastAssistantMessage.slice(-tailLen)
+      return `${head}\n...[truncated]...\n${tail}`
+    }
+
+    return lastAssistantMessage
+  } catch (err) {
+    log('EXPAND', `Error reading transcript: ${err.message}`)
+    return null
+  }
 }
 
 /**
@@ -143,8 +202,8 @@ export async function expandCommand(prompt, options = {}) {
     rawInput = await readStdin()
   }
 
-  // Extract prompt from input (handles JSON format from Claude Code)
-  const input = extractPrompt(rawInput)
+  // Extract prompt and transcript path from input (handles JSON format from Claude Code)
+  const { prompt: input, transcriptPath } = extractInput(rawInput)
 
   // Still no input - nothing to expand
   if (!input) {
@@ -173,7 +232,13 @@ export async function expandCommand(prompt, options = {}) {
   }
 
   try {
-    const result = await expand(root, input)
+    // Get previous assistant message for context (if available)
+    const previousContext = await getLastAssistantMessage(transcriptPath)
+    if (debug && previousContext) {
+      console.error(`[lk expand] Previous context available (${previousContext.length} chars)`)
+    }
+
+    const result = await expand(root, input, previousContext)
 
     if (debug) {
       console.error(`[lk expand] ${result.calls} API call(s), type: ${result.type}`)

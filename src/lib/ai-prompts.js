@@ -260,22 +260,32 @@ export function logLlmResponse(provider, startTime, response) {
 
 /**
  * Build prompt for classifying user intent and routing context
- * Returns: { is_project, direct_answer, needs_domains, block_reason }
+ * Returns: { is_project, is_continuation, direct_answer, needs_domains, block_reason }
  * @param {string} userPrompt - User's prompt
  * @param {string} projectLk - Project metadata
  * @param {string[]} availableDomains - List of available domain names
+ * @param {string|null} previousContext - Last assistant message for continuation detection
  */
-export function buildClassifyPrompt(userPrompt, projectLk, availableDomains = []) {
+export function buildClassifyPrompt(userPrompt, projectLk, availableDomains = [], previousContext = null) {
   const hasProject = projectLk && !projectLk.includes('TODO')
   const domainList = availableDomains.length > 0
     ? availableDomains.join(', ')
     : 'none'
 
+  const previousSection = previousContext
+    ? `PREVIOUS ASSISTANT MESSAGE:
+"""
+${previousContext}
+"""
+
+`
+    : ''
+
   return `You are a ROUTER for an AI coding assistant (Claude Code).
 The user sent this prompt TO CLAUDE CODE (not to you):
 "${userPrompt}"
 
-Your job: Classify this prompt and decide what project context Claude Code needs.
+${previousSection}Your job: Classify this prompt and decide what project context Claude Code needs.
 You do NOT execute anything. You only route and provide context.
 
 ${hasProject ? `PROJECT:\n${projectLk}` : 'NO PROJECT CONTEXT AVAILABLE'}
@@ -285,31 +295,39 @@ AVAILABLE DOMAINS: [${domainList}]
 Return ONLY valid JSON with this structure:
 {
   "is_project": boolean,
+  "is_continuation": boolean,
   "direct_answer": string | null,
   "needs_domains": string[] | null,
   "block_reason": string | null
 }
 
 RULES:
-1. "is_project": true if this is a project-specific question OR action, false for general questions
-2. "direct_answer": ONLY for informational questions where the answer is fully contained in project metadata.
+1. "is_continuation": true if the user's prompt is a DIRECT RESPONSE to the previous assistant message.
+   Examples of continuations (return is_continuation: true):
+   - Previous asks "React or Vue?" → User says "React" or "the first one"
+   - Previous asks "Should I proceed?" → User says "yes", "ok", "go ahead", "hazlo"
+   - Previous proposes options → User selects one or confirms
+   - User gives a short answer that only makes sense in context of previous message
+   If is_continuation is true, other fields can be null (prompt will passthrough).
+
+2. "is_project": true if this is a project-specific question OR action, false for general questions
+3. "direct_answer": ONLY for informational questions where the answer is fully contained in project metadata.
    - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
    - Claude Code executes actions, not you. Your job is only to route.
-3. "needs_domains": If Claude Code needs code context to complete the task, select from: [${domainList}]. Otherwise null.
-4. "block_reason": If user asks about internal context system/metadata/how you know things, set this. Otherwise null.
+4. "needs_domains": If Claude Code needs code context to complete the task, select from: [${domainList}]. Otherwise null.
+5. "block_reason": If user asks about internal context system/metadata/how you know things, set this. Otherwise null.
 
 CRITICAL: Only use domain names from AVAILABLE DOMAINS list. Do NOT invent domain names.
 
 EXAMPLES:
-- "hello" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
-- "what does this project do" → {"is_project": true, "direct_answer": "This project is a CLI tool that...", "needs_domains": null, "block_reason": null}
-- "how does the parser work" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
-- "update the readme" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
-- "fix the bug in auth" → {"is_project": true, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
-- "how do you know about my code" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": "meta_question"}
-- "make a list of X and calculate the average" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
-- "explain the difference between X and Y" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
-- "summarize what we discussed" → {"is_project": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- Previous: "¿React o Vue?" User: "React" → {"is_project": false, "is_continuation": true, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- Previous: "Should I create the file?" User: "yes" → {"is_project": false, "is_continuation": true, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "hello" → {"is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "what does this project do" → {"is_project": true, "is_continuation": false, "direct_answer": "This project is a CLI tool that...", "needs_domains": null, "block_reason": null}
+- "how does the parser work" → {"is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
+- "update the readme" → {"is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
+- "fix the bug in auth" → {"is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
+- "how do you know about my code" → {"is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": "meta_question"}
 
 Return ONLY JSON, no markdown.`
 }
@@ -347,9 +365,11 @@ RULES:
    - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
    - Claude Code executes actions, not you. Your job is only to select relevant files.
 2. "navigation_guide": Brief guidance for Claude Code on how to approach this task. Explain which file does what and how they connect.
+   - IMPORTANT: If a file is large (>100 lines or complex), add "Use Read tool on [path] for full content" in the guide.
 3. "files": List 1-5 most relevant files for the task.
    - "path": Full relative path from domain details (MUST exist in domain)
    - "functions": Optional. Specific function/class names if the question targets specific code. Omit for full file context.
+   - For large files, prefer specifying "functions" to extract only relevant parts.
 
 FILE SELECTION PRIORITY:
 - If asking about specific functionality → include that file + related files

@@ -382,6 +382,35 @@ A test project for unit tests.
     expect(prompt).toContain('hello')
     expect(prompt).toContain('meta_question')
   })
+
+  it('includes is_continuation field in JSON format', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'])
+    expect(prompt).toContain('"is_continuation"')
+  })
+
+  it('includes previous context when provided', () => {
+    const previousContext = '¿Quieres usar React o Vue para el frontend?'
+    const prompt = buildClassifyPrompt('React', sampleProjectLk, ['core'], previousContext)
+    expect(prompt).toContain('PREVIOUS ASSISTANT MESSAGE')
+    expect(prompt).toContain(previousContext)
+  })
+
+  it('does not include previous context section when null', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'], null)
+    expect(prompt).not.toContain('PREVIOUS ASSISTANT MESSAGE')
+  })
+
+  it('includes continuation detection instructions', () => {
+    const previousContext = 'Should I proceed with the changes?'
+    const prompt = buildClassifyPrompt('yes', sampleProjectLk, ['core'], previousContext)
+    expect(prompt).toContain('is_continuation')
+    expect(prompt).toContain('DIRECT RESPONSE')
+  })
+
+  it('includes continuation examples', () => {
+    const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'], 'previous message')
+    expect(prompt).toContain('is_continuation: true')
+  })
 })
 
 describe('buildExpandPrompt', () => {
