@@ -1,9 +1,11 @@
-import { execSync } from 'child_process'
-import { existsSync, createWriteStream, unlinkSync, chmodSync, accessSync, constants, mkdirSync } from 'fs'
+import { existsSync, createWriteStream, unlinkSync, chmodSync, accessSync, constants, mkdirSync, renameSync } from 'fs'
 import { dirname } from 'path'
 import { platform, arch } from 'os'
+import { randomBytes } from 'crypto'
 import https from 'https'
 import { VERSION } from '../lib/version.js'
+
+const HTTP_TIMEOUT_MS = 30000  // 30 seconds timeout for HTTP requests
 
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
 const LK_BIN_PATH = '/usr/local/bin/lk'
@@ -20,8 +22,9 @@ function canWrite(path) {
 
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, {
-      headers: { 'User-Agent': 'lk' }
+    const req = https.get(url, {
+      headers: { 'User-Agent': 'lk' },
+      timeout: HTTP_TIMEOUT_MS
     }, (res) => {
       if (res.statusCode === 302 || res.statusCode === 301) {
         return fetchJSON(res.headers.location).then(resolve).catch(reject)
@@ -36,7 +39,13 @@ function fetchJSON(url) {
           reject(new Error('Invalid JSON response'))
         }
       })
-    }).on('error', reject)
+    })
+
+    req.on('error', reject)
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error('Request timed out'))
+    })
   })
 }
 
@@ -63,11 +72,12 @@ function downloadFile(url, dest) {
     })
 
     const request = (url) => {
-      https.get(url, {
+      const req = https.get(url, {
         headers: {
           'User-Agent': 'lk',
           'Accept': 'application/octet-stream'
-        }
+        },
+        timeout: HTTP_TIMEOUT_MS
       }, (res) => {
         if (res.statusCode === 302 || res.statusCode === 301) {
           return request(res.headers.location)
@@ -94,9 +104,17 @@ function downloadFile(url, dest) {
           console.log('\rDownloading... done')
           resolve()
         })
-      }).on('error', (err) => {
+      })
+
+      req.on('error', (err) => {
         try { unlinkSync(dest) } catch {}
         reject(err)
+      })
+
+      req.on('timeout', () => {
+        req.destroy()
+        try { unlinkSync(dest) } catch {}
+        reject(new Error('Download timed out'))
       })
     }
 
@@ -150,8 +168,10 @@ export async function update() {
     }
 
     const binaryPath = LK_BIN_PATH
-    const tempPath = binaryPath + '.new'
-    const backupPath = binaryPath + '.backup'
+    // Use random suffix to prevent TOCTOU attacks
+    const randomSuffix = randomBytes(8).toString('hex')
+    const tempPath = `${binaryPath}.new.${randomSuffix}`
+    const backupPath = `${binaryPath}.backup.${randomSuffix}`
 
     // Ensure /usr/local/bin directory exists
     const binDir = dirname(binaryPath)
@@ -185,11 +205,18 @@ export async function update() {
     console.log('Installing...')
     try {
       if (existsSync(backupPath)) unlinkSync(backupPath)
-      execSync(`mv "${binaryPath}" "${backupPath}"`)
-      execSync(`mv "${tempPath}" "${binaryPath}"`)
+      // Use fs.renameSync instead of execSync to avoid command injection
+      renameSync(binaryPath, backupPath)
+      renameSync(tempPath, binaryPath)
+      // Clean up backup after successful install
+      try { unlinkSync(backupPath) } catch {}
       console.log('\nUpdate complete!')
       console.log(`Updated to version ${latestVersion}`)
     } catch (err) {
+      // Try to restore backup if rename failed
+      if (existsSync(backupPath) && !existsSync(binaryPath)) {
+        try { renameSync(backupPath, binaryPath) } catch {}
+      }
       console.log('\nPermission denied. Run with sudo:')
       console.log('  sudo lk update')
       try { unlinkSync(tempPath) } catch {}

@@ -1,14 +1,28 @@
 import fs from 'fs'
 import { getFileExtension } from './context.js'
 
-// Strip comments by language
-const stripJS = code => code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
-const stripPy = code => code.replace(/#.*$/gm, '').replace(/'''[\s\S]*?'''/g, '').replace(/"""[\s\S]*?"""/g, '')
-const stripGo = code => code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
-const stripPHP = code => code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/#.*$/gm, '')
-const stripRuby = code => code.replace(/#.*$/gm, '').replace(/=begin[\s\S]*?=end/g, '')
-const stripRust = code => code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
-const stripJava = code => code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+// Max content size for regex operations to prevent ReDoS
+const MAX_STRIP_SIZE = 100000  // 100KB limit for comment stripping
+
+/**
+ * Safe comment stripping with size limit to prevent ReDoS
+ * For large files, returns content as-is (exports extraction will still work)
+ */
+function safeStrip(code, stripFn) {
+  if (code.length > MAX_STRIP_SIZE) {
+    return code  // Skip stripping for very large files
+  }
+  return stripFn(code)
+}
+
+// Strip comments by language (applied with size limit)
+const stripJS = code => safeStrip(code, c => c.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''))
+const stripPy = code => safeStrip(code, c => c.replace(/#.*$/gm, '').replace(/'''[\s\S]*?'''/g, '').replace(/"""[\s\S]*?"""/g, ''))
+const stripGo = code => safeStrip(code, c => c.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''))
+const stripPHP = code => safeStrip(code, c => c.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/#.*$/gm, ''))
+const stripRuby = code => safeStrip(code, c => c.replace(/#.*$/gm, '').replace(/=begin[\s\S]*?=end/g, ''))
+const stripRust = code => safeStrip(code, c => c.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''))
+const stripJava = code => safeStrip(code, c => c.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''))
 
 // JS/TS exports
 function extractJS(content) {
@@ -157,6 +171,7 @@ function extractPyFunction(content, name) {
 
 /**
  * Extract block using brace counting (JS/TS/Go/Rust/Java/C-style)
+ * Properly ignores braces inside strings and comments
  */
 function extractBraceBlock(lines, startLine) {
   let braceCount = 0
@@ -167,12 +182,40 @@ function extractBraceBlock(lines, startLine) {
     const line = lines[i]
     result.push(line)
 
-    for (const char of line) {
-      if (char === '{') {
-        braceCount++
-        started = true
-      } else if (char === '}') {
-        braceCount--
+    // Count braces while respecting strings and comments
+    let inString = null  // null, '"', "'", or '`'
+    let inLineComment = false
+
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j]
+      const prevChar = j > 0 ? line[j - 1] : ''
+
+      // Skip escaped characters
+      if (prevChar === '\\') continue
+
+      // Handle line comments
+      if (!inString && char === '/' && line[j + 1] === '/') {
+        inLineComment = true
+        break  // Rest of line is comment
+      }
+
+      // Handle string boundaries
+      if (!inLineComment) {
+        if (inString === null && (char === '"' || char === "'" || char === '`')) {
+          inString = char
+        } else if (inString === char) {
+          inString = null
+        }
+      }
+
+      // Count braces only outside strings and comments
+      if (!inString && !inLineComment) {
+        if (char === '{') {
+          braceCount++
+          started = true
+        } else if (char === '}') {
+          braceCount--
+        }
       }
     }
 

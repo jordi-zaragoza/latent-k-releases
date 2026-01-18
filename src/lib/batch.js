@@ -1,16 +1,20 @@
 import fs from 'fs'
 import path from 'path'
 import { log } from './config.js'
-import { addEntry, inferGroup, loadIgnore, saveIgnore, inferDomainFromPath, inferSymbolFromPath } from './context.js'
+import { addEntry, inferGroup, loadIgnore, saveIgnore, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS } from './context.js'
 import { extractExports } from './parser.js'
 import { analyzeFiles } from './ai.js'
 import { withSpinner } from './spinner.js'
+
+// Default symbol when AI returns invalid symbol
+const DEFAULT_SYMBOL = 'λ'
 
 // Batch processing limits
 export const MAX_FILES_PER_SYNC = 5
 export const MAX_CHARS_PER_FILE = 8000
 export const MAX_BATCH_CHARS = 100000
 export const MAX_LINES_PER_FILE = 150
+export const MAX_FILE_SIZE = 1024 * 1024  // 1MB max file size to read
 
 /**
  * Extract distributed sections from a file
@@ -63,6 +67,7 @@ export function extractDistributedSections(content, maxLines = MAX_LINES_PER_FIL
 /**
  * Prepare files for AI batch analysis
  * Reads content, truncates large files, respects batch size limits
+ * Validates files are regular files with reasonable size
  */
 export function prepareBatch(cwd, filesToAnalyze) {
   const filesForAI = []
@@ -70,6 +75,33 @@ export function prepareBatch(cwd, filesToAnalyze) {
 
   for (const { file, status } of filesToAnalyze) {
     const fullPath = path.join(cwd, file)
+
+    // Validate file before reading
+    try {
+      const stats = fs.lstatSync(fullPath)  // lstat doesn't follow symlinks
+
+      // Skip symlinks to prevent reading arbitrary files
+      if (stats.isSymbolicLink()) {
+        log('BATCH', `Skipping symlink: ${file}`)
+        continue
+      }
+
+      // Skip if not a regular file
+      if (!stats.isFile()) {
+        log('BATCH', `Skipping non-file: ${file}`)
+        continue
+      }
+
+      // Skip files that are too large
+      if (stats.size > MAX_FILE_SIZE) {
+        log('BATCH', `Skipping large file (${stats.size} bytes): ${file}`)
+        continue
+      }
+    } catch (err) {
+      log('BATCH', `Error checking file ${file}: ${err.message}`)
+      continue
+    }
+
     const rawContent = fs.readFileSync(fullPath, 'utf8')
     const originalLength = rawContent.length
     const originalLines = rawContent.split('\n').length
@@ -155,11 +187,18 @@ export function processBatchResults(cwd, analyzedFiles, results, print, printErr
       // Normalize domain to lowercase to avoid case-sensitive duplicates (Data.lk vs data.lk)
       const domain = (analysis.domain || 'core').toLowerCase()
 
+      // Validate symbol from AI response - use default if invalid
+      let symbol = analysis.symbol || DEFAULT_SYMBOL
+      if (!VALID_SYMBOLS.includes(symbol)) {
+        log('BATCH', `Invalid symbol "${symbol}" for ${file}, using default`)
+        symbol = DEFAULT_SYMBOL
+      }
+
       addEntry(
         cwd,
         domain,
         group,
-        analysis.symbol || 'λ',
+        symbol,
         hash,
         file,
         analysis.description || '',
@@ -168,7 +207,7 @@ export function processBatchResults(cwd, analyzedFiles, results, print, printErr
 
       affectedDomains.add(domain)
       synced++
-      print(`✓ ${analysis.symbol || 'λ'} ${file} → ${domain}`)
+      print(`✓ ${symbol} ${file} → ${domain}`)
       log('BATCH', `✓ Synced: ${file}`)
     } catch (err) {
       log('BATCH', `Error processing ${file}: ${err.message}`)

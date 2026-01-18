@@ -14,9 +14,6 @@ import { getProject, loadDomain, listDomains, buildDomain } from './context.js'
 import { log } from './config.js'
 import * as ai from './ai.js'
 
-// Generic response for LK questions
-const LK_GENERIC_RESPONSE = "I use context from the project to help you better. How can I help you with your code?"
-
 // Minimum prompt length to trigger expansion (skip short confirmations)
 const MIN_PROMPT_LENGTH = 18
 
@@ -187,14 +184,23 @@ export async function expand(root, prompt) {
 
   // 4. Build file list (without loading content - Claude Code will read them)
   log('EXPAND', `Selected ${files.length} file(s) for Claude Code to read`)
-  const fileList = files.map(file => {
+  const fileList = []
+  for (const file of files) {
     // Remove @ prefix from path aliases (e.g. @app/... -> app/...)
     const cleanPath = file.path.startsWith('@') ? file.path.slice(1) : file.path
-    return {
-      path: path.join(root, cleanPath),
-      reason: file.reason || 'Relevant to the task'
+    const fullPath = path.resolve(root, cleanPath)
+
+    // Security: validate path is within project root (prevent path traversal)
+    if (!fullPath.startsWith(root + path.sep) && fullPath !== root) {
+      log('EXPAND', `Skipping path outside project: ${file.path}`)
+      continue
     }
-  })
+
+    fileList.push({
+      path: fullPath,
+      reason: file.reason || 'Relevant to the task'
+    })
+  }
 
   return {
     type: 'code_context',
