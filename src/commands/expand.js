@@ -184,6 +184,8 @@ export async function expandCommand(prompt, options = {}) {
   // Extract prompt and transcript path from input (handles JSON format from Claude Code)
   const { prompt: input, transcriptPath } = extractInput(rawInput)
 
+  log('HOOK', '#### Expand hook started ####')
+
   // Still no input - nothing to expand
   if (!input) {
     if (debug) console.error('[lk expand] No input provided')
@@ -192,6 +194,7 @@ export async function expandCommand(prompt, options = {}) {
 
   // Skip if already expanded for this session
   if (wasAlreadyExpanded(transcriptPath)) {
+    log('HOOK', 'Already expanded this session, skipping further expansions')
     if (debug) console.error('[lk expand] Already expanded this session, skipping')
     return
   }
