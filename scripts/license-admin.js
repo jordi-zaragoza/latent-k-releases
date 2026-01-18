@@ -70,6 +70,10 @@ function getPublicKey() {
 
 // Generate a license key
 export function generateLicense(options = {}) {
+  if (!options.email) {
+    throw new Error('Email is required for license generation')
+  }
+
   const privateKey = getPrivateKey()
 
   let expires = options.expires || null
@@ -80,7 +84,7 @@ export function generateLicense(options = {}) {
   const data = {
     id: randomBytes(8).toString('hex'),
     type: options.type || 'standard',
-    email: options.email || '',
+    email: options.email.toLowerCase().trim(),
     created: Date.now(),
     expires
   }

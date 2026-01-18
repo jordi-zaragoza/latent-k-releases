@@ -1,12 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { existsSync } from 'fs'
+import { join } from 'path'
+import { homedir } from 'os'
 import {
   getLicenseKey,
   setLicenseKey,
   clearLicense,
   validateLicense,
   activateLicense,
-  isLicensed
+  isLicensed,
+  checkAccess
 } from '../src/lib/license.js'
+import { generateLicense } from '../scripts/license-admin.js'
+
+const PRIVATE_KEY_PATH = join(homedir(), '.lk-keys', 'private.pem')
+const hasPrivateKey = existsSync(PRIVATE_KEY_PATH)
 
 let originalLicenseKey
 const originalDevMode = process.env.LK_DEV
@@ -126,5 +134,80 @@ describe('License validation caching', () => {
 
     expect(result1.valid).toBe(true)
     expect(result2.valid).toBe(true)
+  })
+})
+
+describe.skipIf(!hasPrivateKey)('Email verification', () => {
+  it('validateLicense accepts matching email', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+    setLicenseKey(license)
+
+    const result = await validateLicense('user@example.com')
+    expect(result.valid).toBe(true)
+  })
+
+  it('validateLicense accepts email with different case', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+    setLicenseKey(license)
+
+    const result = await validateLicense('USER@EXAMPLE.COM')
+    expect(result.valid).toBe(true)
+  })
+
+  it('validateLicense rejects mismatched email', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+    setLicenseKey(license)
+
+    const result = await validateLicense('other@example.com')
+    expect(result.valid).toBe(false)
+    expect(result.error).toBe('License email mismatch')
+  })
+
+  it('validateLicense skips email check when no email provided', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+    setLicenseKey(license)
+
+    const result = await validateLicense()
+    expect(result.valid).toBe(true)
+  })
+
+  it('activateLicense rejects mismatched email', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+
+    const result = await activateLicense(license, 'other@example.com')
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('different email')
+  })
+
+  it('activateLicense accepts matching email', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+
+    const result = await activateLicense(license, 'user@example.com')
+    expect(result.success).toBe(true)
+  })
+
+  it('checkAccess rejects mismatched email', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+    setLicenseKey(license)
+
+    const result = await checkAccess('other@example.com')
+    expect(result.allowed).toBe(false)
+    expect(result.message).toContain('different email')
+  })
+
+  it('checkAccess accepts matching email', async () => {
+    delete process.env.LK_DEV
+    const license = generateLicense({ email: 'user@example.com' })
+    setLicenseKey(license)
+
+    const result = await checkAccess('user@example.com')
+    expect(result.allowed).toBe(true)
   })
 })

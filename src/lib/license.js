@@ -82,7 +82,7 @@ export function clearLicense() {
   store.delete('licenseExpires')
 }
 
-export async function validateLicense() {
+export async function validateLicense(userEmail = null) {
   if (isDevMode()) return { valid: true, dev: true }
 
   const key = getLicenseKey()
@@ -94,6 +94,14 @@ export async function validateLicense() {
 
   const result = validateLicenseOffline(key)
   if (result.valid) {
+    // Verify email matches if provided
+    if (userEmail && result.data.email) {
+      const normalizedUserEmail = userEmail.toLowerCase().trim()
+      const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
+      if (normalizedUserEmail !== normalizedLicenseEmail) {
+        return { valid: false, error: 'License email mismatch', expectedEmail: result.data.email }
+      }
+    }
     const expiration = getLicenseExpiration()
     return { valid: true, data: result.data, expiration }
   }
@@ -101,6 +109,14 @@ export async function validateLicense() {
   if (result.error === 'License expired' && result.data) {
     const expiration = getLicenseExpiration()
     if (expiration && expiration.inGrace) {
+      // Also verify email for grace period
+      if (userEmail && result.data.email) {
+        const normalizedUserEmail = userEmail.toLowerCase().trim()
+        const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
+        if (normalizedUserEmail !== normalizedLicenseEmail) {
+          return { valid: false, error: 'License email mismatch', expectedEmail: result.data.email }
+        }
+      }
       return { valid: true, data: result.data, expiration, inGrace: true }
     }
   }
@@ -108,7 +124,7 @@ export async function validateLicense() {
   return { valid: false, error: result.error || 'Invalid license' }
 }
 
-export async function activateLicense(key) {
+export async function activateLicense(key, userEmail = null) {
   if (isTestLicense(key)) {
     setLicenseKey(key)
     store.set('licenseValid', true)
@@ -118,6 +134,18 @@ export async function activateLicense(key) {
 
   const result = validateLicenseOffline(key)
   if (result.valid) {
+    // Verify email matches if provided
+    if (userEmail && result.data.email) {
+      const normalizedUserEmail = userEmail.toLowerCase().trim()
+      const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
+      if (normalizedUserEmail !== normalizedLicenseEmail) {
+        return {
+          success: false,
+          error: `License registered to different email (${result.data.email})`
+        }
+      }
+    }
+
     setLicenseKey(key)
     store.set('licenseValid', true)
     if (result.data.expires) {
@@ -165,7 +193,7 @@ export function getLicenseExpiration() {
 }
 
 // Unified access check
-export async function checkAccess() {
+export async function checkAccess(userEmail = null) {
   if (isDevMode()) {
     return { allowed: true, message: null }
   }
@@ -186,6 +214,18 @@ export async function checkAccess() {
   const result = validateLicenseOffline(key)
 
   if (result.valid) {
+    // Verify email matches if provided
+    if (userEmail && result.data.email) {
+      const normalizedUserEmail = userEmail.toLowerCase().trim()
+      const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
+      if (normalizedUserEmail !== normalizedLicenseEmail) {
+        return {
+          allowed: false,
+          message: `License registered to different email (${result.data.email})`
+        }
+      }
+    }
+
     const expiration = getLicenseExpiration()
     if (expiration && expiration.daysLeft !== null && expiration.daysLeft <= 7 && expiration.daysLeft > 0) {
       return {
@@ -197,6 +237,18 @@ export async function checkAccess() {
   }
 
   if (result.error === 'License expired' && result.data) {
+    // Verify email matches even for expired licenses
+    if (userEmail && result.data.email) {
+      const normalizedUserEmail = userEmail.toLowerCase().trim()
+      const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
+      if (normalizedUserEmail !== normalizedLicenseEmail) {
+        return {
+          allowed: false,
+          message: `License registered to different email (${result.data.email})`
+        }
+      }
+    }
+
     const expiration = getLicenseExpiration()
     if (expiration && expiration.inGrace) {
       return {
