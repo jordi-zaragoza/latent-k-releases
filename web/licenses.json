@@ -7,5 +7,14 @@
     "expires": 1768820949399,
     "created": 1768734549399,
     "revoked": false
+  },
+  {
+    "key": "LK-eyJpZCI6IjZiOTc2YzQ0MWM5OWFkYjEiLCJ0eXBlIjoic3RhbmRhcmQiLCJlbWFpbCI6InRlY2hAY3liZXJjbGljay5uZXQiLCJjcmVhdGVkIjoxNzY4NzY1NDAwOTc1LCJleHBpcmVzIjoxNzY4ODUxODAwOTc1fQ.gtcXOs4X4v_NqeUj92GuIQOn7W-HJ-z1sDCzXwSM8jeiOhW80onXZLyZnjRCE93WKXrOLxjh_fQ2WDuLkz-Nk0AYYKZ6BrmhenYCglGvVlXZkJqQmeg3o2TaGJj4BcDALqBlYudYkPF8KIZuQQjZO89QCRixCMrCXY5LYGUgBiUoECH1s9RPoIwYbZ3w4Jfj7GTS5KWVuPNZ5fqJi--MZRTeblDWYgapa_8L7c2KDBXvs2fJns4b9DGmrtH5DM89c7In67rQgxdCkyjela8lNVKh8ULu1YL8PnFgLZNs8n9Hhk9TIUpaqHNGB7WnL49DJ827_WuWBbVGTUkfKT2IbA",
+    "email": "tech@cyberclick.net",
+    "name": "Mr LK",
+    "plan": "trial1",
+    "created": "2026-01-18T19:43:20.979Z",
+    "expires": "2026-01-19T19:43:20.975Z",
+    "revoked": false
   }
 ]

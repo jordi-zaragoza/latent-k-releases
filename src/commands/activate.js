@@ -1,5 +1,19 @@
 import { createInterface } from 'readline'
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
+import { homedir } from 'os'
 import { activateLicense, isLicensed, clearLicense } from '../lib/license.js'
+
+function getClaudeUserEmail() {
+  try {
+    const claudeConfigPath = join(homedir(), '.claude.json')
+    if (!existsSync(claudeConfigPath)) return null
+    const config = JSON.parse(readFileSync(claudeConfigPath, 'utf8'))
+    return config.oauthAccount?.emailAddress || null
+  } catch {
+    return null
+  }
+}
 
 let rl = null
 
@@ -35,7 +49,8 @@ export async function activate() {
   }
 
   console.log('\nActivating...')
-  const result = await activateLicense(key.trim())
+  const userEmail = getClaudeUserEmail()
+  const result = await activateLicense(key.trim(), userEmail)
 
   if (result.success) {
     console.log('License activated successfully!')
