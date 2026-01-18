@@ -15,7 +15,8 @@ import { writeFileSync, existsSync } from 'fs'
 import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, isLicensed } from './lib/license.js'
-import { isConfigured } from './lib/config.js'
+import { isConfigured, getAiProvider } from './lib/config.js'
+import { checkRateLimit } from './lib/ai.js'
 
 function terminalPrint(message) {
   try {
@@ -197,7 +198,7 @@ if (!IS_BINARY) {
 program
   .command('session-info')
   .description('Print session start info (for hooks)')
-  .action(() => {
+  .action(async () => {
     const green = '\x1b[32m'
     const yellow = '\x1b[33m'
     const red = '\x1b[31m'
@@ -234,6 +235,17 @@ program
 
     // Build info line
     const infoParts = ['Context loaded']
+
+    // Check rate limit status
+    const provider = getAiProvider()
+    const rateCheck = await checkRateLimit()
+    if (rateCheck.rateLimited) {
+      infoParts.push(`⚠ ${provider} rate limited`)
+    } else if (rateCheck.ok) {
+      infoParts.push(`${provider} ready`)
+    } else if (rateCheck.error) {
+      infoParts.push(`⚠ ${provider}: ${rateCheck.error}`)
+    }
 
     if (!DEV_MODE) {
       const exp = getLicenseExpiration()

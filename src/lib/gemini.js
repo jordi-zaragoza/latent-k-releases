@@ -61,6 +61,28 @@ export async function validateApiKey(apiKey) {
 }
 
 /**
+ * Check if the API is rate limited by making a minimal call
+ * @returns {Promise<{ok: boolean, rateLimited: boolean, error?: string}>}
+ */
+export async function checkRateLimit() {
+  if (!model) initClient()
+
+  try {
+    await model.generateContent('.')
+    return { ok: true, rateLimited: false }
+  } catch (err) {
+    const message = err.message || 'Unknown error'
+    if (message.includes('429') || message.includes('quota') || message.includes('rate')) {
+      return { ok: true, rateLimited: true }
+    }
+    if (message.includes('API_KEY_INVALID') || message.includes('401') || message.includes('403')) {
+      return { ok: false, rateLimited: false, error: 'Invalid API key' }
+    }
+    return { ok: false, rateLimited: false, error: message }
+  }
+}
+
+/**
  * Make an API call to Gemini (with JSON mode)
  */
 async function callJsonApi(prompt) {
