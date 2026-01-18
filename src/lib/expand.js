@@ -23,6 +23,9 @@ const MIN_PROMPT_LENGTH = 18
 // Maximum prompt length to trigger expansion (skip very long prompts)
 const MAX_PROMPT_LENGTH = 500
 
+// Minimum previous context length to skip expansion (context already in conversation)
+const MIN_PREVIOUS_CONTEXT_LENGTH = 200
+
 /**
  * Serialize domain object back to LK format string
  */
@@ -65,6 +68,16 @@ export async function expand(root, prompt, previousContext = null) {
     }
   }
 
+  // Skip if conversation already has context (not first interaction)
+  if (previousContext && previousContext.length >= MIN_PREVIOUS_CONTEXT_LENGTH) {
+    log('EXPAND', `Previous context exists (${previousContext.length} chars), skipping expansion`)
+    return {
+      type: 'passthrough',
+      calls: 0,
+      context: null
+    }
+  }
+
   const projectLk = getProject(root)
 
   // No project context available
@@ -88,6 +101,16 @@ export async function expand(root, prompt, previousContext = null) {
   }
   const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains, previousContext)
   log('EXPAND', `Classification: ${JSON.stringify(classification)}`)
+
+  // Rate limit hit - notify and pass through
+  if (classification.rate_limited) {
+    log('EXPAND', 'Rate limited on classification')
+    return {
+      type: 'rate_limited',
+      calls: 1,
+      context: null
+    }
+  }
 
   // Block meta questions about the context system
   if (classification.block_reason) {
@@ -174,6 +197,16 @@ export async function expand(root, prompt, previousContext = null) {
   log('EXPAND', `Expanding with ${domainContents.length} domain(s)...`)
 
   const expansion = await ai.expandPrompt(prompt, projectLk, domainLk)
+
+  // Rate limit hit on expansion - notify and pass through
+  if (expansion.rate_limited) {
+    log('EXPAND', 'Rate limited on expansion')
+    return {
+      type: 'rate_limited',
+      calls: 2,
+      context: null
+    }
+  }
 
   // Direct answer with domain context
   if (expansion.direct_answer) {
