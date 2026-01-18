@@ -11,7 +11,7 @@ import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
-import { writeFileSync } from 'fs'
+import { writeFileSync, existsSync } from 'fs'
 import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration } from './lib/license.js'
@@ -197,7 +197,25 @@ program
   .command('session-info')
   .description('Print session start info (for hooks)')
   .action(() => {
-    const infoParts = ['[LK context loaded]']
+    // Only show banner if .lk directory exists
+    if (!existsSync('.lk')) return
+
+    const green = '\x1b[32m'
+    const reset = '\x1b[0m'
+
+    // ASCII banner with lk symbols
+    const banner = [
+      '',
+      '╔═══════════════════════════════════╗',
+      '║        ⦓  L A T E N T - K  ⦔       ║',
+      '╚═══════════════════════════════════╝'
+    ]
+
+    // Print banner in green
+    banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
+
+    // Build info line
+    const infoParts = ['Context loaded']
 
     if (!DEV_MODE) {
       const exp = getLicenseExpiration()
