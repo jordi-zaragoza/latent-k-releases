@@ -27,7 +27,7 @@ function getClaudeUserEmail() {
     const claudeConfigPath = join(homedir(), '.claude.json')
     if (!existsSync(claudeConfigPath)) return null
     const config = JSON.parse(readFileSync(claudeConfigPath, 'utf8'))
-    return config.emailAddress || null
+    return config.oauthAccount?.emailAddress || null
   } catch {
     return null
   }
