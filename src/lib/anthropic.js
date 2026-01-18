@@ -55,6 +55,32 @@ export async function validateApiKey(apiKey) {
 }
 
 /**
+ * Check if the API is rate limited by making a minimal call
+ * @returns {Promise<{ok: boolean, rateLimited: boolean, error?: string}>}
+ */
+export async function checkRateLimit() {
+  if (!client) initClient()
+
+  try {
+    await client.messages.create({
+      model: MODEL,
+      max_tokens: 1,
+      messages: [{ role: 'user', content: '.' }]
+    })
+    return { ok: true, rateLimited: false }
+  } catch (err) {
+    const message = err.message || 'Unknown error'
+    if (message.includes('429') || message.includes('rate')) {
+      return { ok: true, rateLimited: true }
+    }
+    if (message.includes('401') || message.includes('invalid_api_key') || message.includes('authentication')) {
+      return { ok: false, rateLimited: false, error: 'Invalid API key' }
+    }
+    return { ok: false, rateLimited: false, error: message }
+  }
+}
+
+/**
  * Make an API call to Anthropic
  */
 async function callApi(prompt, maxTokens = 256) {

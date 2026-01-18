@@ -36,6 +36,25 @@ export async function validateApiKey(provider, apiKey) {
   return providerModule.validateApiKey(apiKey)
 }
 
+/**
+ * Check if the configured API is rate limited by making a minimal call
+ * @returns {Promise<{ok: boolean, rateLimited: boolean, error?: string}>}
+ */
+export async function checkRateLimit() {
+  const provider = getAiProvider()
+  if (!provider) return { ok: false, error: 'No provider configured' }
+
+  log('AI', `Checking rate limit for ${provider}...`)
+
+  try {
+    const providerModule = provider === 'anthropic' ? anthropic : gemini
+    const result = await providerModule.checkRateLimit()
+    return result
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+}
+
 export async function classifyPrompt(userPrompt, projectLk, availableDomains = [], previousContext = null) {
   return getProvider().classifyPrompt(userPrompt, projectLk, availableDomains, previousContext)
 }
