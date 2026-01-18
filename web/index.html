@@ -989,10 +989,10 @@
             function getInstallCommand(platform, filename) {
                 const url = `${BASE_URL}/${filename}`;
                 if (platform === 'windows') {
-                    return `irm ${url} -OutFile lk.exe; Move-Item lk.exe $env:LOCALAPPDATA\\lk.exe`;
+                    return `irm ${url} -OutFile lk.exe; Move-Item lk.exe $env:LOCALAPPDATA\\lk.exe; Write-Host "✓ lk installed. Next: lk activate → lk setup → lk sync" -ForegroundColor Green`;
                 }
                 // Linux & macOS
-                return `curl -fsSL ${url} -o lk && chmod +x lk && sudo mv lk /usr/local/bin/`;
+                return `curl -fsSL ${url} -o lk && chmod +x lk && sudo mv lk /usr/local/bin/ && printf "\\033[92m✓ lk installed. Next: lk activate → lk setup → lk sync\\033[0m\\n"`;
             }
 
             // Setup download cards
