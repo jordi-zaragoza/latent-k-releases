@@ -174,7 +174,7 @@ A test project.`
         direct_answer: null,
         files: [{ path: 'src/lib/parser.js' }]
       })
-      getFileContext.mockReturnValue('export function parse() {}')
+      getFileContext.mockReturnValue({ content: 'export function parse() {}', truncated: false })
 
       const result = await expand('/test', 'add tests for parser')
 
@@ -253,7 +253,7 @@ A test project.`
         direct_answer: null,
         files: [{ path: 'src/lib/parser.js' }]
       })
-      getFileContext.mockReturnValue('code')
+      getFileContext.mockReturnValue({ content: 'code', truncated: false })
 
       await expand('/test', 'test the core and cli modules')
 
@@ -272,7 +272,7 @@ A test project.`
         direct_answer: null,
         files: [{ path: 'src/lib/parser.js', functions: ['parse', 'extract'] }]
       })
-      getFileContext.mockReturnValue('function code() {}')
+      getFileContext.mockReturnValue({ content: 'function code() {}', truncated: false })
 
       const result = await expand('/test', 'how does parse work')
 
