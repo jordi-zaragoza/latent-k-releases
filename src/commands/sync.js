@@ -1,7 +1,19 @@
 import fs from 'fs'
 import path from 'path'
+import { homedir } from 'os'
 import { isConfigured, log, getIgnorePatterns } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
+
+function getClaudeUserEmail() {
+  try {
+    const claudeConfigPath = path.join(homedir(), '.claude.json')
+    if (!fs.existsSync(claudeConfigPath)) return null
+    const config = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'))
+    return config.oauthAccount?.emailAddress || null
+  } catch {
+    return null
+  }
+}
 import { generateProject, generateIgnore } from '../lib/ai.js'
 import {
   init, buildContext, buildContextForFiles, removeEntry,
@@ -37,8 +49,9 @@ export async function sync(options = {}) {
   log('SYNC', '=== Starting sync ===')
   log('SYNC', `Working directory: ${cwd}`)
 
-  // Check access (license or trial)
-  const access = await checkAccess()
+  // Check access (license or trial, verify email)
+  const userEmail = getClaudeUserEmail()
+  const access = await checkAccess(userEmail)
   if (!access.allowed) {
     log('SYNC', 'Access denied:', access.message)
     printErr(access.message)
