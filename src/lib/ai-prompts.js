@@ -36,6 +36,9 @@ export const SYMBOL_DESCRIPTIONS = `
 - ⤳: Pipeline, workflow, process
 - ⚑: State management (store, reducer, context)`.trim()
 
+// Compact symbol legend (single line, ~60% smaller than SYMBOL_DESCRIPTIONS)
+export const SYMBOLS_COMPACT = `▸(entry) ⇄(api) λ(logic) ⚙(config) ⧫(test) ⊚(ui) ⟐(schema) ◈(bg) ⤳(pipe) ⚑(state)`
+
 // Domain inference rules
 export const DOMAIN_RULES = `
 - src/commands/*, src/cli/* → "cli"
@@ -456,4 +459,38 @@ EXAMPLES:
 - "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/", "files": [{"path": "src/commands/init.js", "reason": "Template for new commands"}, {"path": "src/cli.js", "reason": "Register new command here"}]}
 
 Return ONLY JSON, no markdown.`
+}
+
+/**
+ * Build compact prompt for expanding user prompt with minimal context
+ * Uses projectSummary + domainIndex instead of full content (~60-70% smaller)
+ * Returns: { direct_answer, navigation_guide, files: [{path, reason}] }
+ */
+export function buildExpandPromptCompact(userPrompt, projectSummary, domainIndex) {
+  return `Code context selector for Claude Code.
+User prompt: "${userPrompt}"
+
+Select files Claude Code should READ.
+
+PROJECT:
+${projectSummary}
+
+SYMBOLS: ${SYMBOLS_COMPACT}
+
+FILES:
+${domainIndex}
+
+Return JSON:
+{
+  "direct_answer": string|null,
+  "navigation_guide": string|null,
+  "files": [{"path": "src/file.js", "reason": "why"}]
+}
+
+RULES:
+1. direct_answer: ONLY for info questions answerable from context. For ACTIONs → null
+2. navigation_guide: Brief guidance on approach
+3. files: 1-5 relevant files from FILES list above
+
+Return ONLY JSON.`
 }
