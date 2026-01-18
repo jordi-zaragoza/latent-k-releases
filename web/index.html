@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
     <title>LATENT-K - Intelligent Context for AI Coding Assistants</title>
     <style>
         :root {
@@ -160,6 +161,43 @@
             margin-bottom: 2.5rem;
         }
 
+        .hero-metrics {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 2.5rem;
+            flex-wrap: wrap;
+        }
+
+        .metric {
+            text-align: center;
+        }
+
+        .metric-value {
+            display: block;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .metric-label {
+            display: block;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .metric-divider {
+            width: 1px;
+            height: 40px;
+            background: var(--border-color);
+        }
+
         .hero-buttons {
             display: flex;
             gap: 1rem;
@@ -217,6 +255,152 @@
 
         .terminal-output {
             color: var(--accent-green);
+        }
+
+        /* Download Section */
+        .download {
+            padding: 4rem 2rem 6rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .download-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .download-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 212, 255, 0.15);
+        }
+
+        .download-card.recommended {
+            border-color: var(--accent-cyan);
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.05), rgba(168, 85, 247, 0.05));
+        }
+
+        .download-card .platform-icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .download-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .download-card .arch {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .download-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .action-btn {
+            display: inline-block;
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .action-btn:hover {
+            color: var(--accent-cyan);
+            background: var(--bg-primary);
+        }
+
+        .download-card.recommended .download-link {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            color: var(--bg-primary);
+        }
+
+        .terminal-section {
+            display: none;
+            margin-top: 1rem;
+            text-align: left;
+        }
+
+        .terminal-section.expanded {
+            display: block;
+        }
+
+        .terminal-toggle.active {
+            color: var(--accent-cyan);
+        }
+
+        .download-card .install-cmd {
+            display: block;
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.65rem;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+        }
+
+        .copy-btn.copied {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .download-version {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .download-version a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+        }
+
+        .download-version a:hover {
+            text-decoration: underline;
         }
 
         /* Features Section */
@@ -515,6 +699,7 @@
     <nav>
         <a href="#" class="nav-logo"><span class="delim">⦓</span> LATENT-K <span class="delim">⦔</span></a>
         <div class="nav-links">
+            <a href="#download">Download</a>
             <a href="#features">Features</a>
             <a href="#how-it-works">How it works</a>
             <a href="#pricing">Pricing</a>
@@ -534,6 +719,24 @@
         <p class="hero-subtitle">
             Latent-K automatically syncs and injects relevant code context into your AI coding sessions. Write better prompts, get better answers.
         </p>
+
+        <div class="hero-metrics">
+            <div class="metric">
+                <span class="metric-value">~38%</span>
+                <span class="metric-label">Less tokens used</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric">
+                <span class="metric-value">~40%</span>
+                <span class="metric-label">Faster responses</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric">
+                <span class="metric-value">~60%</span>
+                <span class="metric-label">Less tool calls</span>
+            </div>
+        </div>
+
         <div class="hero-buttons">
             <a href="activation.html" class="btn btn-primary">Get License</a>
             <a href="#how-it-works" class="btn btn-secondary">See how it works</a>
@@ -554,6 +757,64 @@
                 <div class="terminal-line terminal-comment"># Context automatically injected...</div>
                 <div class="terminal-line terminal-comment"># AI now understands your codebase</div>
             </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section class="download" id="download">
+        <div class="section-header">
+            <h2>Download</h2>
+            <p>Choose your platform and start in seconds.</p>
+        </div>
+
+        <div class="download-grid">
+            <div class="download-card" id="download-linux" data-platform="linux">
+                <div class="platform-icon">🐧</div>
+                <h3>Linux</h3>
+                <div class="arch">x64</div>
+                <div class="download-actions">
+                    <a href="#" class="action-btn download-link">Download</a>
+                    <span class="action-btn terminal-toggle">Terminal ▼</span>
+                </div>
+                <div class="terminal-section">
+                    <code class="install-cmd"></code>
+                    <span class="copy-btn">Copy</span>
+                </div>
+            </div>
+
+            <div class="download-card" id="download-macos" data-platform="macos">
+                <div class="platform-icon">🍎</div>
+                <h3>macOS</h3>
+                <div class="arch">x64</div>
+                <div class="download-actions">
+                    <a href="#" class="action-btn download-link">Download</a>
+                    <span class="action-btn terminal-toggle">Terminal ▼</span>
+                </div>
+                <div class="terminal-section">
+                    <code class="install-cmd"></code>
+                    <span class="copy-btn">Copy</span>
+                </div>
+            </div>
+
+            <div class="download-card" id="download-windows" data-platform="windows">
+                <div class="platform-icon">🪟</div>
+                <h3>Windows</h3>
+                <div class="arch">x64</div>
+                <div class="download-actions">
+                    <a href="#" class="action-btn download-link">Download</a>
+                    <span class="action-btn terminal-toggle">Terminal ▼</span>
+                </div>
+                <div class="terminal-section">
+                    <code class="install-cmd"></code>
+                    <span class="copy-btn">Copy</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="download-version">
+            <span id="version-text">Loading version...</span>
+            &nbsp;|&nbsp;
+            <a href="https://github.com/jordi-zaragoza/latent-k-releases/releases" target="_blank">All releases</a>
         </div>
     </section>
 
@@ -690,16 +951,125 @@
     </footer>
 
     <script>
-        // Smooth scroll for anchor links
+        // Smooth scroll for anchor links (only internal anchors)
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                // Skip if href has been changed to external URL
+                if (!href.startsWith('#')) return;
                 e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
+                const target = document.querySelector(href);
                 if (target) {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
         });
+
+        // Download section logic
+        (async function() {
+            const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases';
+            const ASSETS = {
+                linux: 'lk-linux',
+                macos: 'lk-macos',
+                windows: 'lk-win.exe'
+            };
+
+            // Detect user platform
+            function detectPlatform() {
+                const ua = navigator.userAgent.toLowerCase();
+                if (ua.includes('win')) return 'windows';
+                if (ua.includes('mac')) return 'macos';
+                return 'linux';
+            }
+
+            // Base URL for latest release (version-independent)
+            const BASE_URL = `https://github.com/${GITHUB_REPO}/releases/latest/download`;
+
+            // Generate install command for each platform
+            function getInstallCommand(platform, filename) {
+                const url = `${BASE_URL}/${filename}`;
+                if (platform === 'windows') {
+                    return `irm ${url} -OutFile lk.exe; Move-Item lk.exe $env:LOCALAPPDATA\\lk.exe`;
+                }
+                // Linux & macOS
+                return `curl -fsSL ${url} -o lk && chmod +x lk && sudo mv lk /usr/local/bin/`;
+            }
+
+            // Setup download cards
+            const userPlatform = detectPlatform();
+            const installCommands = {};
+
+            // Update install commands and download links
+            Object.entries(ASSETS).forEach(([platform, filename]) => {
+                const card = document.getElementById(`download-${platform}`);
+                if (card) {
+                    // Set install command
+                    const cmd = getInstallCommand(platform, filename);
+                    installCommands[platform] = cmd;
+                    const cmdEl = card.querySelector('.install-cmd');
+                    if (cmdEl) cmdEl.textContent = cmd;
+
+                    // Set download link
+                    const downloadLink = card.querySelector('.download-link');
+                    if (downloadLink) {
+                        downloadLink.href = `${BASE_URL}/${filename}`;
+                    }
+                }
+            });
+
+            // Fetch version just for display
+            (async () => {
+                try {
+                    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+                    if (res.ok) {
+                        const release = await res.json();
+                        document.getElementById('version-text').textContent = `Version ${release.tag_name}`;
+                    }
+                } catch (e) {
+                    document.getElementById('version-text').textContent = 'Latest version';
+                }
+            })();
+
+            // Highlight recommended platform
+            const recommendedCard = document.getElementById(`download-${userPlatform}`);
+            if (recommendedCard) {
+                recommendedCard.classList.add('recommended');
+            }
+
+            // Terminal toggle
+            document.querySelectorAll('.terminal-toggle').forEach(toggle => {
+                toggle.addEventListener('click', function() {
+                    const card = this.closest('.download-card');
+                    const terminalSection = card.querySelector('.terminal-section');
+                    const isExpanded = terminalSection.classList.toggle('expanded');
+                    this.classList.toggle('active', isExpanded);
+                    this.textContent = isExpanded ? 'Terminal ▲' : 'Terminal ▼';
+                });
+            });
+
+            // Copy to clipboard
+            document.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const card = this.closest('.download-card');
+                    const platform = card.dataset.platform;
+                    const cmd = installCommands[platform];
+                    if (!cmd) return;
+
+                    try {
+                        await navigator.clipboard.writeText(cmd);
+                        const originalText = this.textContent;
+                        this.textContent = 'Copied!';
+                        this.classList.add('copied');
+                        setTimeout(() => {
+                            this.textContent = originalText;
+                            this.classList.remove('copied');
+                        }, 2000);
+                    } catch (e) {
+                        console.error('Failed to copy:', e);
+                    }
+                });
+            });
+        })();
     </script>
 </body>
 </html>

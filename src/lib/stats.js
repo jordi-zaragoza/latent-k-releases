@@ -11,9 +11,10 @@ import { log } from './config.js'
 const LK_DIR = '.lk'
 const STATS_FILE = 'stats.json'
 
-// Pricing per 1M tokens (as of January 2025)
+// Pricing per 1M tokens
 // Source: https://ai.google.dev/pricing, https://www.anthropic.com/pricing
-const MODEL_PRICING = {
+export const PRICING_DATE = '2025-01-18'
+export const MODEL_PRICING = {
   'gemini-2.5-flash': { input: 0.075, output: 0.30 },    // $/1M tokens
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gemini-1.5-flash': { input: 0.075, output: 0.30 },
