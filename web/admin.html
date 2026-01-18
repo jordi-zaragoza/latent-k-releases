@@ -369,6 +369,159 @@
             border-color: var(--accent-red);
             color: var(--accent-red);
         }
+
+        .new-license-btn {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            border-radius: 6px;
+            color: var(--bg-primary);
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 0.5rem;
+        }
+
+        .new-license-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .modal h3 {
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+        }
+
+        .modal .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .modal .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .modal .form-group input,
+        .modal .form-group select {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .modal .form-group input:focus,
+        .modal .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 0.65rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .btn-cancel {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .btn-cancel:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .btn-create {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            color: var(--bg-primary);
+            font-weight: 600;
+        }
+
+        .btn-create:hover {
+            opacity: 0.9;
+        }
+
+        .generated-key {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            display: none;
+        }
+
+        .generated-key.show {
+            display: block;
+        }
+
+        .generated-key label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .generated-key code {
+            display: block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--accent-green);
+            word-break: break-all;
+            margin-bottom: 0.5rem;
+        }
+
+        .copy-key-btn {
+            padding: 0.35rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .copy-key-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
     </style>
 </head>
 <body>
@@ -393,6 +546,42 @@
             </form>
         </div>
     </div>
+
+    <!-- New License Modal -->
+    <div class="modal-overlay hidden" id="new-license-modal">
+        <div class="modal">
+            <h3>Generate New License</h3>
+            <form id="new-license-form">
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" id="new-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="new-name">
+                </div>
+                <div class="form-group">
+                    <label>Plan *</label>
+                    <select id="new-plan" required>
+                        <option value="trial1">Trial (1 day)</option>
+                        <option value="trial7">Trial (7 days)</option>
+                        <option value="monthly">Monthly (30 days)</option>
+                        <option value="yearly">Yearly (365 days)</option>
+                    </select>
+                </div>
+                <div class="generated-key" id="generated-key">
+                    <label>License Key:</label>
+                    <code id="key-value"></code>
+                    <button type="button" class="copy-key-btn" onclick="copyGeneratedKey()">Copy Key</button>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel" onclick="hideNewLicenseModal()">Close</button>
+                    <button type="submit" class="btn-create" id="create-btn">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1><span class="delim">&#10643;</span> LATENT-K <span class="delim">&#10644;</span> Admin</h1>
@@ -665,6 +854,53 @@
 
         // Search
         document.getElementById('search-input').addEventListener('input', renderTable);
+
+        // New License Modal
+        function showNewLicenseModal() {
+            document.getElementById('new-license-modal').classList.remove('hidden');
+            document.getElementById('new-license-form').reset();
+            document.getElementById('generated-key').classList.remove('show');
+            document.getElementById('create-btn').style.display = 'block';
+        }
+
+        function hideNewLicenseModal() {
+            document.getElementById('new-license-modal').classList.add('hidden');
+            loadLicenses();
+        }
+
+        document.getElementById('new-license-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('new-email').value;
+            const name = document.getElementById('new-name').value;
+            const plan = document.getElementById('new-plan').value;
+
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name, plan })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('key-value').textContent = data.key;
+                    document.getElementById('generated-key').classList.add('show');
+                    document.getElementById('create-btn').style.display = 'none';
+                } else {
+                    alert('Failed to generate license');
+                }
+            } catch (err) {
+                alert('Error generating license');
+            }
+        });
+
+        function copyGeneratedKey() {
+            const key = document.getElementById('key-value').textContent;
+            navigator.clipboard.writeText(key);
+            const btn = document.querySelector('.copy-key-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy Key', 2000);
+        }
 
         // Initial auth check
         checkAuth();
