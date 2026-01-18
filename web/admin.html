@@ -211,9 +211,31 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
             max-width: 200px;
+        }
+
+        .key-cell .key-preview {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            display: inline-block;
+            max-width: 120px;
+            vertical-align: middle;
+        }
+
+        .btn-show-key {
+            padding: 0.2rem 0.4rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .btn-show-key:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
         }
 
         .empty-state {
@@ -522,6 +544,37 @@
             border-color: var(--accent-cyan);
             color: var(--accent-cyan);
         }
+
+        /* Key Modal */
+        .key-modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .key-modal h3 {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .key-modal .key-full {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+            background: var(--bg-primary);
+            padding: 1rem;
+            border-radius: 6px;
+            word-break: break-all;
+            margin-bottom: 1rem;
+        }
+
+        .key-modal-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -544,6 +597,18 @@
                 <button type="submit" class="login-btn">Login</button>
                 <div class="login-error" id="login-error">Invalid credentials</div>
             </form>
+        </div>
+    </div>
+
+    <!-- Show Key Modal -->
+    <div class="modal-overlay hidden" id="show-key-modal" onclick="hideKeyModal(event)">
+        <div class="key-modal">
+            <h3>License Key</h3>
+            <div class="key-full" id="full-key-value"></div>
+            <div class="key-modal-buttons">
+                <button class="copy-key-btn" onclick="copyFullKey()">Copy Key</button>
+                <button class="btn-cancel" onclick="hideKeyModal()">Close</button>
+            </div>
         </div>
     </div>
 
@@ -807,7 +872,10 @@
                         <td>${formatDate(license.created)}</td>
                         <td>${formatDate(license.expires)}</td>
                         <td><span class="status ${status}">${statusLabel}</span></td>
-                        <td class="key-cell" title="${license.key}">${license.key}</td>
+                        <td class="key-cell">
+                            <span class="key-preview">${license.key}</span>
+                            <button class="btn-show-key" onclick="showKey('${license.key}')">Show</button>
+                        </td>
                         <td>${actionBtn}</td>
                     </tr>
                 `;
@@ -897,7 +965,27 @@
         function copyGeneratedKey() {
             const key = document.getElementById('key-value').textContent;
             navigator.clipboard.writeText(key);
-            const btn = document.querySelector('.copy-key-btn');
+            const btn = document.querySelector('.generated-key .copy-key-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy Key', 2000);
+        }
+
+        // Show Key Modal
+        function showKey(key) {
+            document.getElementById('full-key-value').textContent = key;
+            document.getElementById('show-key-modal').classList.remove('hidden');
+        }
+
+        function hideKeyModal(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('show-key-modal').classList.add('hidden');
+            }
+        }
+
+        function copyFullKey() {
+            const key = document.getElementById('full-key-value').textContent;
+            navigator.clipboard.writeText(key);
+            const btn = document.querySelector('#show-key-modal .copy-key-btn');
             btn.textContent = 'Copied!';
             setTimeout(() => btn.textContent = 'Copy Key', 2000);
         }
