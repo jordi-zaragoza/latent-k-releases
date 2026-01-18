@@ -10,7 +10,7 @@
  */
 
 import path from 'path'
-import { getProject, loadDomain, listDomains, buildDomain } from './context.js'
+import { getProject, listDomains, getProjectSummary, getDomainIndex } from './context.js'
 import { log } from './config.js'
 import * as ai from './ai.js'
 
@@ -19,20 +19,6 @@ const MIN_PROMPT_LENGTH = 18
 
 // Maximum prompt length to trigger expansion (skip very long prompts)
 const MAX_PROMPT_LENGTH = 500
-
-/**
- * Serialize domain object back to LK format string
- */
-function serializeDomain(domain) {
-  if (!domain) return ''
-  return buildDomain(
-    domain.id,
-    domain.domain,
-    domain.vibe,
-    domain.groups,
-    domain.invariants || []
-  )
-}
 
 /**
  * Main expand function - returns structured JSON context
@@ -126,24 +112,21 @@ export async function expand(root, prompt) {
     }
   }
 
-  // 2. Load requested domains (normalize to lowercase for case-insensitive matching)
+  // 2. Resolve requested domains (case-insensitive matching)
   log('EXPAND', `Loading domains: ${domainNames.join(', ')}`)
-  const domainContents = []
   const availableLower = availableDomains.map(d => d.toLowerCase())
+  const resolvedDomains = []
 
   for (const name of domainNames) {
     const nameLower = name.toLowerCase()
     const idx = availableLower.indexOf(nameLower)
     if (idx >= 0) {
       // Use actual filename from availableDomains (preserves case for file access)
-      const domain = loadDomain(root, availableDomains[idx])
-      if (domain) {
-        domainContents.push(serializeDomain(domain))
-      }
+      resolvedDomains.push(availableDomains[idx])
     }
   }
 
-  if (domainContents.length === 0) {
+  if (resolvedDomains.length === 0) {
     log('EXPAND', 'No domains found')
     return {
       type: 'passthrough',
@@ -152,11 +135,12 @@ export async function expand(root, prompt) {
     }
   }
 
-  // 3. Second call - expand with domain context
-  const domainLk = domainContents.join('\n\n')
-  log('EXPAND', `Expanding with ${domainContents.length} domain(s)...`)
+  // 3. Second call - expand with compact context (reduced tokens ~60-70%)
+  const projectSummary = getProjectSummary(root)
+  const domainIndex = getDomainIndex(root, resolvedDomains)
+  log('EXPAND', `Expanding with compact context (${projectSummary.length + domainIndex.length} chars)...`)
 
-  const expansion = await ai.expandPrompt(prompt, projectLk, domainLk)
+  const expansion = await ai.expandPromptCompact(prompt, projectSummary, domainIndex)
 
   // Direct answer with domain context
   if (expansion.direct_answer) {

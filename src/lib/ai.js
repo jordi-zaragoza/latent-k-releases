@@ -22,10 +22,6 @@ export async function generateProject(params) {
   return getProvider().generateProject(params)
 }
 
-export async function describeLk(params) {
-  return getProvider().describeLk(params)
-}
-
 export async function generateIgnore(params) {
   return getProvider().generateIgnore(params)
 }
@@ -61,4 +57,8 @@ export async function classifyPrompt(userPrompt, projectLk, availableDomains = [
 
 export async function expandPrompt(userPrompt, projectLk, domainLk) {
   return getProvider().expandPrompt(userPrompt, projectLk, domainLk)
+}
+
+export async function expandPromptCompact(userPrompt, projectSummary, domainIndex) {
+  return getProvider().expandPromptCompact(userPrompt, projectSummary, domainIndex)
 }

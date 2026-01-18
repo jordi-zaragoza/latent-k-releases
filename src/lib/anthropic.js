@@ -4,10 +4,10 @@ import {
   buildAnalyzeFilePrompt,
   buildAnalyzeFilesPrompt,
   buildProjectPrompt,
-  buildDescribeLkPrompt,
   buildIgnorePrompt,
   buildClassifyPrompt,
   buildExpandPrompt,
+  buildExpandPromptCompact,
   parseJsonResponse,
   generateDefaultResults,
   logLlmCall,
@@ -176,22 +176,6 @@ export async function generateProject({ files, packageJson, context }) {
   return text.replace(/```[a-z]*\n?/g, '').trim()
 }
 
-export async function describeLk({ file, content }) {
-  if (!client) initClient()
-
-  log('ANTHROPIC', `describeLk: ${file} (${content.length} chars)`)
-
-  const prompt = buildDescribeLkPrompt({ file, content })
-  const text = await callApi(prompt, 256, 'describeLk')
-
-  if (!text) {
-    throw new Error('Empty response from API')
-  }
-
-  log('ANTHROPIC', `Response: ${text}`)
-  return text
-}
-
 export async function generateIgnore({ files, globalPatterns = [] }) {
   if (!client) initClient()
 
@@ -273,4 +257,34 @@ export async function expandPrompt(userPrompt, projectLk, domainLk) {
 
   log('ANTHROPIC', 'Parse failed - returning empty result')
   return { direct_answer: null, files: [] }
+}
+
+/**
+ * Expand a user prompt with compact context (reduced tokens)
+ * @param {string} userPrompt - The user's prompt
+ * @param {string} projectSummary - Compact project summary (Purpose + Stack + Flows)
+ * @param {string} domainIndex - Compact domain index (paths + symbols only)
+ * @returns {Promise<{direct_answer: string|null, navigation_guide: string|null, files: Array<{path: string, reason: string}>}>}
+ */
+export async function expandPromptCompact(userPrompt, projectSummary, domainIndex) {
+  if (!client) initClient()
+
+  log('ANTHROPIC', `expandPromptCompact: ${userPrompt.slice(0, 100)}...`)
+
+  const prompt = buildExpandPromptCompact(userPrompt, projectSummary, domainIndex)
+  const text = await callApi(prompt, 512, 'expandPromptCompact')
+
+  if (!text) {
+    log('ANTHROPIC', 'Empty response - returning empty result')
+    return { direct_answer: null, navigation_guide: null, files: [] }
+  }
+
+  const parsed = parseJsonResponse(text)
+  if (parsed) {
+    log('ANTHROPIC', `Expansion: ${JSON.stringify(parsed)}`)
+    return parsed
+  }
+
+  log('ANTHROPIC', 'Parse failed - returning empty result')
+  return { direct_answer: null, navigation_guide: null, files: [] }
 }

@@ -7,7 +7,6 @@ import {
   buildAnalyzeFilePrompt,
   buildAnalyzeFilesPrompt,
   buildProjectPrompt,
-  buildDescribeLkPrompt,
   buildIgnorePrompt,
   buildClassifyPrompt,
   buildExpandPrompt,
@@ -205,28 +204,6 @@ describe('buildProjectPrompt', () => {
     expect(prompt).toContain('⦓ID: PROJECT⦔')
     expect(prompt).toContain('⟪VIBE:')
     expect(prompt).toContain('⟦Δ: Purpose⟧')
-  })
-})
-
-describe('buildDescribeLkPrompt', () => {
-  it('includes file and content', () => {
-    const prompt = buildDescribeLkPrompt({
-      file: 'src/auth.js',
-      content: 'export function login() {}'
-    })
-
-    expect(prompt).toContain('src/auth.js')
-    expect(prompt).toContain('export function login')
-  })
-
-  it('includes example format', () => {
-    const prompt = buildDescribeLkPrompt({
-      file: 'test.js',
-      content: 'code'
-    })
-
-    expect(prompt).toContain('λ auth.js')
-    expect(prompt).toContain('{login, logout, refresh}')
   })
 })
 
