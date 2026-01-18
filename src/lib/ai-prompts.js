@@ -4,25 +4,34 @@
  */
 
 import { log } from './config.js'
+import { recordCall } from './stats.js'
 
-// Available symbols for file classification
+// Available symbols for file classification (matches VALID_SYMBOLS in context.js, except ◇ which is internal)
 export const SYMBOLS = {
-  LAMBDA: 'λ',      // Core logic, pure functions, utilities, helpers
+  ENTRY: '▸',       // Entry point, main file, index
   INTERFACE: '⇄',   // Interface, API, commands, entry points, routes
+  LAMBDA: 'λ',      // Core logic, pure functions, utilities, helpers
   CONFIG: '⚙',      // Config files (package.json, .env, tsconfig, etc)
   TEST: '⧫',        // Test files
-  ENTRY: '▸',       // Entry point, main file, index
   COMPONENT: '⊚',   // Component (UI, React, Vue, Svelte)
+  SCHEMA: '⟐',      // Schema, types, models, definitions
+  BACKGROUND: '◈',  // Background jobs, workers, queues, cron
+  PIPELINE: '⤳',    // Pipeline, workflow, process
+  STATE: '⚑',       // State management (store, reducer, context)
 }
 
 // Symbol descriptions for prompts
 export const SYMBOL_DESCRIPTIONS = `
-- λ (lambda): Core logic, pure functions, utilities, helpers
+- ▸: Entry point, main file, index
 - ⇄: Interface, API, commands, entry points, routes
+- λ (lambda): Core logic, pure functions, utilities, helpers
 - ⚙: Config files (package.json, .env, tsconfig, etc)
 - ⧫: Test files
-- ▸: Entry point, main file, index
-- ⊚: Component (UI, React, Vue, Svelte)`.trim()
+- ⊚: Component (UI, React, Vue, Svelte)
+- ⟐: Schema, types, models, definitions
+- ◈: Background jobs, workers, queues, cron
+- ⤳: Pipeline, workflow, process
+- ⚑: State management (store, reducer, context)`.trim()
 
 // Domain inference rules
 export const DOMAIN_RULES = `
@@ -237,24 +246,55 @@ export function generateDefaultResults(files) {
 }
 
 /**
- * Log LLM call with timing
+ * Log LLM call with timing - returns tracking object for stats
+ * @param {string} provider - Provider name (e.g., 'GEMINI')
+ * @param {string} operation - Operation type (e.g., 'JSON API call')
+ * @param {number} promptLength - Length of prompt in characters
+ * @param {string} model - Model identifier (e.g., 'gemini-2.5-flash')
+ * @param {string} operationType - Logical operation type (e.g., 'analyzeFile', 'classifyPrompt')
+ * @returns {Object} Tracking object to pass to logLlmResponse
  */
-export function logLlmCall(provider, operation, promptLength) {
+export function logLlmCall(provider, operation, promptLength, model = 'unknown', operationType = null) {
   log('LLM', '─'.repeat(50))
-  log('LLM', `CALL: ${operation}`)
-  log(provider, `Sending prompt (${promptLength} chars)...`)
-  return Date.now()
+  log('LLM', `CALL: ${operation}${operationType ? ` (${operationType})` : ''}`)
+  log(provider, `Sending prompt (${promptLength} chars) to ${model}...`)
+
+  return {
+    startTime: Date.now(),
+    provider,
+    operation,
+    operationType,
+    promptLength,
+    model
+  }
 }
 
 /**
- * Log LLM response with elapsed time
+ * Log LLM response with elapsed time and record stats
+ * @param {Object} tracking - Tracking object from logLlmCall
+ * @param {string|null} response - Response text (for logging and measuring)
+ * @returns {number} Elapsed time in milliseconds
  */
-export function logLlmResponse(provider, startTime, response) {
-  const elapsed = Date.now() - startTime
-  log(provider, `Response received in ${elapsed}ms`)
+export function logLlmResponse(tracking, response) {
+  const elapsed = Date.now() - tracking.startTime
+  const responseLength = response ? response.length : 0
+
+  log(tracking.provider, `Response received in ${elapsed}ms (${responseLength} chars)`)
   if (response) {
-    log(provider, `Response: ${typeof response === 'string' ? response.slice(0, 200) : JSON.stringify(response).slice(0, 200)}`)
+    log(tracking.provider, `Response: ${typeof response === 'string' ? response.slice(0, 200) : JSON.stringify(response).slice(0, 200)}`)
   }
+
+  // Record statistics
+  recordCall({
+    provider: tracking.provider,
+    operation: tracking.operation,
+    operationType: tracking.operationType,
+    model: tracking.model,
+    charsSent: tracking.promptLength,
+    charsReceived: responseLength,
+    durationMs: elapsed
+  })
+
   return elapsed
 }
 
