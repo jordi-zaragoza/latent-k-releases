@@ -63,8 +63,8 @@ describe('expand command', () => {
       // We pass it directly as argument for testing
       await expandCommand('{"prompt": "test from json"}', {})
 
-      // The expand function should receive the extracted prompt
-      expect(expand).toHaveBeenCalledWith(tempDir, 'test from json')
+      // The expand function should receive the extracted prompt (with null previousContext)
+      expect(expand).toHaveBeenCalledWith(tempDir, 'test from json', null)
     })
 
     it('handles plain text input', async () => {
@@ -76,7 +76,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('plain text prompt', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'plain text prompt')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'plain text prompt', null)
     })
 
     it('handles JSON without prompt field', async () => {
@@ -89,7 +89,7 @@ describe('expand command', () => {
       await expandCommand('{"other": "field"}', {})
 
       // Should treat entire JSON string as the prompt
-      expect(expand).toHaveBeenCalledWith(tempDir, '{"other": "field"}')
+      expect(expand).toHaveBeenCalledWith(tempDir, '{"other": "field"}', null)
     })
   })
 

@@ -230,21 +230,49 @@ export function extractFunctions(filePath, functionNames) {
   return result
 }
 
+// Max lines to show at start/end of large files
+const HEAD_LINES = 50
+const TAIL_LINES = 50
+const MAX_LINES = HEAD_LINES + TAIL_LINES
+
+/**
+ * Truncate content to first N + last N lines if too large
+ * @param {string} content - File content
+ * @returns {{content: string, truncated: boolean}}
+ */
+function truncateByLines(content) {
+  const lines = content.split('\n')
+
+  if (lines.length <= MAX_LINES) {
+    return { content, truncated: false }
+  }
+
+  const head = lines.slice(0, HEAD_LINES)
+  const tail = lines.slice(-TAIL_LINES)
+  const omitted = lines.length - MAX_LINES
+
+  const result = [
+    ...head,
+    `\n... (${omitted} lines omitted) ...\n`,
+    ...tail
+  ].join('\n')
+
+  return { content: result, truncated: true }
+}
+
 /**
  * Get file content, optionally extracting only specified functions
  * @param {string} filePath - Path to file
  * @param {string[]|null} functionNames - Functions to extract, or null for full file
- * @param {number} maxLength - Max content length
- * @returns {string} File content or extracted functions
+ * @returns {{content: string, truncated: boolean}|null} File content and truncation status
  */
-export function getFileContext(filePath, functionNames = null, maxLength = 4000) {
+export function getFileContext(filePath, functionNames = null) {
   if (!fs.existsSync(filePath)) return null
   const content = fs.readFileSync(filePath, 'utf8')
 
   if (!functionNames || functionNames.length === 0) {
-    // Return trimmed full file
-    if (content.length <= maxLength) return content
-    return content.slice(0, maxLength) + '\n... (truncated)'
+    // Return full file, truncated if needed
+    return truncateByLines(content)
   }
 
   // Extract specified functions
@@ -259,12 +287,10 @@ export function getFileContext(filePath, functionNames = null, maxLength = 4000)
   }
 
   if (extracted.length === 0) {
-    // No functions found, return trimmed full file
-    if (content.length <= maxLength) return content
-    return content.slice(0, maxLength) + '\n... (truncated)'
+    // No functions found, return full file
+    return truncateByLines(content)
   }
 
   const result = extracted.join('\n\n')
-  if (result.length <= maxLength) return result
-  return result.slice(0, maxLength) + '\n... (truncated)'
+  return truncateByLines(result)
 }

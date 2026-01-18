@@ -282,4 +282,93 @@ A test project.`
       expect(result.type).toBe('code_context')
     })
   })
+
+  describe('continuation detection', () => {
+    const sampleProjectLk = `⦓ID: PROJECT⦔
+⟪NAME: test-project⟫
+⟦Δ: Purpose⟧
+A test project.`
+
+    beforeEach(() => {
+      getProject.mockReturnValue(sampleProjectLk)
+      listDomains.mockReturnValue(['core', 'cli'])
+    })
+
+    // Note: prompts must be >= 18 chars to avoid MIN_PROMPT_LENGTH bypass
+    it('returns passthrough when is_continuation is true', async () => {
+      ai.classifyPrompt.mockResolvedValue({
+        is_project: false,
+        is_continuation: true,
+        direct_answer: null,
+        needs_domains: null,
+        block_reason: null
+      })
+
+      // Use a longer prompt to pass MIN_PROMPT_LENGTH check
+      const result = await expand('/test', 'yes proceed with changes', 'Should I proceed with the changes?')
+
+      expect(result).toEqual({
+        type: 'passthrough',
+        calls: 1,
+        context: null
+      })
+    })
+
+    it('passes previousContext to classifyPrompt', async () => {
+      ai.classifyPrompt.mockResolvedValue({
+        is_project: false,
+        is_continuation: true,
+        direct_answer: null,
+        needs_domains: null,
+        block_reason: null
+      })
+
+      const previousContext = '¿Quieres usar React o Vue?'
+      // Use a longer prompt to pass MIN_PROMPT_LENGTH check
+      await expand('/test', 'I want to use React', previousContext)
+
+      expect(ai.classifyPrompt).toHaveBeenCalledWith(
+        'I want to use React',
+        sampleProjectLk,
+        ['core', 'cli'],
+        previousContext
+      )
+    })
+
+    it('processes normally when is_continuation is false', async () => {
+      ai.classifyPrompt.mockResolvedValue({
+        is_project: true,
+        is_continuation: false,
+        direct_answer: 'This is a test project.',
+        needs_domains: null,
+        block_reason: null
+      })
+
+      const result = await expand('/test', 'what does this project do', 'some previous context')
+
+      expect(result.type).toBe('direct')
+      expect(result.context.answer).toBe('This is a test project.')
+    })
+
+    it('handles null previousContext gracefully', async () => {
+      ai.classifyPrompt.mockResolvedValue({
+        is_project: false,
+        is_continuation: false,
+        direct_answer: null,
+        needs_domains: null,
+        block_reason: null
+      })
+
+      // Use a longer prompt to pass MIN_PROMPT_LENGTH check
+      const result = await expand('/test', 'hello there how are you', null)
+
+      expect(ai.classifyPrompt).toHaveBeenCalledWith(
+        'hello there how are you',
+        sampleProjectLk,
+        ['core', 'cli'],
+        null
+      )
+      expect(result.type).toBe('passthrough')
+    })
+  })
 })

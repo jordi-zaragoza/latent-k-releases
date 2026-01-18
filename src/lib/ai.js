@@ -36,8 +36,8 @@ export async function validateApiKey(provider, apiKey) {
   return providerModule.validateApiKey(apiKey)
 }
 
-export async function classifyPrompt(userPrompt, projectLk, availableDomains = []) {
-  return getProvider().classifyPrompt(userPrompt, projectLk, availableDomains)
+export async function classifyPrompt(userPrompt, projectLk, availableDomains = [], previousContext = null) {
+  return getProvider().classifyPrompt(userPrompt, projectLk, availableDomains, previousContext)
 }
 
 export async function expandPrompt(userPrompt, projectLk, domainLk) {
