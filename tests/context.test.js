@@ -13,7 +13,8 @@ import {
   addEntry, removeEntry, getAllEntries,
   hashContent, getFileHash,
   getUnsyncedFiles, getDeletedFiles,
-  buildContext, buildVerboseContext, countTokens,
+  buildContext, buildVerboseContext, buildContextForFiles, countTokens,
+  getProjectSummary, getDomainIndex,
   inferGroup, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS,
   getFileExtension, isCodeFile, getAllFiles, CODE_EXTENSIONS
 } from '../src/lib/context.js'
@@ -693,5 +694,143 @@ describe('getAllFiles', () => {
     const files = getAllFiles(tmpDir, tmpDir, { codeOnly: false })
     expect(files).not.toContain('src/package-lock.json')
     expect(files).not.toContain('src/__init__.py')
+  })
+})
+
+describe('getProjectSummary', () => {
+  beforeEach(() => {
+    init(tmpDir)
+  })
+
+  it('returns empty string for no project', () => {
+    fs.unlinkSync(projectPath(tmpDir))
+    expect(getProjectSummary(tmpDir)).toBe('')
+  })
+
+  it('extracts Purpose, Stack, and Flows sections', () => {
+    const projectContent = `⦓ID: PROJECT⦔
+⟪VIBE: minimal⟫ ⟪NAME: TestProject⟫ ⟪VERSION: 1.0.0⟫
+
+⟦Δ: Purpose⟧
+A test project for unit testing.
+
+⟦Δ: Stack⟧
+∑ Tech [Runtime⇨node, Type⇨CLI]
+
+⟦Δ: Flows⟧
+∑ Flows [CLI → parse → execute]
+
+⟦Δ: Architecture⟧
+Some architecture info.`
+    setProject(tmpDir, projectContent)
+
+    const summary = getProjectSummary(tmpDir)
+    expect(summary).toContain('⦓ID: PROJECT⦔')
+    expect(summary).toContain('⟪NAME: TestProject⟫')
+    expect(summary).toContain('Purpose')
+    expect(summary).toContain('A test project')
+    expect(summary).toContain('Stack')
+    expect(summary).toContain('Flows')
+    // Architecture should not be included
+    expect(summary).not.toContain('Architecture')
+  })
+
+  it('handles project with only header', () => {
+    const projectContent = `⦓ID: PROJECT⦔
+⟪NAME: MinimalProject⟫`
+    setProject(tmpDir, projectContent)
+
+    const summary = getProjectSummary(tmpDir)
+    expect(summary).toContain('⦓ID: PROJECT⦔')
+    expect(summary).toContain('⟪NAME: MinimalProject⟫')
+  })
+})
+
+describe('getDomainIndex', () => {
+  beforeEach(() => {
+    init(tmpDir)
+    addEntry(tmpDir, 'core', 'Lib', 'λ', 'abc1234', 'src/lib/parser.js', 'parsing utilities', [])
+    addEntry(tmpDir, 'core', 'Lib', '⇄', 'def5678', 'src/lib/api.js', 'api interface', [])
+    addEntry(tmpDir, 'cli', 'Commands', '⇄', 'ghi9012', 'src/commands/sync.js', 'sync command', [])
+  })
+
+  it('returns empty string for empty domain list', () => {
+    expect(getDomainIndex(tmpDir, [])).toBe('')
+  })
+
+  it('returns compact index for single domain', () => {
+    const index = getDomainIndex(tmpDir, ['core'])
+    expect(index).toContain('⟦Core⟧')
+    expect(index).toContain('λsrc/lib/parser.js')
+    expect(index).toContain('⇄src/lib/api.js')
+    // Should not contain descriptions
+    expect(index).not.toContain('parsing utilities')
+  })
+
+  it('returns compact index for multiple domains', () => {
+    // getDomainIndex includes domains that exist, even if groups are empty after parse
+    const index = getDomainIndex(tmpDir, ['core', 'cli'])
+    expect(index).toContain('⟦Core⟧')
+    expect(index).toContain('⟦Cli⟧')
+    expect(index).toContain('parser.js')
+  })
+
+  it('skips non-existent domains', () => {
+    const index = getDomainIndex(tmpDir, ['nonexistent', 'core'])
+    expect(index).toContain('⟦Core⟧')
+    expect(index).not.toContain('nonexistent')
+  })
+})
+
+describe('buildContextForFiles', () => {
+  beforeEach(() => {
+    init(tmpDir)
+    addEntry(tmpDir, 'core', 'Lib', 'λ', 'abc1234', 'src/lib/parser.js', 'parsing', [])
+    addEntry(tmpDir, 'cli', 'Commands', '⇄', 'def5678', 'src/commands/sync.js', 'sync', [])
+    addEntry(tmpDir, 'api', 'Routes', '⇄', 'ghi9012', 'src/api/routes.js', 'routes', [])
+  })
+
+  it('includes syntax and project for any files', () => {
+    const context = buildContextForFiles(tmpDir, ['src/lib/parser.js'])
+    expect(context).toContain('LK-SYNTAX')
+    expect(context).toContain('PROJECT')
+  })
+
+  it('includes only relevant domains based on file paths', () => {
+    const context = buildContextForFiles(tmpDir, ['src/lib/parser.js'])
+    // Should include core domain (inferred from src/lib/)
+    expect(context).toContain('Core')
+    // Should NOT include cli or api domains
+    expect(context).not.toContain('⟦Cli⟧')
+  })
+
+  it('always includes core as fallback', () => {
+    const context = buildContextForFiles(tmpDir, ['src/unknown/file.js'])
+    // Core should be included as fallback
+    expect(context).toContain('parser.js')
+  })
+
+  it('includes multiple domains when files span them', () => {
+    const context = buildContextForFiles(tmpDir, [
+      'src/lib/parser.js',
+      'src/commands/sync.js'
+    ])
+    expect(context).toContain('Core')
+    expect(context).toContain('Cli')
+  })
+
+  it('applies same minification as buildContext', () => {
+    const context = buildContextForFiles(tmpDir, ['src/lib/parser.js'])
+    // Should not contain full ID prefixes
+    expect(context).not.toContain('ID: DOMAIN-')
+    // Should not contain hashes
+    expect(context).not.toMatch(/⦗[a-f0-9]{7}⦘/)
+  })
+
+  it('returns empty string for empty file list', () => {
+    const context = buildContextForFiles(tmpDir, [])
+    // Should still include syntax and project
+    expect(context).toContain('LK-SYNTAX')
+    expect(context).toContain('PROJECT')
   })
 })

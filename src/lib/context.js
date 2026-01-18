@@ -666,4 +666,159 @@ export function inferSymbolFromPath(filePath) {
   return 'λ'
 }
 
+/**
+ * Get project summary: extracts Purpose + Stack + Flows from project.lk
+ * @param {string} root - Project root directory
+ * @returns {string} Compact project summary
+ */
+export function getProjectSummary(root) {
+  const project = getProject(root)
+  if (!project) return ''
+
+  const lines = project.split('\n')
+  const result = []
+  let inSection = false
+  let currentSection = ''
+
+  for (const line of lines) {
+    // Include header line
+    if (line.includes('⦓ID: PROJECT⦔')) {
+      result.push(line.trim())
+      continue
+    }
+
+    // Include VIBE/NAME/VERSION line
+    if (line.includes('⟪VIBE:') || line.includes('⟪NAME:')) {
+      result.push(line.trim())
+      continue
+    }
+
+    // Track sections we want: Purpose, Stack, Flows
+    if (line.includes('⟦Δ: Purpose⟧') || line.includes('⟦Purpose⟧')) {
+      inSection = true
+      currentSection = 'purpose'
+      result.push(line.trim())
+      continue
+    }
+    if (line.includes('⟦Δ: Stack⟧') || line.includes('⟦Stack⟧')) {
+      inSection = true
+      currentSection = 'stack'
+      result.push(line.trim())
+      continue
+    }
+    if (line.includes('⟦Δ: Flows⟧') || line.includes('⟦Flows⟧')) {
+      inSection = true
+      currentSection = 'flows'
+      result.push(line.trim())
+      continue
+    }
+
+    // End section on new section marker
+    if (line.includes('⟦Δ:') || line.includes('⟦') && line.includes('⟧')) {
+      if (inSection && !['Purpose', 'Stack', 'Flows'].some(s => line.includes(s))) {
+        inSection = false
+      }
+    }
+
+    // Include content while in relevant sections
+    if (inSection && line.trim()) {
+      result.push(line.trim())
+    }
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * Get domain index: returns compressed index with paths + symbols only (no descriptions)
+ * @param {string} root - Project root directory
+ * @param {string[]} domainNames - List of domain names to include
+ * @returns {string} Compact domain index
+ */
+export function getDomainIndex(root, domainNames) {
+  const result = []
+
+  for (const name of domainNames) {
+    const domain = loadDomain(root, name)
+    if (!domain) continue
+
+    // Compact header: just domain name
+    result.push(`⟦${domain.domain || name}⟧`)
+
+    // Collect all entries with just symbol + path
+    for (const [groupName, entries] of Object.entries(domain.groups)) {
+      if (entries.length === 0) continue
+
+      const paths = entries.map(e => `${e.symbol}${e.path}`).join(',')
+      result.push(`${groupName}:[${paths}]`)
+    }
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * Build context filtered for specific files based on their domains
+ * @param {string} root - Project root directory
+ * @param {string[]} files - List of file paths to build context for
+ * @returns {string} Filtered and minified context
+ */
+export function buildContextForFiles(root, files) {
+  const parts = []
+
+  // 1. Always include syntax (LK grammar reference)
+  const syntax = getSyntax(root)
+  if (syntax) parts.push(syntax)
+
+  // 2. Always include project metadata
+  const project = getProject(root)
+  if (project) parts.push(project)
+
+  // 3. Infer domains from file paths
+  const inferredDomains = new Set()
+  for (const file of files) {
+    const domain = inferDomainFromPath(file)
+    if (domain) inferredDomains.add(domain)
+  }
+
+  // 4. Always include 'core' as fallback
+  inferredDomains.add('core')
+
+  // 5. Load only relevant domains
+  const allDomains = listDomains(root)
+  const relevantDomains = allDomains.filter(d =>
+    inferredDomains.has(d.toLowerCase()) ||
+    [...inferredDomains].some(inf => d.toLowerCase().includes(inf))
+  )
+
+  for (const name of relevantDomains) {
+    const p = domainPath(root, name)
+    if (fs.existsSync(p)) {
+      const raw = fs.readFileSync(p, 'utf8').trim()
+      parts.push(decrypt(raw))
+    }
+  }
+
+  // 6. Apply same minification as buildContext()
+  const full = parts.join('\n\n')
+  if (!full) return ''
+
+  return full
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l)
+    .join('\n')
+    .replace(/  +/g, ' ')
+    .replace(/⦓ID: DOMAIN-/g, '⦓')
+    .replace(/⦓ID: /g, '⦓')
+    .replace(/⟦Δ: Domain ⫸ /g, '⟦')
+    .replace(/⟦Δ: /g, '⟦')
+    .replace(/∑ /g, '∑')
+    .replace(/\[\s+/g, '[')
+    .replace(/\s+\]/g, ']')
+    .replace(/,\s+/g, ',')
+    .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[')
+    .replace(/\s+\[\]/g, '')
+}
+
 export { VALID_SYMBOLS }
