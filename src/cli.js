@@ -14,7 +14,8 @@ import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
 import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { VERSION } from './lib/version.js'
-import { getLicenseExpiration } from './lib/license.js'
+import { getLicenseExpiration, isLicensed } from './lib/license.js'
+import { isConfigured } from './lib/config.js'
 
 function terminalPrint(message) {
   try {
@@ -199,6 +200,7 @@ program
   .action(() => {
     const green = '\x1b[32m'
     const yellow = '\x1b[33m'
+    const red = '\x1b[31m'
     const reset = '\x1b[0m'
 
     // ASCII banner with lk symbols
@@ -212,9 +214,21 @@ program
     // Print banner in green
     banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
 
+    // Check license (skip in dev mode)
+    if (!DEV_MODE && !isLicensed()) {
+      terminalPrint(`${red}No license - Stop Claude and run: lk activate${reset}`)
+      return
+    }
+
+    // Check API key configuration
+    if (!isConfigured()) {
+      terminalPrint(`${red}No API key - Stop Claude and run: lk setup${reset}`)
+      return
+    }
+
     // Check if .lk directory exists
     if (!existsSync('.lk')) {
-      terminalPrint(`${yellow}No context - It will sync dynamically during conversation${reset}`)
+      terminalPrint(`${yellow}No context - Will sync dynamically, or stop Claude and run: lk sync${reset}`)
       return
     }
 
