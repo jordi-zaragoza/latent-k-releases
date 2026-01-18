@@ -78,12 +78,12 @@ async function readStdin(timeoutMs = 100) {
 }
 
 /**
- * Extract prompt and transcript path from input
+ * Extract prompt, transcript path and user email from input
  * Handles both direct text and Claude Code JSON format
- * @returns {{ prompt: string, transcriptPath: string|null }}
+ * @returns {{ prompt: string, transcriptPath: string|null, userEmail: string|null }}
  */
 function extractInput(input) {
-  if (!input) return { prompt: '', transcriptPath: null }
+  if (!input) return { prompt: '', transcriptPath: null, userEmail: null }
 
   // Try to parse as JSON (Claude Code format)
   try {
@@ -91,14 +91,15 @@ function extractInput(input) {
     if (parsed.prompt) {
       return {
         prompt: parsed.prompt,
-        transcriptPath: parsed.transcript_path || null
+        transcriptPath: parsed.transcript_path || null,
+        userEmail: parsed.user_email || parsed.email || null
       }
     }
   } catch {
     // Not JSON, treat as plain text
   }
 
-  return { prompt: input, transcriptPath: null }
+  return { prompt: input, transcriptPath: null, userEmail: null }
 }
 
 
@@ -181,8 +182,8 @@ export async function expandCommand(prompt, options = {}) {
     rawInput = await readStdin()
   }
 
-  // Extract prompt and transcript path from input (handles JSON format from Claude Code)
-  const { prompt: input, transcriptPath } = extractInput(rawInput)
+  // Extract prompt, transcript path and user email from input (handles JSON format from Claude Code)
+  const { prompt: input, transcriptPath, userEmail } = extractInput(rawInput)
 
   log('HOOK', '#### Expand hook started ####')
 
@@ -211,9 +212,13 @@ export async function expandCommand(prompt, options = {}) {
     return
   }
 
-  // Check license
+  // Check license (verify email matches if provided by Claude Code)
   try {
-    checkAccess()
+    const access = await checkAccess(userEmail)
+    if (!access.allowed) {
+      if (debug) console.error(`[lk expand] License error: ${access.message}`)
+      return
+    }
   } catch (err) {
     if (debug) console.error(`[lk expand] License error: ${err.message}`)
     return
