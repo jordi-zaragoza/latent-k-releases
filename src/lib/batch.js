@@ -10,6 +10,55 @@ import { withSpinner } from './spinner.js'
 export const MAX_FILES_PER_SYNC = 5
 export const MAX_CHARS_PER_FILE = 8000
 export const MAX_BATCH_CHARS = 100000
+export const MAX_LINES_PER_FILE = 150
+
+/**
+ * Extract distributed sections from a file
+ * Dynamically calculates number of sections based on file size
+ * @param {string} content - File content
+ * @param {number} maxLines - Maximum lines to include
+ * @returns {{content: string, truncated: boolean}}
+ */
+export function extractDistributedSections(content, maxLines = MAX_LINES_PER_FILE) {
+  const lines = content.split('\n')
+
+  if (lines.length <= maxLines) {
+    return { content, truncated: false }
+  }
+
+  // Calculate number of sections based on file size
+  // Larger files get more sections for better coverage
+  const ratio = lines.length / maxLines
+  let numSections
+  if (ratio <= 2) numSections = 3       // up to 2x: start, middle, end
+  else if (ratio <= 4) numSections = 5  // up to 4x: 5 sections
+  else if (ratio <= 8) numSections = 7  // up to 8x: 7 sections
+  else numSections = 9                  // very large: 9 sections
+
+  const linesPerSection = Math.floor(maxLines / numSections)
+  const resultParts = []
+
+  for (let i = 0; i < numSections; i++) {
+    // Calculate where this section should start in the original file
+    // Evenly distribute sections across the file
+    const sectionStart = Math.floor((i / (numSections - 1)) * (lines.length - linesPerSection))
+    const sectionEnd = Math.min(sectionStart + linesPerSection, lines.length)
+    const section = lines.slice(sectionStart, sectionEnd)
+
+    if (i > 0) {
+      // Calculate omitted lines between previous section end and this section start
+      const prevEnd = Math.floor(((i - 1) / (numSections - 1)) * (lines.length - linesPerSection)) + linesPerSection
+      const omitted = sectionStart - prevEnd
+      if (omitted > 0) {
+        resultParts.push(`\n// ... (${omitted} lines omitted) ...\n`)
+      }
+    }
+
+    resultParts.push(...section)
+  }
+
+  return { content: resultParts.join('\n'), truncated: true }
+}
 
 /**
  * Prepare files for AI batch analysis
@@ -21,12 +70,28 @@ export function prepareBatch(cwd, filesToAnalyze) {
 
   for (const { file, status } of filesToAnalyze) {
     const fullPath = path.join(cwd, file)
-    let fileContent = fs.readFileSync(fullPath, 'utf8')
+    const rawContent = fs.readFileSync(fullPath, 'utf8')
+    const originalLength = rawContent.length
+    const originalLines = rawContent.split('\n').length
 
-    // Truncate large files
+    // Extract distributed sections if file is too large (by lines or chars)
+    let fileContent = rawContent
+    let truncated = false
+
+    if (originalLines > MAX_LINES_PER_FILE) {
+      const result = extractDistributedSections(rawContent, MAX_LINES_PER_FILE)
+      fileContent = result.content
+      truncated = result.truncated
+    }
+
+    // Additional char limit as safety net
     if (fileContent.length > MAX_CHARS_PER_FILE) {
       fileContent = fileContent.slice(0, MAX_CHARS_PER_FILE) + '\n// ... truncated'
-      log('BATCH', `Truncated ${file} from ${fileContent.length} to ${MAX_CHARS_PER_FILE} chars`)
+      truncated = true
+    }
+
+    if (truncated) {
+      log('BATCH', `Extracted sections from ${file}: ${originalLines} lines → ${MAX_LINES_PER_FILE} lines (${originalLength} → ${fileContent.length} chars)`)
     }
 
     // Check if adding this file would exceed batch limit
