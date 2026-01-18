@@ -212,29 +212,29 @@ export async function expand(root, prompt, previousContext = null) {
 
     if (functions && functions.length > 0) {
       // Extract each function separately to avoid split issues
-      fileContext[file.path] = {}
+      fileContext[cleanPath] = {}
       for (const fnName of functions) {
         const result = getFileContext(filePath, [fnName])
         if (result) {
           if (result.truncated) {
-            fileContext[file.path][fnName] = result.content + `\n\n[Truncated - use Read tool on: ${file.path}]`
+            fileContext[cleanPath][fnName] = result.content + `\n\n[Truncated - use Read tool on: ${cleanPath}]`
           } else {
-            fileContext[file.path][fnName] = result.content
+            fileContext[cleanPath][fnName] = result.content
           }
         }
       }
       // If no functions extracted, skip this file
-      if (Object.keys(fileContext[file.path]).length === 0) {
-        delete fileContext[file.path]
+      if (Object.keys(fileContext[cleanPath]).length === 0) {
+        delete fileContext[cleanPath]
       }
     } else {
       // Full file content
       const result = getFileContext(filePath, null)
       if (result) {
         if (result.truncated) {
-          fileContext[file.path] = result.content + `\n\n[Truncated - use Read tool on: ${file.path}]`
+          fileContext[cleanPath] = result.content + `\n\n[Truncated - use Read tool on: ${cleanPath}]`
         } else {
-          fileContext[file.path] = result.content
+          fileContext[cleanPath] = result.content
         }
       }
     }
