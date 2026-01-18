@@ -199,7 +199,6 @@ export async function expand(root, prompt, previousContext = null) {
   // 4. Extract code from files
   log('EXPAND', `Extracting context from ${files.length} file(s)`)
   const fileContext = {}
-  const TRUNCATION_MARKER = '... (truncated)'
 
   for (const file of files) {
     // Remove @ prefix from path aliases (e.g. @app/... -> app/...)
@@ -211,13 +210,12 @@ export async function expand(root, prompt, previousContext = null) {
       // Extract each function separately to avoid split issues
       fileContext[file.path] = {}
       for (const fnName of functions) {
-        const fnContent = getFileContext(filePath, [fnName])
-        if (fnContent) {
-          // If truncated, tell Claude Code to read it instead
-          if (fnContent.endsWith(TRUNCATION_MARKER)) {
-            fileContext[file.path][fnName] = `[File too large - use Read tool on: ${file.path}]`
+        const result = getFileContext(filePath, [fnName])
+        if (result) {
+          if (result.truncated) {
+            fileContext[file.path][fnName] = result.content + `\n\n[Truncated - use Read tool on: ${file.path}]`
           } else {
-            fileContext[file.path][fnName] = fnContent
+            fileContext[file.path][fnName] = result.content
           }
         }
       }
@@ -227,13 +225,12 @@ export async function expand(root, prompt, previousContext = null) {
       }
     } else {
       // Full file content
-      const content = getFileContext(filePath, null)
-      if (content) {
-        // If truncated, tell Claude Code to read it instead
-        if (content.endsWith(TRUNCATION_MARKER)) {
-          fileContext[file.path] = `[File too large - use Read tool on: ${file.path}]`
+      const result = getFileContext(filePath, null)
+      if (result) {
+        if (result.truncated) {
+          fileContext[file.path] = result.content + `\n\n[Truncated - use Read tool on: ${file.path}]`
         } else {
-          fileContext[file.path] = content
+          fileContext[file.path] = result.content
         }
       }
     }
