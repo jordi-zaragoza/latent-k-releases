@@ -74,7 +74,7 @@ const server = createServer(async (req, res) => {
   }
 
   // Serve static files
-  let filePath = req.url === '/' ? '/activation.html' : req.url
+  let filePath = req.url === '/' ? '/index.html' : req.url
   const fullPath = join(__dirname, filePath)
 
   try {
