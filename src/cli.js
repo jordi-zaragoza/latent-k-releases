@@ -5,6 +5,7 @@ import { activate } from './commands/activate.js'
 import { setup } from './commands/setup.js'
 import { sync } from './commands/sync.js'
 import { status } from './commands/status.js'
+import { stats } from './commands/stats.js'
 import { update } from './commands/update.js'
 import { dev } from './commands/dev.js'
 import { enableHooks, disableHooks } from './commands/hooks.js'
@@ -62,6 +63,16 @@ program
   .command('status')
   .description('Show configuration status')
   .action(status)
+
+program
+  .command('stats')
+  .description('Show LLM usage statistics')
+  .option('--json', 'Output raw JSON')
+  .option('--reset', 'Reset statistics')
+  .action((options) => stats({
+    json: options.json,
+    reset: options.reset
+  }))
 
 program
   .command('update')

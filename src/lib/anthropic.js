@@ -82,9 +82,12 @@ export async function checkRateLimit() {
 
 /**
  * Make an API call to Anthropic
+ * @param {string} prompt - The prompt to send
+ * @param {number} maxTokens - Maximum tokens in response
+ * @param {string} operationType - Logical operation type for stats tracking
  */
-async function callApi(prompt, maxTokens = 256) {
-  const startTime = logLlmCall('ANTHROPIC', 'API call', prompt.length)
+async function callApi(prompt, maxTokens = 256, operationType = null) {
+  const tracking = logLlmCall('ANTHROPIC', 'API call', prompt.length, MODEL, operationType)
 
   const response = await client.messages.create({
     model: MODEL,
@@ -92,8 +95,9 @@ async function callApi(prompt, maxTokens = 256) {
     messages: [{ role: 'user', content: prompt }]
   })
 
-  logLlmResponse('ANTHROPIC', startTime)
-  return response.content?.[0]?.text?.trim() || null
+  const text = response.content?.[0]?.text?.trim() || null
+  logLlmResponse(tracking, text)
+  return text
 }
 
 export async function analyzeFile({ lkContent, file, content, action }) {
@@ -103,7 +107,7 @@ export async function analyzeFile({ lkContent, file, content, action }) {
   log('ANTHROPIC', `Context: ${lkContent.length} chars, Content: ${content?.length || 0} chars`)
 
   const prompt = buildAnalyzeFilePrompt({ lkContent, file, content, action })
-  const text = await callApi(prompt, 256)
+  const text = await callApi(prompt, 256, 'analyzeFile')
 
   if (!text) {
     log('ANTHROPIC', 'Empty response - using defaults')
@@ -129,7 +133,7 @@ export async function analyzeFiles({ lkContent, files }) {
   log('ANTHROPIC', `Context: ${lkContent.length} chars`)
 
   const prompt = buildAnalyzeFilesPrompt({ lkContent, files })
-  const text = await callApi(prompt, 2048)
+  const text = await callApi(prompt, 2048, 'analyzeFiles')
 
   if (!text) {
     log('ANTHROPIC', 'Empty batch response - returning defaults')
@@ -152,7 +156,7 @@ export async function generateProject({ files, packageJson, context }) {
   log('ANTHROPIC', `generateProject: ${files.length} files, context: ${context?.length || 0} chars`)
 
   const prompt = buildProjectPrompt({ files, packageJson, context })
-  const text = await callApi(prompt, 1024)
+  const text = await callApi(prompt, 1024, 'generateProject')
 
   if (!text) {
     throw new Error('Empty response from API')
@@ -167,7 +171,7 @@ export async function describeLk({ file, content }) {
   log('ANTHROPIC', `describeLk: ${file} (${content.length} chars)`)
 
   const prompt = buildDescribeLkPrompt({ file, content })
-  const text = await callApi(prompt, 256)
+  const text = await callApi(prompt, 256, 'describeLk')
 
   if (!text) {
     throw new Error('Empty response from API')
@@ -183,7 +187,7 @@ export async function generateIgnore({ files, globalPatterns = [] }) {
   log('ANTHROPIC', `generateIgnore: ${files.length} files, ${globalPatterns.length} global patterns`)
 
   const prompt = buildIgnorePrompt({ files, globalPatterns })
-  const text = await callApi(prompt, 1024)
+  const text = await callApi(prompt, 1024, 'generateIgnore')
 
   if (!text) {
     log('ANTHROPIC', 'Empty response - no project-specific patterns')
@@ -213,7 +217,7 @@ export async function classifyPrompt(userPrompt, projectLk, availableDomains = [
   }
 
   const prompt = buildClassifyPrompt(userPrompt, projectLk, availableDomains, previousContext)
-  const text = await callApi(prompt, 512)
+  const text = await callApi(prompt, 512, 'classifyPrompt')
 
   if (!text) {
     log('ANTHROPIC', 'Empty response - defaulting to passthrough')
@@ -243,7 +247,7 @@ export async function expandPrompt(userPrompt, projectLk, domainLk) {
   log('ANTHROPIC', `expandPrompt: ${userPrompt.slice(0, 100)}...`)
 
   const prompt = buildExpandPrompt(userPrompt, projectLk, domainLk)
-  const text = await callApi(prompt, 1024)
+  const text = await callApi(prompt, 1024, 'expandPrompt')
 
   if (!text) {
     log('ANTHROPIC', 'Empty response - returning empty result')

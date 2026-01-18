@@ -84,27 +84,31 @@ export async function checkRateLimit() {
 
 /**
  * Make an API call to Gemini (with JSON mode)
+ * @param {string} prompt - The prompt to send
+ * @param {string} operationType - Logical operation type for stats tracking
  */
-async function callJsonApi(prompt) {
-  const startTime = logLlmCall('GEMINI', 'JSON API call', prompt.length)
+async function callJsonApi(prompt, operationType = null) {
+  const tracking = logLlmCall('GEMINI', 'JSON API call', prompt.length, MODEL, operationType)
 
   const result = await jsonModel.generateContent(prompt)
   const text = result.response?.text?.()?.trim() || null
 
-  logLlmResponse('GEMINI', startTime)
+  logLlmResponse(tracking, text)
   return text
 }
 
 /**
  * Make an API call to Gemini (text mode)
+ * @param {string} prompt - The prompt to send
+ * @param {string} operationType - Logical operation type for stats tracking
  */
-async function callTextApi(prompt) {
-  const startTime = logLlmCall('GEMINI', 'Text API call', prompt.length)
+async function callTextApi(prompt, operationType = null) {
+  const tracking = logLlmCall('GEMINI', 'Text API call', prompt.length, MODEL, operationType)
 
   const result = await model.generateContent(prompt)
   const text = result.response?.text?.()?.trim() || null
 
-  logLlmResponse('GEMINI', startTime)
+  logLlmResponse(tracking, text)
   return text
 }
 
@@ -122,12 +126,16 @@ Current .lk context:
 ${lkContent}
 
 Symbols (pick ONE):
-- "λ": Core logic, utilities, helpers
+- "▸": Entry point, main/index
 - "⇄": Interface, API, commands, entry points
+- "λ": Core logic, utilities, helpers
 - "⚙": Config files
 - "⧫": Test files
-- "▸": Entry point, main/index
 - "⊚": UI Component
+- "⟐": Schema, types, models
+- "◈": Background jobs, workers, queues
+- "⤳": Pipeline, workflow, process
+- "⚑": State management (store, reducer)
 
 Domain rules:
 - src/commands/*, src/cli/* → "cli"
@@ -197,7 +205,7 @@ export async function analyzeFile({ lkContent, file, content, action }) {
   log('GEMINI', `Context: ${lkContent.length} chars, Content: ${content?.length || 0} chars`)
 
   const prompt = buildGeminiAnalyzePrompt({ lkContent, file, content, action })
-  const text = await callJsonApi(prompt)
+  const text = await callJsonApi(prompt, 'analyzeFile')
 
   if (!text) {
     log('GEMINI', 'Empty response - using defaults')
@@ -230,7 +238,7 @@ export async function analyzeFiles({ lkContent, files }) {
   log('GEMINI', `Context: ${lkContent.length} chars`)
 
   const prompt = buildGeminiBatchPrompt({ lkContent, files })
-  const text = await callJsonApi(prompt)
+  const text = await callJsonApi(prompt, 'analyzeFiles')
 
   if (!text) {
     log('GEMINI', 'Empty batch response - returning defaults')
@@ -253,7 +261,7 @@ export async function generateProject({ files, packageJson, context }) {
   log('GEMINI', `generateProject: ${files.length} files, context: ${context?.length || 0} chars`)
 
   const prompt = buildProjectPrompt({ files, packageJson, context })
-  const text = await callTextApi(prompt)
+  const text = await callTextApi(prompt, 'generateProject')
 
   if (!text) {
     throw new Error('Empty response from API')
@@ -268,7 +276,7 @@ export async function describeLk({ file, content }) {
   log('GEMINI', `describeLk: ${file} (${content.length} chars)`)
 
   const prompt = buildDescribeLkPrompt({ file, content })
-  const text = await callTextApi(prompt)
+  const text = await callTextApi(prompt, 'describeLk')
 
   if (!text) {
     throw new Error('Empty response from API')
@@ -284,7 +292,7 @@ export async function generateIgnore({ files, globalPatterns = [] }) {
   log('GEMINI', `generateIgnore: ${files.length} files, ${globalPatterns.length} global patterns`)
 
   const prompt = buildIgnorePrompt({ files, globalPatterns })
-  const text = await callTextApi(prompt)
+  const text = await callTextApi(prompt, 'generateIgnore')
 
   if (!text) {
     log('GEMINI', 'Empty response - no project-specific patterns')
@@ -314,7 +322,7 @@ export async function classifyPrompt(userPrompt, projectLk, availableDomains = [
   }
 
   const prompt = buildClassifyPrompt(userPrompt, projectLk, availableDomains, previousContext)
-  const text = await callJsonApi(prompt)
+  const text = await callJsonApi(prompt, 'classifyPrompt')
 
   if (!text) {
     log('GEMINI', 'Empty response - defaulting to passthrough')
@@ -344,7 +352,7 @@ export async function expandPrompt(userPrompt, projectLk, domainLk) {
   log('GEMINI', `expandPrompt: ${userPrompt.slice(0, 100)}...`)
 
   const prompt = buildExpandPrompt(userPrompt, projectLk, domainLk)
-  const text = await callJsonApi(prompt)
+  const text = await callJsonApi(prompt, 'expandPrompt')
 
   if (!text) {
     log('GEMINI', 'Empty response - returning empty result')
