@@ -1,19 +1,18 @@
 /**
- * Prompt expansion - transforms user prompts into structured JSON context
+ * Prompt expansion - transforms user prompts into file selection guidance
  *
  * Flow:
  * 1. Receive user prompt
  * 2. Load project.lk + list available domains
  * 3. Call AI: classify prompt + decide if domain needed
  * 4. If domain needed: load domain.lk, call AI again
- * 5. Return JSON with context (files/functions or direct answer)
+ * 5. Return file paths + reasons (Claude Code reads them with Read tool)
  */
 
 import path from 'path'
 import { getProject, loadDomain, listDomains, buildDomain } from './context.js'
 import { log } from './config.js'
 import * as ai from './ai.js'
-import { getFileContext } from './parser.js'
 
 // Generic response for LK questions
 const LK_GENERIC_RESPONSE = "I use context from the project to help you better. How can I help you with your code?"
@@ -189,7 +188,7 @@ export async function expand(root, prompt, previousContext = null) {
     }
   }
 
-  // Build file context
+  // Build file list with reasons
   const files = expansion.files || []
   if (files.length === 0) {
     log('EXPAND', 'No files specified')
@@ -200,65 +199,24 @@ export async function expand(root, prompt, previousContext = null) {
     }
   }
 
-  // 4. Extract code from files
-  log('EXPAND', `Extracting context from ${files.length} file(s)`)
-  const fileContext = {}
-
-  for (const file of files) {
+  // 4. Build file list (without loading content - Claude Code will read them)
+  log('EXPAND', `Selected ${files.length} file(s) for Claude Code to read`)
+  const fileList = files.map(file => {
     // Remove @ prefix from path aliases (e.g. @app/... -> app/...)
     const cleanPath = file.path.startsWith('@') ? file.path.slice(1) : file.path
-    const filePath = path.join(root, cleanPath)
-    const functions = file.functions || null
-
-    if (functions && functions.length > 0) {
-      // Extract each function separately to avoid split issues
-      fileContext[cleanPath] = {}
-      for (const fnName of functions) {
-        const result = getFileContext(filePath, [fnName])
-        if (result) {
-          if (result.truncated) {
-            fileContext[cleanPath][fnName] = result.content + `\n\n[Truncated - use Read tool on: ${cleanPath}]`
-          } else {
-            fileContext[cleanPath][fnName] = result.content
-          }
-        }
-      }
-      // If no functions extracted, skip this file
-      if (Object.keys(fileContext[cleanPath]).length === 0) {
-        delete fileContext[cleanPath]
-      }
-    } else {
-      // Full file content
-      const result = getFileContext(filePath, null)
-      if (result) {
-        if (result.truncated) {
-          fileContext[cleanPath] = result.content + `\n\n[Truncated - use Read tool on: ${cleanPath}]`
-        } else {
-          fileContext[cleanPath] = result.content
-        }
-      }
-    }
-  }
-
-  log('EXPAND', `Context built for ${Object.keys(fileContext).length} file(s)`)
-
-  // If no files could be loaded, return passthrough
-  if (Object.keys(fileContext).length === 0) {
-    log('EXPAND', 'No file context extracted, returning passthrough')
     return {
-      type: 'passthrough',
-      calls: 2,
-      context: null
+      path: path.join(root, cleanPath),
+      reason: file.reason || 'Relevant to the task'
     }
-  }
+  })
 
   return {
     type: 'code_context',
     calls: 2,
     context: {
-      _instruction: 'read_context',
+      _instruction: 'read_files',
       navigation_guide: expansion.navigation_guide || null,
-      files: fileContext
+      files: fileList
     }
   }
 }

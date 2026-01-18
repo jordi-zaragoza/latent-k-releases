@@ -334,15 +334,15 @@ Return ONLY JSON, no markdown.`
 
 /**
  * Build prompt for expanding user prompt with domain context
- * Returns: { direct_answer, files: [{path, functions?}] }
+ * Returns: { direct_answer, navigation_guide, files: [{path, reason}] }
  */
 export function buildExpandPrompt(userPrompt, projectLk, domainLk) {
   return `You are a code context selector for an AI coding assistant (Claude Code).
 The user sent this prompt TO CLAUDE CODE (not to you):
 "${userPrompt}"
 
-Your job: Select relevant code files that Claude Code needs to complete this task.
-You do NOT execute anything. You only select context.
+Your job: Select relevant code files that Claude Code should READ to complete this task.
+You do NOT execute anything. You only select which files Claude Code needs to read.
 
 PROJECT:
 ${projectLk}
@@ -355,8 +355,7 @@ Return ONLY valid JSON with this structure:
   "direct_answer": string | null,
   "navigation_guide": string | null,
   "files": [
-    {"path": "src/lib/file.js", "functions": ["func1", "func2"]},
-    {"path": "src/other.js"}
+    {"path": "src/lib/file.js", "reason": "why Claude Code should read this file"}
   ]
 }
 
@@ -365,11 +364,9 @@ RULES:
    - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
    - Claude Code executes actions, not you. Your job is only to select relevant files.
 2. "navigation_guide": Brief guidance for Claude Code on how to approach this task. Explain which file does what and how they connect.
-   - IMPORTANT: If a file is large (>50 lines), tell Claude Code to use the Read tool for full content.
 3. "files": List 1-5 most relevant files for the task.
    - "path": Full relative path from domain details (MUST exist in domain)
-   - "functions": Optional. Specific function/class names if the question targets specific code. Omit for full file context.
-   - For large files, prefer specifying "functions" to extract only relevant parts.
+   - "reason": Why Claude Code should read this file (what it contains, what to look for)
 
 FILE SELECTION PRIORITY:
 - If asking about specific functionality → include that file + related files
@@ -378,9 +375,9 @@ FILE SELECTION PRIORITY:
 - Prefer fewer, more relevant files over many tangential ones
 
 EXAMPLES:
-- "how does classifyPrompt work" → {"direct_answer": null, "navigation_guide": "Classification happens in ai-prompts.js...", "files": [{"path": "src/lib/ai-prompts.js", "functions": ["buildClassifyPrompt"]}]}
-- "update the readme" → {"direct_answer": null, "navigation_guide": "README.md is at project root. Check project.lk for current description.", "files": [{"path": "README.md"}]}
-- "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/. See init.js as template.", "files": [{"path": "src/commands/init.js"}, {"path": "src/cli.js"}]}
+- "how does classifyPrompt work" → {"direct_answer": null, "navigation_guide": "Classification logic is in ai-prompts.js", "files": [{"path": "src/lib/ai-prompts.js", "reason": "Contains buildClassifyPrompt function"}]}
+- "update the readme" → {"direct_answer": null, "navigation_guide": "README.md is at project root", "files": [{"path": "README.md", "reason": "File to update"}]}
+- "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/", "files": [{"path": "src/commands/init.js", "reason": "Template for new commands"}, {"path": "src/cli.js", "reason": "Register new command here"}]}
 
 Return ONLY JSON, no markdown.`
 }
