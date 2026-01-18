@@ -9,10 +9,26 @@
 
 import fs from 'fs'
 import crypto from 'crypto'
+import { join } from 'path'
+import { homedir } from 'os'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
+
+/**
+ * Get Claude user email from ~/.claude.json
+ */
+function getClaudeUserEmail() {
+  try {
+    const claudeConfigPath = join(homedir(), '.claude.json')
+    if (!fs.existsSync(claudeConfigPath)) return null
+    const config = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'))
+    return config.emailAddress || null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Get marker file path for a session (based on transcript path hash)
@@ -78,12 +94,12 @@ async function readStdin(timeoutMs = 100) {
 }
 
 /**
- * Extract prompt, transcript path and user email from input
+ * Extract prompt and transcript path from input
  * Handles both direct text and Claude Code JSON format
- * @returns {{ prompt: string, transcriptPath: string|null, userEmail: string|null }}
+ * @returns {{ prompt: string, transcriptPath: string|null }}
  */
 function extractInput(input) {
-  if (!input) return { prompt: '', transcriptPath: null, userEmail: null }
+  if (!input) return { prompt: '', transcriptPath: null }
 
   // Try to parse as JSON (Claude Code format)
   try {
@@ -91,15 +107,14 @@ function extractInput(input) {
     if (parsed.prompt) {
       return {
         prompt: parsed.prompt,
-        transcriptPath: parsed.transcript_path || null,
-        userEmail: parsed.user_email || parsed.email || null
+        transcriptPath: parsed.transcript_path || null
       }
     }
   } catch {
     // Not JSON, treat as plain text
   }
 
-  return { prompt: input, transcriptPath: null, userEmail: null }
+  return { prompt: input, transcriptPath: null }
 }
 
 
@@ -182,10 +197,14 @@ export async function expandCommand(prompt, options = {}) {
     rawInput = await readStdin()
   }
 
-  // Extract prompt, transcript path and user email from input (handles JSON format from Claude Code)
-  const { prompt: input, transcriptPath, userEmail } = extractInput(rawInput)
+  // Extract prompt and transcript path from input (handles JSON format from Claude Code)
+  const { prompt: input, transcriptPath } = extractInput(rawInput)
+
+  // Get user email from Claude config
+  const userEmail = getClaudeUserEmail()
 
   log('HOOK', '#### Expand hook started ####')
+  log('HOOK', `User email from Claude config: ${userEmail || 'not found'}`)
 
   // Still no input - nothing to expand
   if (!input) {

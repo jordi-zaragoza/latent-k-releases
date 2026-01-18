@@ -15,9 +15,23 @@ import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
 import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
 import { VERSION } from './lib/version.js'
-import { getLicenseExpiration, isLicensed } from './lib/license.js'
+import { getLicenseExpiration, isLicensed, checkAccess } from './lib/license.js'
 import { isConfigured, getAiProvider } from './lib/config.js'
 import { checkRateLimit } from './lib/ai.js'
+import { join } from 'path'
+import { homedir } from 'os'
+import { readFileSync } from 'fs'
+
+function getClaudeUserEmail() {
+  try {
+    const claudeConfigPath = join(homedir(), '.claude.json')
+    if (!existsSync(claudeConfigPath)) return null
+    const config = JSON.parse(readFileSync(claudeConfigPath, 'utf8'))
+    return config.emailAddress || null
+  } catch {
+    return null
+  }
+}
 
 function terminalPrint(message) {
   try {
@@ -226,10 +240,18 @@ program
     // Print banner in green
     banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
 
-    // Check license (skip in dev mode)
-    if (!DEV_MODE && !isLicensed()) {
-      terminalPrint(`${red}No license - Stop Claude and run: lk activate${reset}`)
-      return
+    // Check license with email verification (skip in dev mode)
+    if (!DEV_MODE) {
+      const userEmail = getClaudeUserEmail()
+      const access = await checkAccess(userEmail)
+      if (!access.allowed) {
+        terminalPrint(`${red}${access.message}${reset}`)
+        return
+      }
+      // Show license warning if present
+      if (access.message) {
+        terminalPrint(`${yellow}${access.message}${reset}`)
+      }
     }
 
     // Check API key configuration
@@ -247,7 +269,7 @@ program
     // Build info line
     const infoParts = ['Context loaded']
 
-    // Check rate limit status
+    // Check rate limit status (only if license is valid)
     const provider = getAiProvider()
     const rateCheck = await checkRateLimit()
     if (rateCheck.rateLimited) {
@@ -256,19 +278,6 @@ program
       infoParts.push(`${provider} ready`)
     } else if (rateCheck.error) {
       infoParts.push(`⚠ ${provider}: ${rateCheck.error}`)
-    }
-
-    if (!DEV_MODE) {
-      const exp = getLicenseExpiration()
-      if (exp) {
-        if (exp.inGrace) {
-          infoParts.push(`⚠ License expired - grace period: ${exp.graceDaysLeft}d left`)
-        } else if (exp.expired) {
-          infoParts.push('⚠ License expired')
-        } else if (exp.daysLeft !== null && exp.daysLeft <= 30) {
-          infoParts.push(`License: ${exp.daysLeft}d remaining`)
-        }
-      }
     }
 
     terminalPrint(infoParts.join(' | '))
