@@ -39,3 +39,17 @@ describe('Binary path configuration', () => {
     expect(content).toContain('getLicenseExpiration')
   })
 })
+
+describe('Hook command consistency', () => {
+  it('hooks.js uses expand command (not context)', () => {
+    const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
+    expect(content).toContain('expand')
+    expect(content).toContain('expandCmd')
+  })
+
+  it('hooks.js isLkHook detects both expand and context', () => {
+    const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
+    expect(content).toContain("if (type === 'expand')")
+    expect(content).toContain("command.includes('expand') || command.includes('context')")
+  })
+})

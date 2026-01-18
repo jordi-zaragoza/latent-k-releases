@@ -164,9 +164,9 @@ function getHookCommands(mode) {
   const lkBin = '/usr/local/bin/lk'
   const sourcePath = getSourcePath()
 
-  const contextCmd = mode === 'binary'
-    ? `${lkBin} context || true`
-    : `LK_DEV=1 node ${sourcePath} context || true`
+  const expandCmd = mode === 'binary'
+    ? `${lkBin} expand || true`
+    : `LK_DEV=1 node ${sourcePath} expand || true`
 
   const syncCmd = mode === 'binary'
     ? `${lkBin} sync`
@@ -176,19 +176,25 @@ function getHookCommands(mode) {
     ? `${lkBin} session-info || true`
     : `LK_DEV=1 node ${sourcePath} session-info || true`
 
-  return { contextCmd, syncCmd, sessionCmd }
+  return { expandCmd, syncCmd, sessionCmd }
 }
 
-function updateHooksInSettings(settings, stopEvent, contextCmd, syncCmd, sessionCmd) {
-  // Update UserPromptSubmit hook (context on every prompt)
+function isLkExpandHook(command) {
+  if (!command) return false
+  const isLk = /\blk\b/.test(command) || command.includes('cli.js')
+  return isLk && (command.includes('expand') || command.includes('context'))
+}
+
+function updateHooksInSettings(settings, stopEvent, expandCmd, syncCmd, sessionCmd) {
+  // Update UserPromptSubmit hook (expand on every prompt)
   if (settings.hooks?.UserPromptSubmit) {
     settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit.map(h => {
-      if (h.hooks?.some(hh => hh.command?.includes('context'))) {
+      if (h.hooks?.some(hh => isLkExpandHook(hh.command))) {
         return {
           ...h,
           hooks: h.hooks.map(hh => {
-            if (hh.command?.includes('context')) {
-              return { ...hh, command: contextCmd }
+            if (isLkExpandHook(hh.command)) {
+              return { ...hh, command: expandCmd }
             }
             return hh
           })
@@ -198,7 +204,7 @@ function updateHooksInSettings(settings, stopEvent, contextCmd, syncCmd, session
     })
   }
 
-  // Update SessionStart hooks: session-info and remove legacy context hooks
+  // Update SessionStart hooks: session-info and remove legacy expand/context hooks
   if (settings.hooks?.SessionStart) {
     // Update session-info hooks
     settings.hooks.SessionStart = settings.hooks.SessionStart.map(h => {
@@ -215,9 +221,9 @@ function updateHooksInSettings(settings, stopEvent, contextCmd, syncCmd, session
       }
       return h
     })
-    // Remove legacy context hooks from SessionStart (they should be in UserPromptSubmit now)
+    // Remove legacy expand/context hooks from SessionStart (they should be in UserPromptSubmit now)
     settings.hooks.SessionStart = settings.hooks.SessionStart.filter(h =>
-      !h.hooks?.some(hh => hh.command?.includes('context') && !hh.command?.includes('session-info'))
+      !h.hooks?.some(hh => isLkExpandHook(hh.command) && !hh.command?.includes('session-info'))
     )
     if (settings.hooks.SessionStart.length === 0) {
       delete settings.hooks.SessionStart
@@ -256,8 +262,8 @@ async function updateClaudeHooks(mode) {
     return false
   }
 
-  const { contextCmd, syncCmd, sessionCmd } = getHookCommands(mode)
-  settings = updateHooksInSettings(settings, 'Stop', contextCmd, syncCmd, sessionCmd)
+  const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode)
+  settings = updateHooksInSettings(settings, 'Stop', expandCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true
@@ -274,8 +280,8 @@ async function updateGeminiHooks(mode) {
     return false
   }
 
-  const { contextCmd, syncCmd, sessionCmd } = getHookCommands(mode)
-  settings = updateHooksInSettings(settings, 'SessionEnd', contextCmd, syncCmd, sessionCmd)
+  const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode)
+  settings = updateHooksInSettings(settings, 'SessionEnd', expandCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true
