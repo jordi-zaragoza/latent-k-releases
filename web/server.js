@@ -16,6 +16,8 @@ const PORT = process.env.PORT || 3000
 const LICENSES_FILE = join(__dirname, 'licenses.json')
 
 const PLAN_DAYS = {
+  trial1: 1,
+  trial7: 7,
   monthly: 30,
   yearly: 365
 }
@@ -24,8 +26,21 @@ const PLAN_DAYS = {
 const ADMIN_USER = process.env.ADMIN_USER || 'admin'
 const ADMIN_PASS = process.env.ADMIN_PASS || 'latentk2024'
 
-// Simple session tokens (in-memory)
-const sessions = new Set()
+// Session tokens (persisted to file)
+const SESSIONS_FILE = join(__dirname, '.sessions.json')
+
+function loadSessions() {
+  if (existsSync(SESSIONS_FILE)) {
+    return new Set(JSON.parse(readFileSync(SESSIONS_FILE, 'utf8')))
+  }
+  return new Set()
+}
+
+function saveSessions(sessions) {
+  writeFileSync(SESSIONS_FILE, JSON.stringify([...sessions]))
+}
+
+const sessions = loadSessions()
 
 // Load existing licenses or create empty array
 function loadLicenses() {
@@ -70,6 +85,7 @@ const server = createServer(async (req, res) => {
         if (username === ADMIN_USER && password === ADMIN_PASS) {
           const token = Math.random().toString(36).slice(2) + Date.now().toString(36)
           sessions.add(token)
+          saveSessions(sessions)
           console.log(`[AUTH] Admin logged in`)
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ token }))
@@ -90,64 +106,20 @@ const server = createServer(async (req, res) => {
     const auth = req.headers.authorization
     if (auth && auth.startsWith('Bearer ')) {
       sessions.delete(auth.slice(7))
+      saveSessions(sessions)
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ success: true }))
     return
   }
 
-  // API: Generate license
+  // API: Generate license (payment module pending)
   if (req.method === 'POST' && req.url === '/api/generate') {
-    let body = ''
-    req.on('data', chunk => body += chunk)
-    req.on('end', () => {
-      try {
-        const { email, name, plan } = JSON.parse(body)
-
-        if (!email || !plan) {
-          res.writeHead(400, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ error: 'Email and plan are required' }))
-          return
-        }
-
-        const days = PLAN_DAYS[plan] || 30
-        const key = generateLicense({
-          email,
-          type: plan,
-          durationDays: days
-        })
-
-        const data = parseLicense(key)
-
-        // Save license to file
-        const licenses = loadLicenses()
-        licenses.push({
-          key,
-          email,
-          name: name || '',
-          plan,
-          expires: data.expires,
-          created: data.created,
-          revoked: false
-        })
-        saveLicenses(licenses)
-
-        console.log(`[LICENSE] Generated ${plan} license for ${email}`)
-
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({
-          key,
-          email,
-          plan,
-          expires: data.expires,
-          created: data.created
-        }))
-      } catch (err) {
-        console.error('[ERROR]', err.message)
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: err.message }))
-      }
-    })
+    res.writeHead(503, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      error: 'Payment module not available',
+      message: 'The payment system is under development. Coming soon!'
+    }))
     return
   }
 
