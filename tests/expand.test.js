@@ -18,13 +18,8 @@ vi.mock('../src/lib/ai.js', () => ({
   expandPrompt: vi.fn()
 }))
 
-vi.mock('../src/lib/parser.js', () => ({
-  getFileContext: vi.fn()
-}))
-
 import { getProject, loadDomain, listDomains, buildDomain } from '../src/lib/context.js'
 import * as ai from '../src/lib/ai.js'
-import { getFileContext } from '../src/lib/parser.js'
 
 describe('expand', () => {
   beforeEach(() => {
@@ -172,9 +167,9 @@ A test project.`
       })
       ai.expandPrompt.mockResolvedValue({
         direct_answer: null,
-        files: [{ path: 'src/lib/parser.js' }]
+        navigation_guide: 'Parser module contains parsing logic',
+        files: [{ path: 'src/lib/parser.js', reason: 'Contains parse function to test' }]
       })
-      getFileContext.mockReturnValue({ content: 'export function parse() {}', truncated: false })
 
       const result = await expand('/test', 'add tests for parser')
 
@@ -182,7 +177,10 @@ A test project.`
       expect(ai.expandPrompt).toHaveBeenCalled()
       expect(result.type).toBe('code_context')
       expect(result.calls).toBe(2)
-      expect(result.context.files['src/lib/parser.js']).toBe('export function parse() {}')
+      expect(result.context._instruction).toBe('read_files')
+      expect(result.context.navigation_guide).toBe('Parser module contains parsing logic')
+      expect(result.context.files[0].path).toContain('src/lib/parser.js')
+      expect(result.context.files[0].reason).toBe('Contains parse function to test')
     })
 
     it('handles direct answer from domain context', async () => {
@@ -251,9 +249,8 @@ A test project.`
       })
       ai.expandPrompt.mockResolvedValue({
         direct_answer: null,
-        files: [{ path: 'src/lib/parser.js' }]
+        files: [{ path: 'src/lib/parser.js', reason: 'Core parsing' }]
       })
-      getFileContext.mockReturnValue({ content: 'code', truncated: false })
 
       await expand('/test', 'test the core and cli modules')
 
@@ -261,7 +258,7 @@ A test project.`
       expect(loadDomain).toHaveBeenCalledWith('/test', 'cli')
     })
 
-    it('extracts specific functions when requested', async () => {
+    it('returns file list with reasons for Claude Code to read', async () => {
       ai.classifyPrompt.mockResolvedValue({
         is_project: true,
         direct_answer: null,
@@ -270,16 +267,20 @@ A test project.`
       })
       ai.expandPrompt.mockResolvedValue({
         direct_answer: null,
-        files: [{ path: 'src/lib/parser.js', functions: ['parse', 'extract'] }]
+        navigation_guide: 'Check the parser module',
+        files: [
+          { path: 'src/lib/parser.js', reason: 'Contains parse function' },
+          { path: 'src/lib/utils.js', reason: 'Helper utilities' }
+        ]
       })
-      getFileContext.mockReturnValue({ content: 'function code() {}', truncated: false })
 
       const result = await expand('/test', 'how does parse work')
 
-      // Each function is extracted separately to avoid split issues
-      expect(getFileContext).toHaveBeenCalledWith(expect.stringContaining('parser.js'), ['parse'])
-      expect(getFileContext).toHaveBeenCalledWith(expect.stringContaining('parser.js'), ['extract'])
       expect(result.type).toBe('code_context')
+      expect(result.context._instruction).toBe('read_files')
+      expect(result.context.files).toHaveLength(2)
+      expect(result.context.files[0].reason).toBe('Contains parse function')
+      expect(result.context.files[1].reason).toBe('Helper utilities')
     })
   })
 

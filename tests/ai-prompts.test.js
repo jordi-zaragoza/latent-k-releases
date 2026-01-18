@@ -450,7 +450,7 @@ A CLI tool for testing.`
     expect(prompt).toContain('"direct_answer"')
     expect(prompt).toContain('"files"')
     expect(prompt).toContain('"path"')
-    expect(prompt).toContain('"functions"')
+    expect(prompt).toContain('"reason"')
   })
 
   it('includes file selection rules', () => {
