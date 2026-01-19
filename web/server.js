@@ -133,11 +133,22 @@ function readBody(req) {
   })
 }
 
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+  'https://latent-k.dev',
+  'https://www.latent-k.dev',
+  'http://localhost:3000' // For local development
+]
+
 const server = createServer(async (req, res) => {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  // CORS headers - restrict to allowed origins
+  const origin = req.headers.origin
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
@@ -220,8 +231,7 @@ const server = createServer(async (req, res) => {
         if (isActive) {
           res.writeHead(409, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({
-            error: 'You already have an active license',
-            existingKey: existingPaid.key
+            error: 'You already have an active license. Check your email for your license key.'
           }))
         } else {
           res.writeHead(409, { 'Content-Type': 'application/json' })
@@ -241,8 +251,7 @@ const server = createServer(async (req, res) => {
       if (existingTrial) {
         res.writeHead(409, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({
-          error: 'Trial already used for this email',
-          existingKey: existingTrial.key
+          error: 'Trial already used for this email. Check your email for your license key.'
         }))
         return
       }

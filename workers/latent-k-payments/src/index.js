@@ -12,6 +12,55 @@ const PLAN_CONFIG = {
 
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Rate limiting configuration
+const RATE_LIMIT = {
+  login: { maxAttempts: 5, windowSeconds: 300 },    // 5 attempts per 5 minutes
+  trial: { maxAttempts: 3, windowSeconds: 3600 },   // 3 attempts per hour
+  checkout: { maxAttempts: 10, windowSeconds: 60 }  // 10 attempts per minute
+};
+
+/**
+ * Check rate limit for an action
+ * Returns { allowed: boolean, remaining: number, resetIn: number }
+ */
+async function checkRateLimit(env, action, identifier) {
+  if (!env.LICENSES) return { allowed: true, remaining: 999, resetIn: 0 };
+
+  const config = RATE_LIMIT[action];
+  if (!config) return { allowed: true, remaining: 999, resetIn: 0 };
+
+  const key = `ratelimit:${action}:${identifier}`;
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    const data = await env.LICENSES.get(key);
+    let record = data ? JSON.parse(data) : { count: 0, windowStart: now };
+
+    // Reset window if expired
+    if (now - record.windowStart >= config.windowSeconds) {
+      record = { count: 0, windowStart: now };
+    }
+
+    const remaining = Math.max(0, config.maxAttempts - record.count);
+    const resetIn = config.windowSeconds - (now - record.windowStart);
+
+    if (record.count >= config.maxAttempts) {
+      return { allowed: false, remaining: 0, resetIn };
+    }
+
+    // Increment counter
+    record.count++;
+    await env.LICENSES.put(key, JSON.stringify(record), {
+      expirationTtl: config.windowSeconds
+    });
+
+    return { allowed: true, remaining: remaining - 1, resetIn };
+  } catch (error) {
+    console.error('Rate limit error:', error);
+    return { allowed: true, remaining: 999, resetIn: 0 }; // Fail open
+  }
+}
+
 /**
  * Import RSA private key from PEM format
  */
@@ -147,14 +196,23 @@ async function checkAuth(request, env) {
   return { authenticated: false };
 }
 
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+  'https://latent-k.dev',
+  'https://www.latent-k.dev',
+  'http://localhost:3000' // For local development
+];
+
 /**
- * CORS headers for responses
+ * CORS headers for responses - restricted to allowed origins
  */
 function corsHeaders(origin) {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
-    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
   };
 }
 
@@ -178,6 +236,16 @@ function jsonResponse(data, status = 200, origin) {
  */
 async function handleCheckout(request, env) {
   const origin = request.headers.get('Origin');
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  // Rate limiting
+  const rateLimit = await checkRateLimit(env, 'checkout', clientIP);
+  if (!rateLimit.allowed) {
+    return jsonResponse({
+      error: 'Too many requests. Please try again later.',
+      retryAfter: rateLimit.resetIn
+    }, 429, origin);
+  }
 
   try {
     const { email, name, plan } = await request.json();
@@ -410,6 +478,16 @@ async function verifyStripeWebhook(payload, signature, secret) {
  */
 async function handleLogin(request, env) {
   const origin = request.headers.get('Origin');
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  // Rate limiting
+  const rateLimit = await checkRateLimit(env, 'login', clientIP);
+  if (!rateLimit.allowed) {
+    return jsonResponse({
+      error: 'Too many login attempts. Please try again later.',
+      retryAfter: rateLimit.resetIn
+    }, 429, origin);
+  }
 
   try {
     const { username, password } = await request.json();
@@ -453,6 +531,16 @@ async function handleLogout(request, env) {
  */
 async function handleTrial(request, env) {
   const origin = request.headers.get('Origin');
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  // Rate limiting
+  const rateLimit = await checkRateLimit(env, 'trial', clientIP);
+  if (!rateLimit.allowed) {
+    return jsonResponse({
+      error: 'Too many trial requests. Please try again later.',
+      retryAfter: rateLimit.resetIn
+    }, 429, origin);
+  }
 
   try {
     const { email, name } = await request.json();
@@ -470,8 +558,7 @@ async function handleTrial(request, env) {
       const isActive = license.expires && new Date(license.expires).getTime() > Date.now();
       if (isActive) {
         return jsonResponse({
-          error: 'You already have an active license',
-          existingKey: license.key
+          error: 'You already have an active license. Check your email for your license key.'
         }, 409, origin);
       } else {
         return jsonResponse({
@@ -483,10 +570,8 @@ async function handleTrial(request, env) {
     // Check if email already has a trial
     const existingTrial = await env.LICENSES.get(`license:trial:${normalizedEmail}`);
     if (existingTrial) {
-      const trial = JSON.parse(existingTrial);
       return jsonResponse({
-        error: 'Trial already used for this email',
-        existingKey: trial.key
+        error: 'Trial already used for this email. Check your email for your license key.'
       }, 409, origin);
     }
 

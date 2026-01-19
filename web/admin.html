@@ -702,6 +702,14 @@
         let currentFilter = 'all';
         let authToken = localStorage.getItem('adminToken');
 
+        // Sanitize HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
         // Toggle password visibility
         function togglePassword() {
             const input = document.getElementById('password');
@@ -848,21 +856,24 @@
             tbody.innerHTML = filtered.map(license => {
                 const status = getStatus(license);
                 const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-                const actionBtn = `<button class="btn btn-delete" onclick="deleteLicense('${license.key}')">Delete</button>`;
+                const safeKey = escapeHtml(license.key);
+                const safeEmail = escapeHtml(license.email);
+                const safeName = escapeHtml(license.name) || '-';
+                const safePlan = escapeHtml(license.plan);
 
                 return `
                     <tr>
-                        <td>${license.email}</td>
-                        <td>${license.name || '-'}</td>
-                        <td>${license.plan}</td>
+                        <td>${safeEmail}</td>
+                        <td>${safeName}</td>
+                        <td>${safePlan}</td>
                         <td>${formatDate(license.created)}</td>
                         <td>${formatDate(license.expires)}</td>
                         <td><span class="status ${status}">${statusLabel}</span></td>
                         <td class="key-cell">
-                            <span class="key-preview">${license.key}</span>
-                            <button class="btn-show-key" onclick="showKey('${license.key}')">Show</button>
+                            <span class="key-preview">${safeKey}</span>
+                            <button class="btn-show-key" data-key="${safeKey}">Show</button>
                         </td>
-                        <td>${actionBtn}</td>
+                        <td><button class="btn btn-delete" data-key="${safeKey}">Delete</button></td>
                     </tr>
                 `;
             }).join('');
@@ -896,6 +907,18 @@
 
         // Search
         document.getElementById('search-input').addEventListener('input', renderTable);
+
+        // Event delegation for table buttons (prevents XSS via onclick)
+        document.getElementById('licenses-table').addEventListener('click', function(e) {
+            const target = e.target;
+            if (target.classList.contains('btn-delete')) {
+                const key = target.dataset.key;
+                if (key) deleteLicense(key);
+            } else if (target.classList.contains('btn-show-key')) {
+                const key = target.dataset.key;
+                if (key) showKey(key);
+            }
+        });
 
         // New License Modal
         function showNewLicenseModal() {
@@ -946,6 +969,7 @@
 
         // Show Key Modal
         function showKey(key) {
+            // Use textContent to safely display the key (prevents XSS)
             document.getElementById('full-key-value').textContent = key;
             document.getElementById('show-key-modal').classList.remove('hidden');
         }
