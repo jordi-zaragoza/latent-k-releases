@@ -13,6 +13,22 @@ import { randomBytes } from 'crypto'
 import { generateLicense, parseLicense } from '../scripts/license-admin.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Timing-safe string comparison to prevent timing attacks
+ */
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const lenA = a.length
+  const lenB = b.length
+  // Compare against self to maintain constant time on length mismatch
+  const compareB = lenA === lenB ? b : a
+  let result = lenA === lenB ? 0 : 1
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ compareB.charCodeAt(i)
+  }
+  return result === 0
+}
 const PORT = process.env.PORT || 3000
 const LICENSES_FILE = join(__dirname, 'licenses.json')
 
@@ -170,7 +186,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req)
       const { username, password } = JSON.parse(body)
 
-      if (username === ADMIN_USER && password === ADMIN_PASS) {
+      if (timingSafeEqual(username, ADMIN_USER) && timingSafeEqual(password, ADMIN_PASS)) {
         const token = randomBytes(32).toString('hex')
         sessions.set(token, Date.now())
         saveSessions(sessions)

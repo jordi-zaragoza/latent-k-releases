@@ -62,6 +62,22 @@ async function checkRateLimit(env, action, identifier) {
 }
 
 /**
+ * Timing-safe string comparison to prevent timing attacks
+ */
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) {
+    // Compare against self to maintain constant time even on length mismatch
+    b = a;
+  }
+  let result = a.length === arguments[1].length ? 0 : 1;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+/**
  * Import RSA private key from PEM format
  */
 async function importPrivateKey(pem) {
@@ -493,7 +509,7 @@ async function handleLogin(request, env) {
   try {
     const { username, password } = await request.json();
 
-    if (username === env.ADMIN_USER && password === env.ADMIN_PASS) {
+    if (timingSafeEqual(username, env.ADMIN_USER) && timingSafeEqual(password, env.ADMIN_PASS)) {
       const token = randomHex(32);
       await env.LICENSES.put(
         `session:${token}`,
