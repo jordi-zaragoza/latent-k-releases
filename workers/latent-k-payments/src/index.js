@@ -559,7 +559,7 @@ async function handleTrial(request, env) {
       const isActive = license.expires && new Date(license.expires).getTime() > Date.now();
       if (isActive) {
         return jsonResponse({
-          error: 'You already have an active license. Check your email for your license key.'
+          error: 'You already have an active license for this email.'
         }, 409, origin);
       } else {
         return jsonResponse({
@@ -572,7 +572,7 @@ async function handleTrial(request, env) {
     const existingTrial = await env.LICENSES.get(`license:trial:${normalizedEmail}`);
     if (existingTrial) {
       return jsonResponse({
-        error: 'Trial already used for this email. Check your email for your license key.'
+        error: 'Trial already used for this email.'
       }, 409, origin);
     }
 
