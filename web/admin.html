@@ -186,12 +186,12 @@
             transition: all 0.2s;
         }
 
-        .btn-revoke {
+        .btn-delete {
             background: rgba(255, 71, 87, 0.1);
             color: var(--accent-red);
         }
 
-        .btn-revoke:hover {
+        .btn-delete:hover {
             background: var(--accent-red);
             color: white;
         }
@@ -862,7 +862,7 @@
                 const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
                 const actionBtn = license.revoked
                     ? `<button class="btn btn-restore" onclick="restoreLicense('${license.key}')">Restore</button>`
-                    : `<button class="btn btn-revoke" onclick="revokeLicense('${license.key}')">Revoke</button>`;
+                    : `<button class="btn btn-delete" onclick="deleteLicense('${license.key}')">Delete</button>`;
 
                 return `
                     <tr>
@@ -882,18 +882,18 @@
             }).join('');
         }
 
-        async function revokeLicense(key) {
-            if (!confirm('Are you sure you want to revoke this license?')) return;
+        async function deleteLicense(key) {
+            if (!confirm('Are you sure you want to delete this license?')) return;
 
             try {
-                await apiCall('/api/revoke', {
+                await apiCall('/api/delete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ key })
                 });
                 loadLicenses();
             } catch (err) {
-                alert('Failed to revoke license');
+                alert('Failed to delete license');
             }
         }
 
