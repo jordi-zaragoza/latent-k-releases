@@ -15,7 +15,8 @@ import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
 import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain } from './lib/context.js'
 import { VERSION } from './lib/version.js'
-import { getLicenseExpiration, isLicensed, checkAccess } from './lib/license.js'
+import { getLicenseExpiration, getLicenseKey, isLicensed, checkAccess } from './lib/license.js'
+import { parseLicense } from './lib/license-gen.js'
 import { isConfigured, getAiProvider } from './lib/config.js'
 import { sync as runSync, syncProjectOnly } from './commands/sync.js'
 import { join } from 'path'
@@ -321,6 +322,17 @@ program
       infoParts.push(`${provider} ready`)
     } else if (syncResult.error) {
       infoParts.push(`⚠ ${syncResult.error}`)
+    }
+
+    // Add trial license info
+    const licenseKey = getLicenseKey()
+    if (licenseKey) {
+      const licenseData = parseLicense(licenseKey)
+      if (licenseData?.type === 'trial') {
+        const expiration = getLicenseExpiration()
+        const daysText = expiration?.daysLeft === 1 ? '1 day' : `${expiration?.daysLeft} days`
+        infoParts.push(`${yellow}trial (${daysText})${reset}`)
+      }
     }
 
     terminalPrint(infoParts.join(' | '))
