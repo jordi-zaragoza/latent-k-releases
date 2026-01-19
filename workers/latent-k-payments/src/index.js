@@ -200,6 +200,7 @@ async function checkAuth(request, env) {
 const ALLOWED_ORIGINS = [
   'https://latent-k.dev',
   'https://www.latent-k.dev',
+  'https://latent-k.pages.dev',
   'http://localhost:3000' // For local development
 ];
 
