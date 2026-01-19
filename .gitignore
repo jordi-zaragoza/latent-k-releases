@@ -7,3 +7,7 @@ dist/
 .DS_Store
 *.log
 .lk-mode
+
+# Sensitive data
+web/.sessions.json
+web/licenses.json
