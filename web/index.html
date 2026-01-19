@@ -563,9 +563,9 @@
 
         .pricing-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 1.5rem;
-            max-width: 700px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -911,6 +911,18 @@
 
         <div class="pricing-grid">
             <div class="pricing-card">
+                <h3>Free Trial</h3>
+                <div class="price">$0</div>
+                <div class="period">14 days free</div>
+                <ul class="pricing-features">
+                    <li>All features included</li>
+                    <li>Claude Code + Gemini CLI</li>
+                    <li>No credit card required</li>
+                </ul>
+                <a href="activation.html" class="btn btn-secondary">Start Free Trial</a>
+            </div>
+
+            <div class="pricing-card">
                 <h3>Monthly</h3>
                 <div class="price">$9<span>/mo</span></div>
                 <div class="period">Billed monthly</div>
@@ -918,7 +930,6 @@
                     <li>All features included</li>
                     <li>Claude Code + Gemini CLI</li>
                     <li>Email support</li>
-                    <li>Cancel anytime</li>
                 </ul>
                 <a href="activation.html" class="btn btn-secondary">Get Monthly</a>
             </div>
