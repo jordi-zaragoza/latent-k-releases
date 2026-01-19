@@ -232,7 +232,7 @@ const server = createServer(async (req, res) => {
         if (isActive) {
           res.writeHead(409, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({
-            error: 'You already have an active license. Check your email for your license key.'
+            error: 'You already have an active license for this email.'
           }))
         } else {
           res.writeHead(409, { 'Content-Type': 'application/json' })
@@ -252,7 +252,7 @@ const server = createServer(async (req, res) => {
       if (existingTrial) {
         res.writeHead(409, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({
-          error: 'Trial already used for this email. Check your email for your license key.'
+          error: 'Trial already used for this email.'
         }))
         return
       }
