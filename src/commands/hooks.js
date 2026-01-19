@@ -11,11 +11,13 @@ const MAX_SETTINGS_SIZE = 1024 * 1024
 const CLI_CONFIG = {
   claude: {
     dir: join(homedir(), '.claude'),
+    promptEvent: 'UserPromptSubmit',
     stopEvent: 'Stop',
     name: 'Claude Code'
   },
   gemini: {
     dir: join(homedir(), '.gemini'),
+    promptEvent: 'BeforeAgent',
     stopEvent: 'SessionEnd',
     name: 'Gemini CLI'
   }
@@ -81,7 +83,7 @@ function removeLkHooks(hooks, type) {
 }
 
 async function enableSingleCli(cli, silent = false) {
-  const { dir, stopEvent, name } = getConfig(cli)
+  const { dir, promptEvent, stopEvent, name } = getConfig(cli)
 
   // Skip if CLI config dir doesn't exist (CLI not installed)
   if (!existsSync(dir)) {
@@ -121,10 +123,10 @@ async function enableSingleCli(cli, silent = false) {
       added = true
     }
 
-    // UserPromptSubmit hook (expand prompt with context)
-    settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit || []
-    if (!hasLkHook(settings.hooks.UserPromptSubmit, 'expand') && !hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
-      settings.hooks.UserPromptSubmit.push({
+    // Prompt hook (expand prompt with context) - UserPromptSubmit for Claude, BeforeAgent for Gemini
+    settings.hooks[promptEvent] = settings.hooks[promptEvent] || []
+    if (!hasLkHook(settings.hooks[promptEvent], 'expand') && !hasLkHook(settings.hooks[promptEvent], 'context')) {
+      settings.hooks[promptEvent].push({
         matcher: '',
         hooks: [{ type: 'command', command: expandCmd }]
       })
@@ -143,15 +145,15 @@ async function enableSingleCli(cli, silent = false) {
 
     // Remove legacy hooks
     if (settings.hooks.Start) delete settings.hooks.Start
-    // Migrate from SessionStart to UserPromptSubmit (remove old context hooks)
+    // Migrate from SessionStart to prompt event (remove old context hooks)
     if (hasLkHook(settings.hooks.SessionStart, 'context')) {
       settings.hooks.SessionStart = removeLkHooks(settings.hooks.SessionStart, 'context')
       if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart
     }
-    // Migrate from old context to new expand in UserPromptSubmit
-    if (hasLkHook(settings.hooks.UserPromptSubmit, 'context') && !settings.hooks.UserPromptSubmit.some(h => h.hooks?.some(hh => hh.command?.includes('expand')))) {
-      settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'context')
-      settings.hooks.UserPromptSubmit.push({
+    // Migrate from old context to new expand in prompt event
+    if (hasLkHook(settings.hooks[promptEvent], 'context') && !settings.hooks[promptEvent]?.some(h => h.hooks?.some(hh => hh.command?.includes('expand')))) {
+      settings.hooks[promptEvent] = removeLkHooks(settings.hooks[promptEvent], 'context')
+      settings.hooks[promptEvent].push({
         matcher: '',
         hooks: [{ type: 'command', command: expandCmd }]
       })
@@ -176,7 +178,7 @@ async function enableSingleCli(cli, silent = false) {
 }
 
 async function disableSingleCli(cli, silent = false) {
-  const { dir, stopEvent, name } = getConfig(cli)
+  const { dir, promptEvent, stopEvent, name } = getConfig(cli)
 
   if (!existsSync(dir)) {
     if (!silent) console.log(`Skipped ${name} (not installed)`)
@@ -193,11 +195,11 @@ async function disableSingleCli(cli, silent = false) {
 
     let removed = false
 
-    // Remove all LK hooks from UserPromptSubmit (both expand and legacy context)
-    if (hasLkHook(settings.hooks.UserPromptSubmit, 'expand') || hasLkHook(settings.hooks.UserPromptSubmit, 'context')) {
-      settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'expand')
-      settings.hooks.UserPromptSubmit = removeLkHooks(settings.hooks.UserPromptSubmit, 'context')
-      if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit
+    // Remove all LK hooks from prompt event (both expand and legacy context)
+    if (hasLkHook(settings.hooks[promptEvent], 'expand') || hasLkHook(settings.hooks[promptEvent], 'context')) {
+      settings.hooks[promptEvent] = removeLkHooks(settings.hooks[promptEvent], 'expand')
+      settings.hooks[promptEvent] = removeLkHooks(settings.hooks[promptEvent], 'context')
+      if (settings.hooks[promptEvent]?.length === 0) delete settings.hooks[promptEvent]
       removed = true
     }
 

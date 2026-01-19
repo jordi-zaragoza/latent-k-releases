@@ -55,11 +55,19 @@ describe('Hook command consistency', () => {
 })
 
 describe('Gemini CLI support', () => {
-  it('hooks.js has Gemini CLI configuration', () => {
+  it('hooks.js has Gemini CLI configuration with BeforeAgent promptEvent', () => {
     const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
     expect(content).toContain("gemini: {")
     expect(content).toContain("dir: join(homedir(), '.gemini')")
+    expect(content).toContain("promptEvent: 'BeforeAgent'")
     expect(content).toContain("stopEvent: 'SessionEnd'")
+  })
+
+  it('hooks.js has Claude CLI configuration with UserPromptSubmit promptEvent', () => {
+    const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
+    expect(content).toContain("claude: {")
+    expect(content).toContain("promptEvent: 'UserPromptSubmit'")
+    expect(content).toContain("stopEvent: 'Stop'")
   })
 
   it('hooks.js adds --json flag for Gemini session-info', () => {
