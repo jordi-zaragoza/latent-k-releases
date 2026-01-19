@@ -8,6 +8,7 @@ const LK_DIR = '.lk'
 const DOMAINS_DIR = 'domains'
 const SYNTAX_FILE = 'syntax.lk'
 const PROJECT_FILE = 'project.lk'
+const PROJECT_HEADER_FILE = 'project_h.lk'
 const IGNORE_FILE = 'ignore'
 const STATE_FILE = 'state.json'
 const VALID_SYMBOLS = ['▸', '⇄', 'λ', '⚙', '⧫', '⊚', '⟐', '◈', '⤳', '⚑', '◇']
@@ -31,7 +32,6 @@ export const IGNORE_FILES = [
   'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
   '.DS_Store', 'Thumbs.db',
   '__init__.py', 'conftest.py', '__main__.py',
-  'setup.py', 'setup.cfg', 'pyproject.toml',
   'mod.rs', 'lib.rs'
 ]
 
@@ -80,6 +80,7 @@ export const domainsPath = root => path.join(root, LK_DIR, DOMAINS_DIR)
 export const domainPath = (root, name) => path.join(domainsPath(root), `${name}.lk`)
 export const syntaxPath = root => path.join(root, LK_DIR, SYNTAX_FILE)
 export const projectPath = root => path.join(root, LK_DIR, PROJECT_FILE)
+export const projectHeaderPath = root => path.join(root, LK_DIR, PROJECT_HEADER_FILE)
 export const ignorePath = root => path.join(root, LK_DIR, IGNORE_FILE)
 export const exists = root => fs.existsSync(lkPath(root))
 export const ignoreExists = root => fs.existsSync(ignorePath(root))
@@ -225,9 +226,75 @@ export function getProject(root) {
   return decrypt(raw)
 }
 
+// Project header (compact summary - pre-generated)
+export function getProjectHeader(root) {
+  const p = projectHeaderPath(root)
+  if (fs.existsSync(p)) {
+    const raw = fs.readFileSync(p, 'utf8').trim()
+    return decrypt(raw)
+  }
+  // Fallback: generate from project.lk if header doesn't exist
+  const project = getProject(root)
+  return buildProjectHeader(project)
+}
+
 export function setProject(root, content) {
   init(root)
   fs.writeFileSync(projectPath(root), encrypt(content))
+  // Also generate project_h.lk (header/summary)
+  const header = buildProjectHeader(content)
+  fs.writeFileSync(projectHeaderPath(root), encrypt(header))
+}
+
+/**
+ * Build compact project header from full project content
+ * Extracts: ID line, VIBE/NAME, Purpose, Stack, Entry, Flows
+ */
+function buildProjectHeader(content) {
+  if (!content) return ''
+
+  const lines = content.split('\n')
+  const result = []
+  let inSection = false
+  const sectionsToInclude = ['Purpose', 'Stack', 'Entry', 'Flows']
+
+  for (const line of lines) {
+    // Include header line
+    if (line.includes('⦓ID: PROJECT⦔')) {
+      result.push(line.trim())
+      continue
+    }
+
+    // Include VIBE/NAME/VERSION line
+    if (line.includes('⟪VIBE:') || line.includes('⟪NAME:')) {
+      result.push(line.trim())
+      continue
+    }
+
+    // Track sections we want
+    const isTargetSection = sectionsToInclude.some(s =>
+      line.includes(`⟦Δ: ${s}⟧`) || line.includes(`⟦${s}⟧`)
+    )
+    if (isTargetSection) {
+      inSection = true
+      result.push(line.trim())
+      continue
+    }
+
+    // End section on new section marker
+    if (line.includes('⟦Δ:') || (line.includes('⟦') && line.includes('⟧'))) {
+      if (inSection && !sectionsToInclude.some(s => line.includes(s))) {
+        inSection = false
+      }
+    }
+
+    // Include content while in relevant sections
+    if (inSection && line.trim()) {
+      result.push(line.trim())
+    }
+  }
+
+  return result.join('\n')
 }
 
 // Parse entry: symbol filename [⦗hash⦘ "desc"? {exports}?]
@@ -480,9 +547,14 @@ export function buildVerboseContext(root) {
     const project = getProject(root)
     if (project) parts.push(project)
 
-    // 3. All domain files
+    // 3. All domain files (skip empty domains)
     const domains = listDomains(root)
     for (const name of domains.sort()) {
+      const domain = loadDomain(root, name)
+      if (!domain) continue
+      // Check if domain has any entries
+      const hasEntries = Object.values(domain.groups).some(g => g.length > 0)
+      if (!hasEntries) continue
       const p = domainPath(root, name)
       if (fs.existsSync(p)) {
         const raw = fs.readFileSync(p, 'utf8').trim()
@@ -558,7 +630,7 @@ export function buildContext(root) {
     .split('\n')
     .map(l => l.trim())
     .filter(l => l)
-    .join('\n')
+    .join(' ')
     // Compress multiple spaces to one
     .replace(/  +/g, ' ')
     // Shorten IDs: ⦓ID: DOMAIN-CLI⦔ → ⦓CLI⦔
@@ -670,58 +742,37 @@ export function inferSymbolFromPath(filePath) {
  * Get project summary: extracts Purpose + Stack + Flows from project.lk
  * @param {string} root - Project root directory
  * @returns {string} Compact project summary
+ * @deprecated Use getProjectHeader instead (reads pre-generated file)
  */
 export function getProjectSummary(root) {
+  return getProjectHeader(root)
+}
+
+/**
+ * Get project flows: extracts only the Flows section from project.lk
+ * @param {string} root - Project root directory
+ * @returns {string} Flows section content
+ */
+export function getProjectFlows(root) {
   const project = getProject(root)
   if (!project) return ''
 
   const lines = project.split('\n')
   const result = []
-  let inSection = false
-  let currentSection = ''
+  let inFlows = false
 
   for (const line of lines) {
-    // Include header line
-    if (line.includes('⦓ID: PROJECT⦔')) {
-      result.push(line.trim())
-      continue
-    }
-
-    // Include VIBE/NAME/VERSION line
-    if (line.includes('⟪VIBE:') || line.includes('⟪NAME:')) {
-      result.push(line.trim())
-      continue
-    }
-
-    // Track sections we want: Purpose, Stack, Flows
-    if (line.includes('⟦Δ: Purpose⟧') || line.includes('⟦Purpose⟧')) {
-      inSection = true
-      currentSection = 'purpose'
-      result.push(line.trim())
-      continue
-    }
-    if (line.includes('⟦Δ: Stack⟧') || line.includes('⟦Stack⟧')) {
-      inSection = true
-      currentSection = 'stack'
-      result.push(line.trim())
-      continue
-    }
     if (line.includes('⟦Δ: Flows⟧') || line.includes('⟦Flows⟧')) {
-      inSection = true
-      currentSection = 'flows'
-      result.push(line.trim())
+      inFlows = true
       continue
     }
 
     // End section on new section marker
-    if (line.includes('⟦Δ:') || line.includes('⟦') && line.includes('⟧')) {
-      if (inSection && !['Purpose', 'Stack', 'Flows'].some(s => line.includes(s))) {
-        inSection = false
-      }
+    if (inFlows && (line.includes('⟦Δ:') || (line.includes('⟦') && line.includes('⟧')))) {
+      break
     }
 
-    // Include content while in relevant sections
-    if (inSection && line.trim()) {
+    if (inFlows && line.trim()) {
       result.push(line.trim())
     }
   }
