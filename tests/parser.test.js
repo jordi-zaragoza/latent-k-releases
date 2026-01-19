@@ -338,3 +338,122 @@ public enum MyEnum {}
     expect(extractExports(file)).toEqual(['MyEnum', 'MyInterface'])
   })
 })
+
+describe('HTML extraction', () => {
+  it('extracts element IDs', () => {
+    const file = writeTestFile('test.html', `
+<div id="header"></div>
+<form id="login-form">
+  <input id="username" type="text">
+  <button id="submit-btn">Submit</button>
+</form>
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('header')
+    expect(exports).toContain('login-form')
+    expect(exports).toContain('username')
+    expect(exports).toContain('submit-btn')
+  })
+
+  it('extracts form names', () => {
+    const file = writeTestFile('test2.html', `
+<form name="contactForm" action="/submit">
+  <input type="text">
+</form>
+`)
+    expect(extractExports(file)).toContain('contactForm')
+  })
+
+  it('extracts data-component attributes', () => {
+    const file = writeTestFile('test3.html', `
+<div data-component="NavBar"></div>
+<section data-component="Hero"></section>
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('NavBar')
+    expect(exports).toContain('Hero')
+  })
+
+  it('handles mixed quotes', () => {
+    const file = writeTestFile('test4.html', `
+<div id="double-quoted"></div>
+<div id='single-quoted'></div>
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('double-quoted')
+    expect(exports).toContain('single-quoted')
+  })
+
+  it('handles .htm extension', () => {
+    const file = writeTestFile('test.htm', `<div id="content"></div>`)
+    expect(extractExports(file)).toEqual(['content'])
+  })
+})
+
+describe('CSS extraction', () => {
+  it('extracts class selectors', () => {
+    const file = writeTestFile('test.css', `
+.header {
+  color: red;
+}
+.nav-item {
+  display: flex;
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('header')
+    expect(exports).toContain('nav-item')
+  })
+
+  it('extracts ID selectors', () => {
+    const file = writeTestFile('test2.css', `
+#main-content {
+  width: 100%;
+}
+#sidebar {
+  width: 300px;
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('main-content')
+    expect(exports).toContain('sidebar')
+  })
+
+  it('extracts CSS custom properties', () => {
+    const file = writeTestFile('test3.css', `
+:root {
+  --primary-color: #007bff;
+  --font-size-base: 16px;
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('--primary-color')
+    expect(exports).toContain('--font-size-base')
+  })
+
+  it('handles combined selectors', () => {
+    const file = writeTestFile('test4.css', `
+.card, .panel {
+  border: 1px solid;
+}
+.btn:hover {
+  opacity: 0.8;
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('card')
+    expect(exports).toContain('panel')
+    expect(exports).toContain('btn')
+  })
+
+  it('handles nested selectors', () => {
+    const file = writeTestFile('test5.css', `
+.container .inner-box {
+  padding: 10px;
+}
+`)
+    const exports = extractExports(file)
+    expect(exports).toContain('container')
+    expect(exports).toContain('inner-box')
+  })
+})

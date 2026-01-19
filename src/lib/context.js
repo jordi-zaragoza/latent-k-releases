@@ -18,7 +18,8 @@ export const CODE_EXTENSIONS = [
   'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
   'py', 'go', 'rs', 'rb', 'php',
   'java', 'kt', 'kts', 'c', 'cpp', 'h', 'hpp',
-  'cs', 'swift', 'scala', 'vue', 'svelte'
+  'cs', 'swift', 'scala', 'vue', 'svelte',
+  'html', 'css'
 ]
 
 export const IGNORE_DIRS = [
