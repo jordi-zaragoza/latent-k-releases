@@ -456,6 +456,19 @@ describe('Context building', () => {
     expect(context).toContain('⦓PROJECT⦔')
     expect(context).toContain('⦓LK-SYNTAX⦔')
   })
+
+  it('buildContext returns single line (no newlines)', () => {
+    const context = buildContext(tmpDir)
+    expect(context.split('\n').length).toBe(1)
+  })
+
+  it('buildVerboseContext excludes empty domains', () => {
+    // Create an empty domain
+    saveDomain(tmpDir, 'empty', buildDomain('DOMAIN-EMPTY', 'Empty', '', {}, []))
+    const context = buildVerboseContext(tmpDir)
+    expect(context).not.toContain('DOMAIN-EMPTY')
+    expect(context).not.toContain('⟦Empty⟧')
+  })
 })
 
 describe('countTokens', () => {
