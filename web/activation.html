@@ -140,8 +140,8 @@
         /* Plan Selection */
         .plans {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1rem;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
             margin-bottom: 1.5rem;
         }
 
@@ -172,6 +172,10 @@
 
         .plan-card:hover {
             border-color: var(--text-secondary);
+        }
+
+        .plan-card.trial-card .plan-price {
+            color: var(--accent-green);
         }
 
         .plan-name {
@@ -365,7 +369,7 @@
         }
 
         /* Responsive */
-        @media (max-width: 480px) {
+        @media (max-width: 600px) {
             .plans {
                 grid-template-columns: 1fr;
             }
@@ -421,7 +425,19 @@
                     <label class="form-label">Select Plan</label>
                     <div class="plans">
                         <label class="plan-option">
-                            <input type="radio" name="plan" value="monthly" checked>
+                            <input type="radio" name="plan" value="trial14" checked>
+                            <div class="plan-card trial-card">
+                                <div class="plan-name">Free Trial</div>
+                                <div class="plan-price">$0</div>
+                                <div class="plan-features">
+                                    <div class="plan-feature">14 days free</div>
+                                    <div class="plan-feature">All features</div>
+                                    <div class="plan-feature">No credit card</div>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="monthly">
                             <div class="plan-card">
                                 <div class="plan-name">Monthly</div>
                                 <div class="plan-price">$9<span>/mo</span></div>
@@ -449,7 +465,7 @@
 
                 <!-- Submit -->
                 <button type="submit" class="btn-submit">
-                    <span class="btn-text">Generate Key</span>
+                    <span class="btn-text">Start Free Trial</span>
                     <span class="spinner"></span>
                 </button>
 
@@ -491,7 +507,9 @@
             keyDisplay.classList.remove('active');
 
             try {
-                const response = await fetch('/api/generate', {
+                // Use /api/trial for trial plan, /api/generate for paid plans
+                const endpoint = plan === 'trial14' ? '/api/trial' : '/api/generate';
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, name, plan })
@@ -500,6 +518,14 @@
                 const data = await response.json();
 
                 if (!response.ok) {
+                    // Special handling for trial already used
+                    if (response.status === 409 && data.existingKey) {
+                        keyValue.textContent = data.existingKey;
+                        keyDisplay.classList.add('active');
+                        status.className = 'status success';
+                        status.textContent = 'Trial already activated for this email. Here is your key:';
+                        return;
+                    }
                     throw new Error(data.error || 'Failed to generate key');
                 }
 
@@ -507,8 +533,10 @@
                 keyValue.textContent = data.key;
                 keyDisplay.classList.add('active');
 
+                const expiresDate = data.expires ? new Date(data.expires).toLocaleDateString() : 'N/A';
+                const planLabel = plan === 'trial14' ? 'Trial' : plan === 'monthly' ? 'Monthly' : 'Yearly';
                 status.className = 'status success';
-                status.textContent = `License generated for ${data.email}. Valid until ${new Date(data.expires).toLocaleDateString()}.`;
+                status.textContent = `${planLabel} license generated for ${data.email}. Valid until ${expiresDate}.`;
 
             } catch (error) {
                 status.className = 'status error';
@@ -529,6 +557,14 @@
                 }, 2000);
             });
         }
+
+        // Update button text based on selected plan
+        const btnText = document.querySelector('.btn-text');
+        document.querySelectorAll('input[name="plan"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                btnText.textContent = radio.value === 'trial14' ? 'Start Free Trial' : 'Get License';
+            });
+        });
     </script>
 </body>
 </html>

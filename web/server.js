@@ -18,6 +18,7 @@ const LICENSES_FILE = join(__dirname, 'licenses.json')
 const PLAN_DAYS = {
   trial1: 1,
   trial7: 7,
+  trial14: 14,
   monthly: 30,
   yearly: 365
 }
@@ -113,6 +114,70 @@ const server = createServer(async (req, res) => {
     return
   }
 
+  // API: Request trial (public - one per email)
+  if (req.method === 'POST' && req.url === '/api/trial') {
+    let body = ''
+    req.on('data', chunk => body += chunk)
+    req.on('end', () => {
+      try {
+        const { email, name } = JSON.parse(body)
+
+        if (!email) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Email is required' }))
+          return
+        }
+
+        const normalizedEmail = email.toLowerCase().trim()
+        const licenses = loadLicenses()
+
+        // Check if this email already has a trial
+        const existingTrial = licenses.find(l =>
+          l.email.toLowerCase().trim() === normalizedEmail &&
+          l.plan === 'trial14'
+        )
+
+        if (existingTrial) {
+          res.writeHead(409, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({
+            error: 'Trial already used for this email',
+            existingKey: existingTrial.key
+          }))
+          return
+        }
+
+        const durationDays = PLAN_DAYS.trial14
+        const key = generateLicense({ email: normalizedEmail, durationDays })
+        const data = parseLicense(key)
+
+        licenses.push({
+          key,
+          email: normalizedEmail,
+          name: name || '',
+          plan: 'trial14',
+          created: new Date().toISOString(),
+          expires: data.expires ? new Date(data.expires).toISOString() : null,
+          revoked: false
+        })
+        saveLicenses(licenses)
+
+        console.log(`[TRIAL] Generated 14-day trial for ${normalizedEmail}`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          key,
+          email: normalizedEmail,
+          expires: data.expires ? new Date(data.expires).toISOString() : null,
+          daysLeft: durationDays
+        }))
+      } catch (err) {
+        console.error('[TRIAL] Error:', err.message)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      }
+    })
+    return
+  }
+
   // API: Generate license (protected - admin only)
   if (req.method === 'POST' && req.url === '/api/generate') {
     if (!isAuthenticated()) {
@@ -132,25 +197,54 @@ const server = createServer(async (req, res) => {
           return
         }
 
+        const normalizedEmail = email.toLowerCase().trim()
+        const licenses = loadLicenses()
         const durationDays = PLAN_DAYS[plan] || 365
-        const key = generateLicense({ email, durationDays })
+        const durationMs = durationDays * 24 * 60 * 60 * 1000
+
+        // Find existing active license for this email (non-trial, non-revoked, not expired)
+        const now = Date.now()
+        const existingLicense = licenses.find(l =>
+          l.email.toLowerCase().trim() === normalizedEmail &&
+          !l.revoked &&
+          !l.plan.startsWith('trial') &&
+          l.expires &&
+          new Date(l.expires).getTime() > now
+        )
+
+        // Calculate expiration: extend from current expiry or start from now
+        let expires
+        if (existingLicense) {
+          const currentExpiry = new Date(existingLicense.expires).getTime()
+          expires = currentExpiry + durationMs
+          console.log(`[LICENSE] Extending license for ${normalizedEmail} from ${existingLicense.expires}`)
+        } else {
+          expires = now + durationMs
+        }
+
+        const key = generateLicense({ email: normalizedEmail, expires })
         const data = parseLicense(key)
 
-        const licenses = loadLicenses()
         licenses.push({
           key,
-          email,
+          email: normalizedEmail,
           name: name || '',
           plan: plan || 'yearly',
           created: new Date().toISOString(),
           expires: data.expires ? new Date(data.expires).toISOString() : null,
-          revoked: false
+          revoked: false,
+          extended: existingLicense ? true : false
         })
         saveLicenses(licenses)
 
-        console.log(`[LICENSE] Generated license for ${email} (${plan || 'yearly'})`)
+        console.log(`[LICENSE] Generated license for ${normalizedEmail} (${plan || 'yearly'}) expires ${new Date(expires).toISOString()}`)
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ key, data }))
+        res.end(JSON.stringify({
+          key,
+          data,
+          extended: existingLicense ? true : false,
+          previousExpiry: existingLicense ? existingLicense.expires : null
+        }))
       } catch (err) {
         console.error('[LICENSE] Error:', err.message)
         res.writeHead(500, { 'Content-Type': 'application/json' })
@@ -160,8 +254,8 @@ const server = createServer(async (req, res) => {
     return
   }
 
-  // API: Revoke license (protected)
-  if (req.method === 'POST' && req.url === '/api/revoke') {
+  // API: Delete license (protected)
+  if (req.method === 'POST' && req.url === '/api/delete') {
     if (!isAuthenticated()) {
       res.writeHead(401, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Unauthorized' }))
@@ -184,7 +278,7 @@ const server = createServer(async (req, res) => {
         license.revoked = true
         saveLicenses(licenses)
 
-        console.log(`[LICENSE] Revoked license for ${license.email}`)
+        console.log(`[LICENSE] Deleted license for ${license.email}`)
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ success: true, email: license.email }))
