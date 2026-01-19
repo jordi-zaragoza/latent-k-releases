@@ -6,20 +6,12 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { validateLicenseOffline, parseLicense } from './license-gen.js'
 
-const GRACE_PERIOD_DAYS = 7
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
+// Dev mode only when running from source (not compiled binary)
+// This cannot be bypassed via environment variables
 function isDevMode() {
-  return process.env.LK_DEV === '1'
-}
-
-const TEST_LICENSES = new Set([
-  'lk-test-license',
-  'lk-dev-license'
-])
-
-function isTestLicense(key) {
-  return isDevMode() && TEST_LICENSES.has(key)
+  return !process.pkg
 }
 
 function deriveEncryptionKey(salt) {
@@ -88,10 +80,6 @@ export async function validateLicense(userEmail = null) {
   const key = getLicenseKey()
   if (!key) return { valid: false, error: 'No license key' }
 
-  if (isTestLicense(key)) {
-    return { valid: true, test: true }
-  }
-
   const result = validateLicenseOffline(key)
   if (result.valid) {
     // Verify email matches if provided
@@ -106,32 +94,10 @@ export async function validateLicense(userEmail = null) {
     return { valid: true, data: result.data, expiration }
   }
 
-  if (result.error === 'License expired' && result.data) {
-    const expiration = getLicenseExpiration()
-    if (expiration && expiration.inGrace) {
-      // Also verify email for grace period
-      if (userEmail && result.data.email) {
-        const normalizedUserEmail = userEmail.toLowerCase().trim()
-        const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
-        if (normalizedUserEmail !== normalizedLicenseEmail) {
-          return { valid: false, error: 'License email mismatch', expectedEmail: result.data.email }
-        }
-      }
-      return { valid: true, data: result.data, expiration, inGrace: true }
-    }
-  }
-
   return { valid: false, error: result.error || 'Invalid license' }
 }
 
 export async function activateLicense(key, userEmail = null) {
-  if (isTestLicense(key)) {
-    setLicenseKey(key)
-    store.set('licenseValid', true)
-    store.set('licenseExpires', Date.now() + 365 * MS_PER_DAY)
-    return { success: true, test: true }
-  }
-
   const result = validateLicenseOffline(key)
   if (result.valid) {
     // Verify email matches if provided
@@ -166,29 +132,19 @@ export function getLicenseExpiration() {
   const key = getLicenseKey()
   if (!key) return null
 
-  if (isTestLicense(key)) {
-    return { expires: null, daysLeft: null, inGrace: false }
-  }
-
   const data = parseLicense(key)
   if (!data || !data.expires) {
-    return { expires: null, daysLeft: null, inGrace: false }
+    return { expires: null, daysLeft: null }
   }
 
   const now = Date.now()
   const expires = data.expires
   const daysLeft = Math.ceil((expires - now) / MS_PER_DAY)
-  const graceEnd = expires + GRACE_PERIOD_DAYS * MS_PER_DAY
-  const inGrace = now > expires && now <= graceEnd
-  const graceDaysLeft = inGrace ? Math.ceil((graceEnd - now) / MS_PER_DAY) : 0
 
   return {
     expires: new Date(expires),
     daysLeft,
-    expired: now > expires,
-    inGrace,
-    graceDaysLeft,
-    fullyExpired: now > graceEnd
+    expired: now > expires
   }
 }
 
@@ -205,10 +161,6 @@ export async function checkAccess(userEmail = null) {
       allowed: false,
       message: 'License required. Run: lk activate'
     }
-  }
-
-  if (isTestLicense(key)) {
-    return { allowed: true, message: null }
   }
 
   const result = validateLicenseOffline(key)
@@ -236,26 +188,7 @@ export async function checkAccess(userEmail = null) {
     return { allowed: true, message: null }
   }
 
-  if (result.error === 'License expired' && result.data) {
-    // Verify email matches even for expired licenses
-    if (userEmail && result.data.email) {
-      const normalizedUserEmail = userEmail.toLowerCase().trim()
-      const normalizedLicenseEmail = result.data.email.toLowerCase().trim()
-      if (normalizedUserEmail !== normalizedLicenseEmail) {
-        return {
-          allowed: false,
-          message: `License registered to different email (${result.data.email})`
-        }
-      }
-    }
-
-    const expiration = getLicenseExpiration()
-    if (expiration && expiration.inGrace) {
-      return {
-        allowed: true,
-        message: `License expired. Grace period: ${expiration.graceDaysLeft} day${expiration.graceDaysLeft === 1 ? '' : 's'} left`
-      }
-    }
+  if (result.error === 'License expired') {
     return {
       allowed: false,
       message: 'License expired. Renew at: https://latent-k.dev'

@@ -21,7 +21,7 @@ describe('dev.js hook commands', () => {
     })
 
     it('generates correct source mode expand command', () => {
-      expect(devContent).toContain('LK_DEV=1 node ${sourcePath} expand || true')
+      expect(devContent).toContain('node ${sourcePath} expand || true')
     })
 
     it('generates correct binary mode expand command', () => {
