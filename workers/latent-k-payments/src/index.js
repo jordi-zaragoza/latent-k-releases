@@ -1,12 +1,151 @@
 /**
  * Latent-K Payments Worker
- * Handles Stripe Checkout integration for license payments
+ * Handles Stripe Checkout, license generation, and admin operations
+ * Fully serverless on Cloudflare Workers + KV
  */
 
 const PLAN_CONFIG = {
+  trial14: { days: 14, name: 'Trial' },
   monthly: { days: 30, name: 'Monthly' },
   yearly: { days: 365, name: 'Yearly' }
 };
+
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Import RSA private key from PEM format
+ */
+async function importPrivateKey(pem) {
+  const pemContents = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '');
+
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+  return crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+}
+
+/**
+ * Generate random hex string
+ */
+function randomHex(bytes) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Base64url encode
+ */
+function base64urlEncode(data) {
+  const str = typeof data === 'string' ? data : JSON.stringify(data);
+  const base64 = btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Base64url decode
+ */
+function base64urlDecode(str) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4;
+  const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
+  return JSON.parse(atob(padded));
+}
+
+/**
+ * Generate a license key using RSA signature
+ */
+async function generateLicense(env, options) {
+  if (!options.email) {
+    throw new Error('Email is required');
+  }
+
+  const privateKey = await importPrivateKey(env.LICENSE_PRIVATE_KEY);
+
+  let expires = options.expires || null;
+  if (options.durationDays && !expires) {
+    expires = Date.now() + options.durationDays * 24 * 60 * 60 * 1000;
+  }
+
+  const data = {
+    id: randomHex(8),
+    type: options.type || 'standard',
+    email: options.email.toLowerCase().trim(),
+    created: Date.now(),
+    expires
+  };
+
+  const payload = base64urlEncode(data);
+  const signatureBuffer = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    new TextEncoder().encode(payload)
+  );
+
+  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  return `LK-${payload}.${signature}`;
+}
+
+/**
+ * Parse license data without validation
+ */
+function parseLicense(key) {
+  try {
+    if (!key || !key.startsWith('LK-')) return null;
+    const payload = key.slice(3).split('.')[0];
+    return base64urlDecode(payload);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate admin session
+ */
+async function isSessionValid(env, token) {
+  if (!token || !env.LICENSES) return false;
+  const data = await env.LICENSES.get(`session:${token}`);
+  if (!data) return false;
+
+  const { createdAt } = JSON.parse(data);
+  if (Date.now() - createdAt > SESSION_MAX_AGE_MS) {
+    await env.LICENSES.delete(`session:${token}`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Check authentication (session or worker token)
+ */
+async function checkAuth(request, env) {
+  const auth = request.headers.get('Authorization');
+  if (!auth || !auth.startsWith('Bearer ')) return { authenticated: false };
+
+  const token = auth.slice(7);
+
+  // Check worker token first
+  if (env.NODE_SERVER_TOKEN && token === env.NODE_SERVER_TOKEN) {
+    return { authenticated: true, source: 'worker' };
+  }
+
+  // Check session
+  if (await isSessionValid(env, token)) {
+    return { authenticated: true, source: 'admin' };
+  }
+
+  return { authenticated: false };
+}
 
 /**
  * CORS headers for responses
@@ -113,43 +252,78 @@ async function handleWebhook(request, env) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
       const { email, name, plan } = session.metadata;
+      const isTestMode = env.STRIPE_SECRET_KEY?.startsWith('sk_test_');
 
-      console.log(`Processing completed checkout for ${email}, plan: ${plan}`);
+      console.log(`Processing completed checkout for ${email}, plan: ${plan}${isTestMode ? ' (TEST MODE)' : ''}`);
 
-      // Generate license via Node.js server
-      const licenseResponse = await fetch(`${env.NODE_SERVER_URL}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${env.NODE_SERVER_TOKEN}`,
-        },
-        body: JSON.stringify({ email, name, plan }),
-      });
-
-      if (!licenseResponse.ok) {
-        const errorData = await licenseResponse.json();
-        console.error('License generation failed:', errorData);
-        return new Response('License generation failed', { status: 500 });
-      }
-
-      const licenseData = await licenseResponse.json();
-      console.log(`License generated for ${email}: ${licenseData.key.substring(0, 20)}...`);
-
-      // Store license in KV for retrieval (TTL 24 hours)
-      if (env.LICENSES) {
+      // In test mode, return a fake key without storing
+      if (isTestMode) {
+        const fakeKey = `LK-TEST-${Date.now()}-${plan}`;
         await env.LICENSES.put(
-          `session:${session.id}`,
+          `checkout:${session.id}`,
           JSON.stringify({
-            key: licenseData.key,
-            email,
+            key: fakeKey,
+            email: email.toLowerCase().trim(),
             plan,
-            expires: licenseData.data?.expires || null,
+            expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
             created: new Date().toISOString(),
+            test: true
           }),
-          { expirationTtl: 86400 } // 24 hours
+          { expirationTtl: 86400 }
         );
+        console.log(`[TEST] Fake license generated for ${email}: ${fakeKey}`);
+        return new Response('OK', { status: 200 });
       }
 
+      // Generate real license for production
+      const normalizedEmail = email.toLowerCase().trim();
+      const durationDays = PLAN_CONFIG[plan]?.days || 365;
+      const durationMs = durationDays * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
+      // Check for existing active license to extend
+      const existingData = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
+      let existingLicense = existingData ? JSON.parse(existingData) : null;
+
+      let expires;
+      if (existingLicense && existingLicense.expires && new Date(existingLicense.expires).getTime() > now) {
+        expires = new Date(existingLicense.expires).getTime() + durationMs;
+        console.log(`[LICENSE] Extending license for ${normalizedEmail}`);
+      } else {
+        expires = now + durationMs;
+      }
+
+      const key = await generateLicense(env, { email: normalizedEmail, expires });
+      const data = parseLicense(key);
+
+      const licenseRecord = {
+        id: data.id,
+        key,
+        email: normalizedEmail,
+        name: name || '',
+        plan: plan || 'yearly',
+        created: new Date().toISOString(),
+        expires: data.expires ? new Date(data.expires).toISOString() : null
+      };
+
+      // Store persistently in KV
+      await env.LICENSES.put(`license:paid:${normalizedEmail}`, JSON.stringify(licenseRecord));
+      await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseRecord));
+
+      // Store for checkout session retrieval (TTL 24 hours)
+      await env.LICENSES.put(
+        `checkout:${session.id}`,
+        JSON.stringify({
+          key,
+          email: normalizedEmail,
+          plan,
+          expires: licenseRecord.expires,
+          created: licenseRecord.created,
+        }),
+        { expirationTtl: 86400 }
+      );
+
+      console.log(`License generated for ${email}: ${key.substring(0, 20)}...`);
       return new Response('OK', { status: 200 });
     }
 
@@ -231,31 +405,276 @@ async function verifyStripeWebhook(payload, signature, secret) {
 }
 
 /**
+ * Handle admin login
+ * POST /api/login
+ */
+async function handleLogin(request, env) {
+  const origin = request.headers.get('Origin');
+
+  try {
+    const { username, password } = await request.json();
+
+    if (username === env.ADMIN_USER && password === env.ADMIN_PASS) {
+      const token = randomHex(32);
+      await env.LICENSES.put(
+        `session:${token}`,
+        JSON.stringify({ createdAt: Date.now() }),
+        { expirationTtl: 86400 }
+      );
+      console.log('[AUTH] Admin logged in');
+      return jsonResponse({ token }, 200, origin);
+    }
+
+    return jsonResponse({ error: 'Invalid credentials' }, 401, origin);
+  } catch (error) {
+    console.error('Login error:', error);
+    return jsonResponse({ error: 'Invalid request' }, 400, origin);
+  }
+}
+
+/**
+ * Handle admin logout
+ * POST /api/logout
+ */
+async function handleLogout(request, env) {
+  const origin = request.headers.get('Origin');
+  const auth = request.headers.get('Authorization');
+
+  if (auth && auth.startsWith('Bearer ')) {
+    await env.LICENSES.delete(`session:${auth.slice(7)}`);
+  }
+
+  return jsonResponse({ success: true }, 200, origin);
+}
+
+/**
  * Handle trial license request
  * POST /api/trial
- * Proxies to Node.js server
  */
 async function handleTrial(request, env) {
   const origin = request.headers.get('Origin');
 
   try {
-    const body = await request.json();
+    const { email, name } = await request.json();
 
-    const response = await fetch(`${env.NODE_SERVER_URL}/api/trial`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+    if (!email) {
+      return jsonResponse({ error: 'Email is required' }, 400, origin);
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if email already has a paid license
+    const existingPaid = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
+    if (existingPaid) {
+      const license = JSON.parse(existingPaid);
+      const isActive = license.expires && new Date(license.expires).getTime() > Date.now();
+      if (isActive) {
+        return jsonResponse({
+          error: 'You already have an active license',
+          existingKey: license.key
+        }, 409, origin);
+      } else {
+        return jsonResponse({
+          error: 'Trial not available for existing customers. Renew at: https://latent-k.dev'
+        }, 409, origin);
+      }
+    }
+
+    // Check if email already has a trial
+    const existingTrial = await env.LICENSES.get(`license:trial:${normalizedEmail}`);
+    if (existingTrial) {
+      const trial = JSON.parse(existingTrial);
+      return jsonResponse({
+        error: 'Trial already used for this email',
+        existingKey: trial.key
+      }, 409, origin);
+    }
+
+    // Generate trial license
+    const durationDays = PLAN_CONFIG.trial14.days;
+    const key = await generateLicense(env, {
+      email: normalizedEmail,
+      durationDays,
+      type: 'trial'
     });
+    const data = parseLicense(key);
 
-    const data = await response.json();
+    const licenseData = {
+      id: data.id,
+      key,
+      email: normalizedEmail,
+      name: name || '',
+      plan: 'trial14',
+      created: new Date().toISOString(),
+      expires: data.expires ? new Date(data.expires).toISOString() : null
+    };
 
-    return jsonResponse(data, response.status, origin);
+    // Store in KV
+    await env.LICENSES.put(`license:trial:${normalizedEmail}`, JSON.stringify(licenseData));
+    await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseData));
+
+    console.log(`[TRIAL] Generated 14-day trial for ${normalizedEmail}`);
+    return jsonResponse({
+      key,
+      email: normalizedEmail,
+      expires: licenseData.expires,
+      daysLeft: durationDays
+    }, 200, origin);
 
   } catch (error) {
     console.error('Trial error:', error);
-    return jsonResponse({ error: 'Failed to process trial request' }, 500, origin);
+    return jsonResponse({ error: error.message || 'Failed to process trial request' }, 500, origin);
+  }
+}
+
+/**
+ * Handle license generation (protected)
+ * POST /api/generate
+ */
+async function handleGenerate(request, env) {
+  const origin = request.headers.get('Origin');
+  const auth = await checkAuth(request, env);
+
+  if (!auth.authenticated) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
+  }
+
+  try {
+    const { email, name, plan } = await request.json();
+
+    if (!email) {
+      return jsonResponse({ error: 'Email is required' }, 400, origin);
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const durationDays = PLAN_CONFIG[plan]?.days || 365;
+    const durationMs = durationDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    // Check for existing active paid license
+    const existingData = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
+    let existingLicense = existingData ? JSON.parse(existingData) : null;
+    let extended = false;
+
+    // Calculate expiration
+    let expires;
+    if (existingLicense && existingLicense.expires && new Date(existingLicense.expires).getTime() > now) {
+      expires = new Date(existingLicense.expires).getTime() + durationMs;
+      extended = true;
+      console.log(`[LICENSE] Extending license for ${normalizedEmail} from ${existingLicense.expires}`);
+    } else {
+      expires = now + durationMs;
+    }
+
+    const key = await generateLicense(env, { email: normalizedEmail, expires });
+    const data = parseLicense(key);
+
+    const licenseData = {
+      id: data.id,
+      key,
+      email: normalizedEmail,
+      name: name || '',
+      plan: plan || 'yearly',
+      created: new Date().toISOString(),
+      expires: data.expires ? new Date(data.expires).toISOString() : null,
+      extended
+    };
+
+    // Store in KV
+    await env.LICENSES.put(`license:paid:${normalizedEmail}`, JSON.stringify(licenseData));
+    await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseData));
+
+    console.log(`[LICENSE] Generated license for ${normalizedEmail} (${plan || 'yearly'}) via ${auth.source}, expires ${new Date(expires).toISOString()}`);
+
+    return jsonResponse({
+      key,
+      data,
+      extended,
+      previousExpiry: extended ? existingLicense.expires : null
+    }, 200, origin);
+
+  } catch (error) {
+    console.error('Generate error:', error);
+    return jsonResponse({ error: error.message || 'Failed to generate license' }, 500, origin);
+  }
+}
+
+/**
+ * Handle license deletion (protected)
+ * POST /api/delete
+ */
+async function handleDelete(request, env) {
+  const origin = request.headers.get('Origin');
+  const auth = await checkAuth(request, env);
+
+  if (!auth.authenticated || auth.source !== 'admin') {
+    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
+  }
+
+  try {
+    const { key } = await request.json();
+    const parsed = parseLicense(key);
+
+    if (!parsed || !parsed.id) {
+      return jsonResponse({ error: 'Invalid license key' }, 400, origin);
+    }
+
+    const licenseData = await env.LICENSES.get(`license:id:${parsed.id}`);
+
+    if (!licenseData) {
+      return jsonResponse({ error: 'License not found' }, 404, origin);
+    }
+
+    const license = JSON.parse(licenseData);
+    const email = license.email;
+
+    // Delete all related keys
+    await env.LICENSES.delete(`license:id:${parsed.id}`);
+    if (license.plan === 'trial14') {
+      await env.LICENSES.delete(`license:trial:${email}`);
+    } else {
+      await env.LICENSES.delete(`license:paid:${email}`);
+    }
+
+    console.log(`[LICENSE] Deleted license for ${email}`);
+    return jsonResponse({ success: true, email }, 200, origin);
+
+  } catch (error) {
+    console.error('Delete error:', error);
+    return jsonResponse({ error: error.message }, 500, origin);
+  }
+}
+
+/**
+ * List all licenses (protected)
+ * GET /api/licenses
+ */
+async function handleListLicenses(request, env) {
+  const origin = request.headers.get('Origin');
+  const auth = await checkAuth(request, env);
+
+  if (!auth.authenticated || auth.source !== 'admin') {
+    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
+  }
+
+  try {
+    const licenses = [];
+    const list = await env.LICENSES.list({ prefix: 'license:id:' });
+
+    for (const key of list.keys) {
+      const data = await env.LICENSES.get(key.name);
+      if (data) {
+        licenses.push(JSON.parse(data));
+      }
+    }
+
+    // Sort by created date descending
+    licenses.sort((a, b) => new Date(b.created) - new Date(a.created));
+
+    return jsonResponse(licenses, 200, origin);
+  } catch (error) {
+    console.error('List error:', error);
+    return jsonResponse({ error: error.message }, 500, origin);
   }
 }
 
@@ -277,7 +696,7 @@ async function handleGetLicense(request, env) {
   }
 
   try {
-    const data = await env.LICENSES.get(`session:${sessionId}`);
+    const data = await env.LICENSES.get(`checkout:${sessionId}`);
 
     if (!data) {
       return jsonResponse({ error: 'License not found. Payment may still be processing.' }, 404, origin);
@@ -324,6 +743,27 @@ export default {
 
     if (path === '/api/trial' && method === 'POST') {
       return handleTrial(request, env);
+    }
+
+    // Admin endpoints
+    if (path === '/api/login' && method === 'POST') {
+      return handleLogin(request, env);
+    }
+
+    if (path === '/api/logout' && method === 'POST') {
+      return handleLogout(request, env);
+    }
+
+    if (path === '/api/generate' && method === 'POST') {
+      return handleGenerate(request, env);
+    }
+
+    if (path === '/api/delete' && method === 'POST') {
+      return handleDelete(request, env);
+    }
+
+    if (path === '/api/licenses' && method === 'GET') {
+      return handleListLicenses(request, env);
     }
 
     // Health check
