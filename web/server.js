@@ -135,7 +135,6 @@ const server = createServer(async (req, res) => {
         const now = Date.now()
         const existingPaid = licenses.find(l =>
           l.email.toLowerCase().trim() === normalizedEmail &&
-          !l.revoked &&
           (l.plan === 'monthly' || l.plan === 'yearly')
         )
 
@@ -183,8 +182,7 @@ const server = createServer(async (req, res) => {
           name: name || '',
           plan: 'trial14',
           created: new Date().toISOString(),
-          expires: data.expires ? new Date(data.expires).toISOString() : null,
-          revoked: false
+          expires: data.expires ? new Date(data.expires).toISOString() : null
         })
         saveLicenses(licenses)
 
@@ -229,11 +227,10 @@ const server = createServer(async (req, res) => {
         const durationDays = PLAN_DAYS[plan] || 365
         const durationMs = durationDays * 24 * 60 * 60 * 1000
 
-        // Find existing active license for this email (non-trial, non-revoked, not expired)
+        // Find existing active license for this email (non-trial, not expired)
         const now = Date.now()
         const existingLicense = licenses.find(l =>
           l.email.toLowerCase().trim() === normalizedEmail &&
-          !l.revoked &&
           !l.plan.startsWith('trial') &&
           l.expires &&
           new Date(l.expires).getTime() > now
@@ -259,8 +256,7 @@ const server = createServer(async (req, res) => {
           plan: plan || 'yearly',
           created: new Date().toISOString(),
           expires: data.expires ? new Date(data.expires).toISOString() : null,
-          revoked: false,
-          extended: existingLicense ? true : false
+          extended: !!existingLicense
         })
         saveLicenses(licenses)
 
