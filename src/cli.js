@@ -13,7 +13,7 @@ import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists } from './lib/context.js'
+import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, loadDomain, listDomains, buildDomain } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, isLicensed, checkAccess } from './lib/license.js'
 import { isConfigured, getAiProvider } from './lib/config.js'
@@ -186,7 +186,10 @@ if (!IS_BINARY) {
   program
     .command('context')
     .description('[DEV] Output full .lk context (syntax + project + domains)')
+    .option('-v, --verbose', 'Verbose output (human readable)')
     .option('-t, --tokens', 'Count tokens')
+    .option('-p, --project', 'Only project.lk')
+    .option('-d, --domain <name>', 'Filter by domain')
     .action((options) => {
       const cwd = process.cwd()
 
@@ -195,7 +198,27 @@ if (!IS_BINARY) {
         process.exit(0)
       }
 
-      const context = buildVerboseContext(cwd)
+      let context = ''
+
+      if (options.project) {
+        // -p: Only project.lk
+        context = getProject(cwd)
+      } else if (options.domain) {
+        // -d: Filter by domain
+        const domain = loadDomain(cwd, options.domain)
+        if (!domain) {
+          console.log(`Domain not found: ${options.domain}`)
+          console.log(`Available domains: ${listDomains(cwd).join(', ')}`)
+          process.exit(1)
+        }
+        context = buildDomain(domain.id, domain.domain, domain.vibe, domain.groups, domain.invariants)
+      } else if (options.verbose) {
+        // -v: Verbose (human readable)
+        context = buildVerboseContext(cwd)
+      } else {
+        // Default: compact (minified)
+        context = buildContext(cwd)
+      }
 
       if (options.tokens) {
         const stats = countTokens(context)
