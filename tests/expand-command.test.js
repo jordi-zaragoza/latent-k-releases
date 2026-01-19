@@ -186,6 +186,42 @@ describe('expand command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('src/test.js'))
     })
 
+    it('includes project_summary in code context output', async () => {
+      expand.mockResolvedValue({
+        type: 'code_context',
+        calls: 1,
+        context: {
+          project_summary: 'CLI tool for project context management',
+          files: {
+            'src/main.js': 'export function main() {}'
+          }
+        }
+      })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('test prompt', {})
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('PROJECT SUMMARY:'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('CLI tool for project context management'))
+    })
+
+    it('omits project_summary section when not present', async () => {
+      expand.mockResolvedValue({
+        type: 'code_context',
+        calls: 1,
+        context: {
+          files: {
+            'src/main.js': 'export function main() {}'
+          }
+        }
+      })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('test prompt', {})
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.not.stringContaining('PROJECT SUMMARY:'))
+    })
+
     it('outputs system-reminder for blocked questions', async () => {
       expand.mockResolvedValue({
         type: 'blocked',
