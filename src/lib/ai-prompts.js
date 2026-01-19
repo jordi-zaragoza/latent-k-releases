@@ -117,15 +117,17 @@ ${DOMAIN_RULES}`
 }
 
 /**
- * Build prompt for project.lk generation
+ * Build prompt for project.lk generation (returns both LK and human-readable versions)
  */
 export function buildProjectPrompt({ files, packageJson, context }) {
-  return `Analyze this project and generate a project.lk metadata file.
+  return `Analyze this project and generate project metadata in TWO formats.
 
 ${context ? `Current context (with file descriptions):\n${context}\n` : `Files in project:\n${files.join('\n')}\n`}
 ${packageJson ? `package.json:\n${packageJson}` : ''}
 
-Generate a project.lk file with this EXACT format (fill in the values):
+Return a JSON object with two keys: "lk" and "human".
+
+1. "lk" - The project.lk file with this EXACT format:
 
 ⦓ID: PROJECT⦔
 ⟪VIBE: [1-3 adjectives describing the project style]⟫ ⟪NAME: [project name]⟫ ⟪VERSION: [version or 0.1.0]⟫
@@ -146,9 +148,29 @@ Generate a project.lk file with this EXACT format (fill in the values):
   [flow1: input → process → output],
   [flow2: trigger → action → result]
 ]
-(List main data/control flows using → arrows. Examples: CLI[cmd] → parse → execute → output, HTTP[req] → router → handler → response)
 
-Return ONLY the project.lk content, no markdown, no explanation.`
+2. "human" - A plain text summary WITHOUT any symbols (no ⦓, ⟪, ⟦, ∑, ⇨, →). Format:
+
+PROJECT: [name] v[version]
+Style: [vibe adjectives]
+
+Purpose:
+[1-2 sentences describing what the project does]
+
+Stack:
+- Runtime: [node/python/go/etc]
+- Type: [CLI/API/Web/Library]
+- Dependencies: [list 3-6 key dependencies]
+
+Entry:
+- Run: [how to run]
+- Commands: [main commands/endpoints/exports]
+
+Flows:
+- [flow1 description in plain text]
+- [flow2 description in plain text]
+
+Return ONLY valid JSON with "lk" and "human" keys, no markdown code blocks.`
 }
 
 /**

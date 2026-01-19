@@ -13,7 +13,7 @@ import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getSyntax, loadDomain, listDomains, buildDomain } from './lib/context.js'
+import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, isLicensed, checkAccess } from './lib/license.js'
 import { isConfigured, getAiProvider } from './lib/config.js'
@@ -190,6 +190,7 @@ if (!IS_BINARY) {
     .option('-t, --tokens', 'Count tokens')
     .option('-s, --syntax', 'Only syntax.lk')
     .option('-p, --project', 'Only project.lk')
+    .option('-H, --header', 'Only project_h.lk (project summary)')
     .option('-d, --domain <name>', 'Filter by domain')
     .action((options) => {
       const cwd = process.cwd()
@@ -208,6 +209,9 @@ if (!IS_BINARY) {
       } else if (options.project) {
         // -p: Only project.lk
         context = getProject(cwd)
+      } else if (options.header) {
+        // -H: Only project_h.lk (project summary)
+        context = getProjectHeader(cwd)
       } else if (options.domain) {
         // -d: Filter by domain
         const domain = loadDomain(cwd, options.domain)
