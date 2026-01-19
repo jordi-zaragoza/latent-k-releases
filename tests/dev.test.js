@@ -27,6 +27,15 @@ describe('dev.js hook commands', () => {
     it('generates correct binary mode expand command', () => {
       expect(devContent).toContain('${lkBin} expand || true')
     })
+
+    it('accepts cli parameter for --json flag', () => {
+      expect(devContent).toContain("function getHookCommands(mode, cli = 'claude')")
+      expect(devContent).toContain("const jsonFlag = cli === 'gemini' ? ' --json' : ''")
+    })
+
+    it('adds --json to session-info for gemini', () => {
+      expect(devContent).toContain('session-info${jsonFlag}')
+    })
   })
 
   describe('isLkExpandHook', () => {
@@ -63,8 +72,8 @@ describe('dev.js hook commands', () => {
   })
 
   describe('updateClaudeHooks', () => {
-    it('destructures expandCmd from getHookCommands', () => {
-      expect(devContent).toContain('const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode)')
+    it('destructures expandCmd from getHookCommands with claude cli', () => {
+      expect(devContent).toContain("getHookCommands(mode, 'claude')")
     })
 
     it('passes expandCmd to updateHooksInSettings', () => {
@@ -73,6 +82,10 @@ describe('dev.js hook commands', () => {
   })
 
   describe('updateGeminiHooks', () => {
+    it('calls getHookCommands with gemini cli for --json flag', () => {
+      expect(devContent).toContain("getHookCommands(mode, 'gemini')")
+    })
+
     it('passes expandCmd to updateHooksInSettings for SessionEnd', () => {
       expect(devContent).toContain("updateHooksInSettings(settings, 'SessionEnd', expandCmd, syncCmd, sessionCmd)")
     })

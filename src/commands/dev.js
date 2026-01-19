@@ -160,9 +160,10 @@ async function ensureBinary() {
   return binaryPath
 }
 
-function getHookCommands(mode) {
+function getHookCommands(mode, cli = 'claude') {
   const lkBin = '/usr/local/bin/lk'
   const sourcePath = getSourcePath()
+  const jsonFlag = cli === 'gemini' ? ' --json' : ''
 
   const expandCmd = mode === 'binary'
     ? `${lkBin} expand || true`
@@ -173,8 +174,8 @@ function getHookCommands(mode) {
     : `node ${sourcePath} sync`
 
   const sessionCmd = mode === 'binary'
-    ? `${lkBin} session-info || true`
-    : `node ${sourcePath} session-info || true`
+    ? `${lkBin} session-info${jsonFlag} || true`
+    : `node ${sourcePath} session-info${jsonFlag} || true`
 
   return { expandCmd, syncCmd, sessionCmd }
 }
@@ -262,7 +263,7 @@ async function updateClaudeHooks(mode) {
     return false
   }
 
-  const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode)
+  const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode, 'claude')
   settings = updateHooksInSettings(settings, 'Stop', expandCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
@@ -280,7 +281,7 @@ async function updateGeminiHooks(mode) {
     return false
   }
 
-  const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode)
+  const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode, 'gemini')
   settings = updateHooksInSettings(settings, 'SessionEnd', expandCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
