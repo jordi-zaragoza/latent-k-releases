@@ -17,7 +17,7 @@ import { buildVerboseContext, countTokens, exists, loadIgnore, saveIgnore, ignor
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, isLicensed, checkAccess } from './lib/license.js'
 import { isConfigured, getAiProvider } from './lib/config.js'
-import { checkRateLimit } from './lib/ai.js'
+import { sync as runSync, syncProjectOnly } from './commands/sync.js'
 import { join } from 'path'
 import { homedir } from 'os'
 import { readFileSync } from 'fs'
@@ -260,24 +260,26 @@ program
       return
     }
 
-    // Check if .lk directory exists
+    // Sync context: full sync if no .lk, project-only if exists
+    const provider = getAiProvider()
+    let syncResult
+
     if (!existsSync('.lk')) {
-      terminalPrint(`${yellow}No context - Will sync dynamically, or stop Claude and run: lk sync${reset}`)
-      return
+      // No context yet - do full sync
+      terminalPrint(`${yellow}Initializing context...${reset}`)
+      await runSync({ quiet: true })
+      syncResult = { synced: true }
+    } else {
+      // Context exists - only sync project.lk if needed
+      syncResult = await syncProjectOnly()
     }
 
     // Build info line
     const infoParts = ['Context loaded']
-
-    // Check rate limit status (only if license is valid)
-    const provider = getAiProvider()
-    const rateCheck = await checkRateLimit()
-    if (rateCheck.rateLimited) {
-      infoParts.push(`⚠ ${provider} rate limited`)
-    } else if (rateCheck.ok) {
+    if (syncResult.synced) {
       infoParts.push(`${provider} ready`)
-    } else if (rateCheck.error) {
-      infoParts.push(`⚠ ${provider}: ${rateCheck.error}`)
+    } else if (syncResult.error) {
+      infoParts.push(`⚠ ${syncResult.error}`)
     }
 
     terminalPrint(infoParts.join(' | '))
