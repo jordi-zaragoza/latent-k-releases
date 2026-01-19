@@ -697,6 +697,7 @@
     </div>
 
     <script>
+        const API_BASE = 'https://latent-k-payments.latent-k.workers.dev';
         let allLicenses = [];
         let currentFilter = 'all';
         let authToken = localStorage.getItem('adminToken');
@@ -731,7 +732,7 @@
             const password = document.getElementById('password').value;
 
             try {
-                const res = await fetch('/api/login', {
+                const res = await fetch(`${API_BASE}/api/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
@@ -753,7 +754,7 @@
 
         // Logout
         async function logout() {
-            await fetch('/api/logout', {
+            await fetch(`${API_BASE}/api/logout`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
@@ -764,7 +765,7 @@
 
         // API helper with auth
         async function apiCall(url, options = {}) {
-            const res = await fetch(url, {
+            const res = await fetch(`${API_BASE}${url}`, {
                 ...options,
                 headers: {
                     ...options.headers,
