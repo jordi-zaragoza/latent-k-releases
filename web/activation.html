@@ -137,6 +137,13 @@
             opacity: 0.6;
         }
 
+        .form-hint {
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            margin-top: 0.5rem;
+            opacity: 0.9;
+        }
+
         /* Plan Selection */
         .plans {
             display: grid;
@@ -406,6 +413,7 @@
                         placeholder="you@example.com"
                         required
                     >
+                    <p class="form-hint">Must match the email configured in Claude Code</p>
                 </div>
 
                 <!-- Name -->
