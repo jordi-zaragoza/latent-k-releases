@@ -186,10 +186,10 @@ function isLkExpandHook(command) {
   return isLk && (command.includes('expand') || command.includes('context'))
 }
 
-function updateHooksInSettings(settings, stopEvent, expandCmd, syncCmd, sessionCmd) {
-  // Update UserPromptSubmit hook (expand on every prompt)
-  if (settings.hooks?.UserPromptSubmit) {
-    settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit.map(h => {
+function updateHooksInSettings(settings, promptEvent, stopEvent, expandCmd, syncCmd, sessionCmd) {
+  // Update prompt hook (expand on every prompt) - UserPromptSubmit for Claude, BeforeAgent for Gemini
+  if (settings.hooks?.[promptEvent]) {
+    settings.hooks[promptEvent] = settings.hooks[promptEvent].map(h => {
       if (h.hooks?.some(hh => isLkExpandHook(hh.command))) {
         return {
           ...h,
@@ -222,7 +222,7 @@ function updateHooksInSettings(settings, stopEvent, expandCmd, syncCmd, sessionC
       }
       return h
     })
-    // Remove legacy expand/context hooks from SessionStart (they should be in UserPromptSubmit now)
+    // Remove legacy expand/context hooks from SessionStart (they should be in prompt event now)
     settings.hooks.SessionStart = settings.hooks.SessionStart.filter(h =>
       !h.hooks?.some(hh => isLkExpandHook(hh.command) && !hh.command?.includes('session-info'))
     )
@@ -264,7 +264,7 @@ async function updateClaudeHooks(mode) {
   }
 
   const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode, 'claude')
-  settings = updateHooksInSettings(settings, 'Stop', expandCmd, syncCmd, sessionCmd)
+  settings = updateHooksInSettings(settings, 'UserPromptSubmit', 'Stop', expandCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true
@@ -282,7 +282,7 @@ async function updateGeminiHooks(mode) {
   }
 
   const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode, 'gemini')
-  settings = updateHooksInSettings(settings, 'SessionEnd', expandCmd, syncCmd, sessionCmd)
+  settings = updateHooksInSettings(settings, 'BeforeAgent', 'SessionEnd', expandCmd, syncCmd, sessionCmd)
 
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true

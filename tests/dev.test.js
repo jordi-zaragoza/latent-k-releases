@@ -58,8 +58,8 @@ describe('dev.js hook commands', () => {
   })
 
   describe('updateHooksInSettings', () => {
-    it('receives expandCmd parameter', () => {
-      expect(devContent).toContain('function updateHooksInSettings(settings, stopEvent, expandCmd, syncCmd, sessionCmd)')
+    it('receives promptEvent and stopEvent parameters', () => {
+      expect(devContent).toContain('function updateHooksInSettings(settings, promptEvent, stopEvent, expandCmd, syncCmd, sessionCmd)')
     })
 
     it('uses isLkExpandHook to find hooks', () => {
@@ -76,8 +76,8 @@ describe('dev.js hook commands', () => {
       expect(devContent).toContain("getHookCommands(mode, 'claude')")
     })
 
-    it('passes expandCmd to updateHooksInSettings', () => {
-      expect(devContent).toContain("updateHooksInSettings(settings, 'Stop', expandCmd, syncCmd, sessionCmd)")
+    it('passes UserPromptSubmit as promptEvent to updateHooksInSettings', () => {
+      expect(devContent).toContain("updateHooksInSettings(settings, 'UserPromptSubmit', 'Stop', expandCmd, syncCmd, sessionCmd)")
     })
   })
 
@@ -86,8 +86,8 @@ describe('dev.js hook commands', () => {
       expect(devContent).toContain("getHookCommands(mode, 'gemini')")
     })
 
-    it('passes expandCmd to updateHooksInSettings for SessionEnd', () => {
-      expect(devContent).toContain("updateHooksInSettings(settings, 'SessionEnd', expandCmd, syncCmd, sessionCmd)")
+    it('passes BeforeAgent as promptEvent to updateHooksInSettings', () => {
+      expect(devContent).toContain("updateHooksInSettings(settings, 'BeforeAgent', 'SessionEnd', expandCmd, syncCmd, sessionCmd)")
     })
   })
 })
