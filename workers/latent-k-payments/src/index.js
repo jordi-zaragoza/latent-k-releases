@@ -568,6 +568,14 @@ async function handleTrial(request, env) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    // Check if this IP already generated a trial (prevent abuse with multiple emails)
+    const existingTrialIP = await env.LICENSES.get(`trial:ip:${clientIP}`);
+    if (existingTrialIP) {
+      return jsonResponse({
+        error: 'Trial already claimed from this network.'
+      }, 409, origin);
+    }
+
     // Check if email already has a paid license
     const existingPaid = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
     if (existingPaid) {
@@ -614,8 +622,13 @@ async function handleTrial(request, env) {
     // Store in KV
     await env.LICENSES.put(`license:trial:${normalizedEmail}`, JSON.stringify(licenseData));
     await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseData));
+    // Mark IP as used for trial (no expiration - permanent)
+    await env.LICENSES.put(`trial:ip:${clientIP}`, JSON.stringify({
+      email: normalizedEmail,
+      created: new Date().toISOString()
+    }));
 
-    console.log(`[TRIAL] Generated 14-day trial for ${normalizedEmail}`);
+    console.log(`[TRIAL] Generated 14-day trial for ${normalizedEmail} from IP ${clientIP}`);
     return jsonResponse({
       key,
       email: normalizedEmail,
