@@ -131,6 +131,33 @@ const server = createServer(async (req, res) => {
         const normalizedEmail = email.toLowerCase().trim()
         const licenses = loadLicenses()
 
+        // Check if this email already has a paid license
+        const now = Date.now()
+        const existingPaid = licenses.find(l =>
+          l.email.toLowerCase().trim() === normalizedEmail &&
+          !l.revoked &&
+          (l.plan === 'monthly' || l.plan === 'yearly')
+        )
+
+        if (existingPaid) {
+          const isActive = existingPaid.expires && new Date(existingPaid.expires).getTime() > now
+          if (isActive) {
+            // Show existing active license
+            res.writeHead(409, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({
+              error: 'You already have an active license',
+              existingKey: existingPaid.key
+            }))
+          } else {
+            // Expired paid license - no trial allowed
+            res.writeHead(409, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({
+              error: 'Trial not available for existing customers. Renew at: https://latent-k.dev'
+            }))
+          }
+          return
+        }
+
         // Check if this email already has a trial
         const existingTrial = licenses.find(l =>
           l.email.toLowerCase().trim() === normalizedEmail &&
@@ -267,54 +294,19 @@ const server = createServer(async (req, res) => {
       try {
         const { key } = JSON.parse(body)
         const licenses = loadLicenses()
-        const license = licenses.find(l => l.key === key)
+        const index = licenses.findIndex(l => l.key === key)
 
-        if (!license) {
+        if (index === -1) {
           res.writeHead(404, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ error: 'License not found' }))
           return
         }
 
-        license.revoked = true
+        const license = licenses[index]
+        licenses.splice(index, 1)
         saveLicenses(licenses)
 
         console.log(`[LICENSE] Deleted license for ${license.email}`)
-
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ success: true, email: license.email }))
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: err.message }))
-      }
-    })
-    return
-  }
-
-  // API: Restore license (protected)
-  if (req.method === 'POST' && req.url === '/api/restore') {
-    if (!isAuthenticated()) {
-      res.writeHead(401, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Unauthorized' }))
-      return
-    }
-    let body = ''
-    req.on('data', chunk => body += chunk)
-    req.on('end', () => {
-      try {
-        const { key } = JSON.parse(body)
-        const licenses = loadLicenses()
-        const license = licenses.find(l => l.key === key)
-
-        if (!license) {
-          res.writeHead(404, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ error: 'License not found' }))
-          return
-        }
-
-        license.revoked = false
-        saveLicenses(licenses)
-
-        console.log(`[LICENSE] Restored license for ${license.email}`)
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ success: true, email: license.email }))
