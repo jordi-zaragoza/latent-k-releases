@@ -9,26 +9,14 @@
 
 import fs from 'fs'
 import crypto from 'crypto'
-import { join } from 'path'
-import { homedir } from 'os'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
+import { getClaudeUserEmail } from '../lib/claude-utils.js'
 
-/**
- * Get Claude user email from ~/.claude.json
- */
-function getClaudeUserEmail() {
-  try {
-    const claudeConfigPath = join(homedir(), '.claude.json')
-    if (!fs.existsSync(claudeConfigPath)) return null
-    const config = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'))
-    return config.oauthAccount?.emailAddress || null
-  } catch {
-    return null
-  }
-}
+const MARKER_PREFIX = 'lk-expanded-'
+const MARKER_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 /**
  * Get marker file path for a session (based on transcript path hash)
@@ -36,7 +24,31 @@ function getClaudeUserEmail() {
 function getMarkerPath(transcriptPath) {
   if (!transcriptPath) return null
   const hash = crypto.createHash('md5').update(transcriptPath).digest('hex').slice(0, 12)
-  return `/tmp/lk-expanded-${hash}`
+  return `/tmp/${MARKER_PREFIX}${hash}`
+}
+
+/**
+ * Clean up old marker files (older than 24 hours)
+ */
+function cleanOldMarkers() {
+  try {
+    const files = fs.readdirSync('/tmp')
+    const now = Date.now()
+    for (const file of files) {
+      if (!file.startsWith(MARKER_PREFIX)) continue
+      const filePath = `/tmp/${file}`
+      try {
+        const stat = fs.statSync(filePath)
+        if (now - stat.mtimeMs > MARKER_MAX_AGE_MS) {
+          fs.unlinkSync(filePath)
+        }
+      } catch {
+        // Ignore errors on individual files
+      }
+    }
+  } catch {
+    // Ignore errors reading /tmp
+  }
 }
 
 /**
@@ -56,6 +68,10 @@ function markAsExpanded(transcriptPath) {
   if (!markerPath) return
   try {
     fs.writeFileSync(markerPath, Date.now().toString())
+    // Clean old markers periodically (1 in 10 chance to avoid overhead)
+    if (Math.random() < 0.1) {
+      cleanOldMarkers()
+    }
   } catch {
     // Ignore errors creating marker
   }
