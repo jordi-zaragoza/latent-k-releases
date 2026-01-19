@@ -442,7 +442,7 @@
                                 <div class="plan-name">Monthly</div>
                                 <div class="plan-price">$9</div>
                                 <div class="plan-features">
-                                    <div class="plan-feature">30-day license</div>
+                                    <div class="plan-feature">+30 days (extends)</div>
                                     <div class="plan-feature">One-time payment</div>
                                     <div class="plan-feature">Email support</div>
                                 </div>
@@ -454,7 +454,7 @@
                                 <div class="plan-name">Yearly</div>
                                 <div class="plan-price">$79</div>
                                 <div class="plan-features">
-                                    <div class="plan-feature">365-day license</div>
+                                    <div class="plan-feature">+365 days (extends)</div>
                                     <div class="plan-feature">One-time payment</div>
                                     <div class="plan-feature">Priority support</div>
                                 </div>
@@ -489,7 +489,7 @@
 
     <script>
         // Configuration - Payments Worker URL
-        const PAYMENTS_API = 'https://api.latent-k.dev';
+        const PAYMENTS_API = 'https://latent-k-payments.latent-k.workers.dev';
 
         const form = document.getElementById('activationForm');
         const status = document.getElementById('status');
@@ -586,8 +586,8 @@
 
             try {
                 if (plan === 'trial14') {
-                    // Trial: use local /api/trial endpoint
-                    const response = await fetch('/api/trial', {
+                    // Trial: use Worker endpoint (proxies to Node.js server)
+                    const response = await fetch(`${PAYMENTS_API}/api/trial`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email, name, plan })
@@ -664,9 +664,9 @@
                 if (radio.value === 'trial14') {
                     btnText.textContent = 'Start Free Trial';
                 } else if (radio.value === 'monthly') {
-                    btnText.textContent = 'Pay $9 - Monthly';
+                    btnText.textContent = 'Pay $9 - One month';
                 } else {
-                    btnText.textContent = 'Pay $79 - Yearly';
+                    btnText.textContent = 'Pay $79 - One year';
                 }
             });
         });
