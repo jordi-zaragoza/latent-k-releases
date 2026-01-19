@@ -246,7 +246,7 @@ const server = createServer(async (req, res) => {
       }
 
       const durationDays = PLAN_DAYS.trial14
-      const key = generateLicense({ email: normalizedEmail, durationDays })
+      const key = generateLicense({ email: normalizedEmail, durationDays, type: 'trial' })
       const data = parseLicense(key)
 
       licenses.push({
