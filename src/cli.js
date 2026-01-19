@@ -34,10 +34,24 @@ function getClaudeUserEmail() {
   }
 }
 
+function getGeminiUserEmail() {
+  try {
+    const geminiAccountsPath = join(homedir(), '.gemini', 'google_accounts.json')
+    if (!existsSync(geminiAccountsPath)) return null
+    const accounts = JSON.parse(readFileSync(geminiAccountsPath, 'utf8'))
+    return accounts.active || null
+  } catch {
+    return null
+  }
+}
+
 function terminalPrint(message) {
   try {
     writeFileSync('/dev/tty', message + '\n')
-  } catch { /* ignore if no tty */ }
+  } catch {
+    // Fallback to stdout if no tty (e.g., Gemini CLI hooks)
+    console.log(message)
+  }
 }
 
 const IS_BINARY = !!process.pkg  // true when running as compiled binary
@@ -265,40 +279,53 @@ if (!IS_BINARY) {
 program
   .command('session-info')
   .description('Print session start info (for hooks)')
-  .action(async () => {
+  .option('--json', 'Output JSON for Gemini CLI hooks')
+  .action(async (options) => {
+    const jsonMode = options.json
+
+    // Helper to output message (JSON for Gemini, text for Claude)
+    const output = (msg, isError = false) => {
+      if (jsonMode) {
+        console.log(JSON.stringify({ systemMessage: msg }))
+      } else {
+        terminalPrint(msg)
+      }
+    }
+
     const green = '\x1b[32m'
     const yellow = '\x1b[33m'
     const red = '\x1b[31m'
     const reset = '\x1b[0m'
 
-    // ASCII banner with lk symbols
-    const banner = [
-      '',
-      '╔═══════════════════════════════════╗',
-      '║       ⦓  L A T E N T - K  ⦔       ║',
-      '╚═══════════════════════════════════╝'
-    ]
-
-    // Print banner in green
-    banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
+    // ASCII banner (only for Claude/tty mode)
+    if (!jsonMode) {
+      const banner = [
+        '',
+        '╔═══════════════════════════════════╗',
+        '║       ⦓  L A T E N T - K  ⦔       ║',
+        '╚═══════════════════════════════════╝'
+      ]
+      banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
+    }
 
     // Check license with email verification (skip in dev mode)
+    // Priority: Claude email first, fallback to Gemini if no Claude
     if (!DEV_MODE) {
-      const userEmail = getClaudeUserEmail()
+      const userEmail = getClaudeUserEmail() || getGeminiUserEmail()
       const access = await checkAccess(userEmail)
       if (!access.allowed) {
-        terminalPrint(`${red}${access.message}${reset}`)
+        output(jsonMode ? `❌ ${access.message}` : `${red}${access.message}${reset}`, true)
         return
       }
       // Show license warning if present
-      if (access.message) {
+      if (access.message && !jsonMode) {
         terminalPrint(`${yellow}${access.message}${reset}`)
       }
     }
 
     // Check API key configuration
     if (!isConfigured()) {
-      terminalPrint(`${red}No API key - Stop Claude and run: lk setup${reset}`)
+      output(jsonMode ? '❌ No API key - run: lk setup' : `${red}No API key - Stop Claude and run: lk setup${reset}`, true)
       return
     }
 
@@ -308,7 +335,7 @@ program
 
     if (!existsSync('.lk')) {
       // No context yet - do full sync
-      terminalPrint(`${yellow}Initializing context...${reset}`)
+      if (!jsonMode) terminalPrint(`${yellow}Initializing context...${reset}`)
       await runSync({ quiet: true })
       syncResult = { synced: true }
     } else {
@@ -317,7 +344,7 @@ program
     }
 
     // Build info line
-    const infoParts = ['Context loaded']
+    const infoParts = ['⦓ LK']
     if (syncResult.synced) {
       infoParts.push(`${provider} ready`)
     } else if (syncResult.error) {
@@ -331,11 +358,15 @@ program
       if (licenseData?.type === 'trial') {
         const expiration = getLicenseExpiration()
         const daysText = expiration?.daysLeft === 1 ? '1 day' : `${expiration?.daysLeft} days`
-        infoParts.push(`${yellow}trial (${daysText})${reset}`)
+        if (jsonMode) {
+          infoParts.push(`trial (${daysText})`)
+        } else {
+          infoParts.push(`${yellow}trial (${daysText})${reset}`)
+        }
       }
     }
 
-    terminalPrint(infoParts.join(' | '))
+    output(jsonMode ? infoParts.join(' | ') : infoParts.join(' | ').replace('⦓ LK', 'Context loaded'))
   })
 
 // Dev-only commands (only from source, never in compiled binary)

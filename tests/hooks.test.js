@@ -53,3 +53,47 @@ describe('Hook command consistency', () => {
     expect(content).toContain("command.includes('expand') || command.includes('context')")
   })
 })
+
+describe('Gemini CLI support', () => {
+  it('hooks.js has Gemini CLI configuration', () => {
+    const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
+    expect(content).toContain("gemini: {")
+    expect(content).toContain("dir: join(homedir(), '.gemini')")
+    expect(content).toContain("stopEvent: 'SessionEnd'")
+  })
+
+  it('hooks.js adds --json flag for Gemini session-info', () => {
+    const content = readFileSync(join(srcDir, 'commands', 'hooks.js'), 'utf8')
+    expect(content).toContain("const jsonFlag = cli === 'gemini' ? ' --json' : ''")
+    expect(content).toContain('session-info${jsonFlag}')
+  })
+
+  it('cli.js has getGeminiUserEmail function', () => {
+    const content = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+    expect(content).toContain('function getGeminiUserEmail()')
+    expect(content).toContain("'.gemini', 'google_accounts.json'")
+    expect(content).toContain('accounts.active')
+  })
+
+  it('cli.js session-info supports --json option', () => {
+    const content = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+    expect(content).toContain(".option('--json'")
+    expect(content).toContain('const jsonMode = options.json')
+  })
+
+  it('cli.js session-info outputs JSON systemMessage format', () => {
+    const content = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+    expect(content).toContain('JSON.stringify({ systemMessage:')
+  })
+
+  it('cli.js license validation prioritizes Claude email over Gemini', () => {
+    const content = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+    expect(content).toContain('getClaudeUserEmail() || getGeminiUserEmail()')
+  })
+
+  it('cli.js terminalPrint has console.log fallback', () => {
+    const content = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+    expect(content).toContain("writeFileSync('/dev/tty'")
+    expect(content).toContain('console.log(message)')
+  })
+})
