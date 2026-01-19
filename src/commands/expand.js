@@ -136,12 +136,22 @@ ${context.message}
 
   // Direct answer - instruct LLM to use it
   if (type === 'direct' && context.answer) {
-    return `<system-reminder>
-⚠️ INSTRUCTION: This answer is complete. DO NOT call Read, Glob, Grep or other tools. Respond directly.
+    const parts = ['<system-reminder>']
+    parts.push('⚠️ INSTRUCTION: This answer is complete. DO NOT call Read, Glob, Grep or other tools. Respond directly.')
+    parts.push('')
 
-READY ANSWER:
-${context.answer}
-</system-reminder>`
+    // Add project summary if present
+    if (context.project_summary) {
+      parts.push('PROJECT SUMMARY:')
+      parts.push(context.project_summary)
+      parts.push('')
+    }
+
+    parts.push('READY ANSWER:')
+    parts.push(context.answer)
+    parts.push('</system-reminder>')
+
+    return parts.join('\n')
   }
 
   // Code context - provide files with instruction
