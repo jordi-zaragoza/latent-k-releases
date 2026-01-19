@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { getConfig, isConfigured, getAiProvider, getIgnorePatterns } from '../lib/config.js'
 import { isLicensed, validateLicense, getLicenseExpiration, getLicenseKey } from '../lib/license.js'
+import { parseLicense } from '../lib/license-gen.js'
 import {
   exists, getUnsyncedFiles, getDeletedFiles, getAllEntries, loadIgnore, ignoreExists, isIgnored,
   getAllFiles
@@ -68,12 +69,19 @@ export async function status() {
 
   // License status
   console.log('License:')
-  const hasKey = !!getLicenseKey()
+  const licenseKey = getLicenseKey()
+  const hasKey = !!licenseKey
   const expiration = hasKey ? getLicenseExpiration() : null
+  const licenseData = hasKey ? parseLicense(licenseKey) : null
+  const isTrial = licenseData?.type === 'trial'
 
   if (hasKey) {
     if (licenseValid) {
-      if (expiration && expiration.expires) {
+      if (isTrial) {
+        const daysText = expiration?.daysLeft === 1 ? '1 día' : `${expiration?.daysLeft} días`
+        console.log(`  Status: licencia de prueba (${daysText} restantes)`)
+        console.log(`  Obtener licencia: https://latent-k.dev`)
+      } else if (expiration && expiration.expires) {
         if (expiration.daysLeft <= 7 && expiration.daysLeft > 0) {
           console.log(`  Status: valid (expires in ${expiration.daysLeft} day${expiration.daysLeft === 1 ? '' : 's'})`)
         } else {
@@ -87,6 +95,7 @@ export async function status() {
       if (expiration && expiration.expired) {
         console.log('  Status: expired')
         console.log(`  Expired: ${expiration.expires.toLocaleDateString()}`)
+        console.log(`  Renovar licencia: https://latent-k.dev`)
       } else {
         console.log('  Status: invalid')
       }
@@ -94,6 +103,7 @@ export async function status() {
   } else {
     console.log('  Status: not activated')
     console.log('  Run: lk activate')
+    console.log('  Obtener licencia: https://latent-k.dev')
   }
   console.log('')
 
