@@ -78,9 +78,9 @@ export async function status() {
   if (hasKey) {
     if (licenseValid) {
       if (isTrial) {
-        const daysText = expiration?.daysLeft === 1 ? '1 día' : `${expiration?.daysLeft} días`
-        console.log(`  Status: licencia de prueba (${daysText} restantes)`)
-        console.log(`  Obtener licencia: https://latent-k.dev`)
+        const daysText = expiration?.daysLeft === 1 ? '1 day' : `${expiration?.daysLeft} days`
+        console.log(`  Status: trial license (${daysText} remaining)`)
+        console.log(`  Get license: https://latent-k.dev`)
       } else if (expiration && expiration.expires) {
         if (expiration.daysLeft <= 7 && expiration.daysLeft > 0) {
           console.log(`  Status: valid (expires in ${expiration.daysLeft} day${expiration.daysLeft === 1 ? '' : 's'})`)
@@ -95,7 +95,7 @@ export async function status() {
       if (expiration && expiration.expired) {
         console.log('  Status: expired')
         console.log(`  Expired: ${expiration.expires.toLocaleDateString()}`)
-        console.log(`  Renovar licencia: https://latent-k.dev`)
+        console.log(`  Renew license: https://latent-k.dev`)
       } else {
         console.log('  Status: invalid')
       }
@@ -103,7 +103,7 @@ export async function status() {
   } else {
     console.log('  Status: not activated')
     console.log('  Run: lk activate')
-    console.log('  Obtener licencia: https://latent-k.dev')
+    console.log('  Get license: https://latent-k.dev')
   }
   console.log('')
 
