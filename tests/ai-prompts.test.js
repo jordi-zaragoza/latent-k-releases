@@ -12,6 +12,7 @@ import {
   buildClassifyPrompt,
   buildExpandPrompt,
   buildExpandPromptCompact,
+  buildProjectSummaryPrompt,
   parseJsonResponse,
   extractJsonFromText,
   generateDefaultResults
@@ -520,5 +521,73 @@ Lib:[λsrc/lib/parser.js,λsrc/lib/utils.js]`
     const fullPrompt = buildExpandPrompt('test', sampleProjectSummary, sampleDomainIndex)
     const compactPrompt = buildExpandPromptCompact('test', sampleProjectSummary, sampleDomainIndex)
     expect(compactPrompt.length).toBeLessThan(fullPrompt.length)
+  })
+})
+
+describe('buildProjectSummaryPrompt', () => {
+  const sampleProjectLk = `⦓ID: PROJECT⦔
+⟪VIBE: minimal⟫ ⟪NAME: test-project⟫ ⟪VERSION: 1.0.0⟫
+⟦Δ: Purpose⟧
+A test project for unit tests.
+⟦Δ: Stack⟧
+∑ Tech [Runtime⇨node, Type⇨CLI]
+⟦Δ: Flows⟧
+∑ Flows [CLI → parse → execute]`
+
+  it('includes project metadata', () => {
+    const prompt = buildProjectSummaryPrompt(sampleProjectLk, ['core', 'cli'])
+    expect(prompt).toContain('test-project')
+    expect(prompt).toContain('⦓ID: PROJECT⦔')
+  })
+
+  it('includes domain list', () => {
+    const prompt = buildProjectSummaryPrompt(sampleProjectLk, ['core', 'cli', 'api'])
+    expect(prompt).toContain('DOMAINS:')
+    expect(prompt).toContain('core, cli, api')
+  })
+
+  it('shows none when no domains', () => {
+    const prompt = buildProjectSummaryPrompt(sampleProjectLk, [])
+    expect(prompt).toContain('DOMAINS: [none]')
+  })
+
+  it('asks for summary format', () => {
+    const prompt = buildProjectSummaryPrompt(sampleProjectLk, ['core'])
+    expect(prompt).toContain('1-2 sentence')
+    expect(prompt).toContain('Domains:')
+  })
+
+  it('instructs to exclude flows', () => {
+    const prompt = buildProjectSummaryPrompt(sampleProjectLk, ['core'])
+    expect(prompt).toContain('NOT include flows')
+  })
+
+  it('instructs to return only text', () => {
+    const prompt = buildProjectSummaryPrompt(sampleProjectLk, ['core'])
+    expect(prompt).toContain('ONLY the summary text')
+    expect(prompt).toContain('no markdown')
+  })
+})
+
+describe('buildProjectPrompt with new sections', () => {
+  it('includes Deps section in template', () => {
+    const prompt = buildProjectPrompt({
+      files: ['src/index.js'],
+      packageJson: null,
+      context: null
+    })
+    expect(prompt).toContain('∑ Deps')
+    expect(prompt).toContain('KEY dependencies')
+  })
+
+  it('includes Entry section in template', () => {
+    const prompt = buildProjectPrompt({
+      files: ['src/index.js'],
+      packageJson: null,
+      context: null
+    })
+    expect(prompt).toContain('⟦Δ: Entry⟧')
+    expect(prompt).toContain('∑ Run')
+    expect(prompt).toContain('∑ Commands')
   })
 })

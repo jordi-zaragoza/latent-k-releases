@@ -62,3 +62,7 @@ export async function expandPrompt(userPrompt, projectLk, domainLk) {
 export async function expandPromptCompact(userPrompt, projectSummary, domainIndex) {
   return getProvider().expandPromptCompact(userPrompt, projectSummary, domainIndex)
 }
+
+export async function generateProjectSummary(projectLk, domainNames = []) {
+  return getProvider().generateProjectSummary(projectLk, domainNames)
+}

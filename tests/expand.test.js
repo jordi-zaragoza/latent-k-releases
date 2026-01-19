@@ -9,7 +9,7 @@ vi.mock('../src/lib/config.js', () => ({
 vi.mock('../src/lib/context.js', () => ({
   getProject: vi.fn(),
   listDomains: vi.fn(),
-  getProjectSummary: vi.fn(),
+  getProjectHeader: vi.fn(),
   getDomainIndex: vi.fn()
 }))
 
@@ -18,7 +18,7 @@ vi.mock('../src/lib/ai.js', () => ({
   expandPromptCompact: vi.fn()
 }))
 
-import { getProject, listDomains, getProjectSummary, getDomainIndex } from '../src/lib/context.js'
+import { getProject, listDomains, getProjectHeader, getDomainIndex } from '../src/lib/context.js'
 import * as ai from '../src/lib/ai.js'
 
 describe('expand', () => {
@@ -63,75 +63,54 @@ A test project.`
     beforeEach(() => {
       getProject.mockReturnValue(sampleProjectLk)
       listDomains.mockReturnValue(['core', 'cli'])
-    })
-
-    it('handles blocked meta question', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: false,
+      getProjectHeader.mockReturnValue(sampleProjectLk)
+      getDomainIndex.mockReturnValue('⟦Core⟧\nLib:[λsrc/lib/parser.js]')
+      // Default expandPromptCompact mock for single call path
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
-        needs_domains: null,
-        block_reason: 'meta_question'
+        navigation_guide: null,
+        files: []
       })
-
-      const result = await expand('/test', 'how do you know about my files?')
-
-      expect(result.type).toBe('blocked')
-      expect(result.calls).toBe(1)
-      expect(result.context).toBeNull()
     })
 
-    it('handles passthrough for non-project questions', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: false,
+    it('returns passthrough when no files returned from expansion', async () => {
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
-        needs_domains: null,
-        block_reason: null
+        navigation_guide: null,
+        files: []
       })
 
       const result = await expand('/test', 'hello how are you today')
 
-      expect(result).toEqual({
-        type: 'passthrough',
-        calls: 1,
-        context: null
-      })
+      expect(result.type).toBe('passthrough')
     })
 
-    it('handles direct answer from project metadata', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
+    it('handles direct answer from expansion', async () => {
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: 'This project is a CLI tool for testing.',
-        needs_domains: null,
-        block_reason: null
+        navigation_guide: null,
+        files: []
       })
 
       const result = await expand('/test', 'what does this project do')
 
-      expect(result).toEqual({
-        type: 'direct',
-        calls: 1,
-        context: {
-          _instruction: 'use_answer',
-          answer: 'This project is a CLI tool for testing.'
-        }
-      })
+      expect(result.type).toBe('direct')
+      expect(result.context.answer).toBe('This project is a CLI tool for testing.')
     })
 
-    it('handles passthrough when no domains needed', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
+    it('returns code_context with files and project header', async () => {
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
-        needs_domains: [],
-        block_reason: null
+        navigation_guide: 'Check parser module',
+        files: [{ path: 'src/lib/parser.js', reason: 'Parser logic' }]
       })
 
-      const result = await expand('/test', 'some random question here')
+      const result = await expand('/test', 'how does the parser work')
 
-      expect(result).toEqual({
-        type: 'passthrough',
-        calls: 1,
-        context: null
-      })
+      expect(result.type).toBe('code_context')
+      expect(result.context.project_summary).toContain('test-project')
+      expect(result.context.navigation_guide).toBe('Check parser module')
+      expect(result.context.files.length).toBe(1)
     })
   })
 
@@ -148,17 +127,11 @@ Lib:[λsrc/lib/parser.js]`
     beforeEach(() => {
       getProject.mockReturnValue(sampleProjectLk)
       listDomains.mockReturnValue(['core', 'cli'])
-      getProjectSummary.mockReturnValue(sampleProjectSummary)
+      getProjectHeader.mockReturnValue(sampleProjectSummary)
       getDomainIndex.mockReturnValue(sampleDomainIndex)
     })
 
     it('loads domain and returns code context', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
-        direct_answer: null,
-        needs_domains: ['core'],
-        block_reason: null
-      })
       ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         navigation_guide: 'Parser module contains parsing logic',
@@ -167,10 +140,10 @@ Lib:[λsrc/lib/parser.js]`
 
       const result = await expand('/test', 'add tests for parser')
 
-      expect(getDomainIndex).toHaveBeenCalledWith('/test', ['core'])
+      // With small context optimization, all domains are loaded
+      expect(getDomainIndex).toHaveBeenCalledWith('/test', ['core', 'cli'])
       expect(ai.expandPromptCompact).toHaveBeenCalled()
       expect(result.type).toBe('code_context')
-      expect(result.calls).toBe(2)
       expect(result.context._instruction).toBe('read_files')
       expect(result.context.navigation_guide).toBe('Parser module contains parsing logic')
       expect(result.context.files[0].path).toContain('src/lib/parser.js')
@@ -178,12 +151,6 @@ Lib:[λsrc/lib/parser.js]`
     })
 
     it('handles direct answer from domain context', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
-        direct_answer: null,
-        needs_domains: ['core'],
-        block_reason: null
-      })
       ai.expandPromptCompact.mockResolvedValue({
         direct_answer: 'The parser uses regex to extract exports.',
         files: []
@@ -191,38 +158,24 @@ Lib:[λsrc/lib/parser.js]`
 
       const result = await expand('/test', 'how does the parser work')
 
-      expect(result).toEqual({
-        type: 'direct',
-        calls: 2,
-        context: {
-          _instruction: 'use_answer',
-          answer: 'The parser uses regex to extract exports.'
-        }
-      })
+      expect(result.type).toBe('direct')
+      expect(result.context._instruction).toBe('use_answer')
+      expect(result.context.answer).toBe('The parser uses regex to extract exports.')
     })
 
-    it('returns passthrough when requested domain not found', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
+    it('returns passthrough when expansion returns no files', async () => {
+      ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
-        needs_domains: ['nonexistent'],
-        block_reason: null
+        navigation_guide: null,
+        files: []
       })
-      listDomains.mockReturnValue(['core'])
 
       const result = await expand('/test', 'add tests to the project')
 
       expect(result.type).toBe('passthrough')
-      expect(result.calls).toBe(1)
     })
 
     it('returns passthrough when no files specified', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
-        direct_answer: null,
-        needs_domains: ['core'],
-        block_reason: null
-      })
       ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         files: []
@@ -231,16 +184,9 @@ Lib:[λsrc/lib/parser.js]`
       const result = await expand('/test', 'my longer test prompt here')
 
       expect(result.type).toBe('passthrough')
-      expect(result.calls).toBe(2)
     })
 
-    it('loads multiple domains when specified', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
-        direct_answer: null,
-        needs_domains: ['core', 'cli'],
-        block_reason: null
-      })
+    it('loads all domains with small context optimization', async () => {
       ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         files: [{ path: 'src/lib/parser.js', reason: 'Core parsing' }]
@@ -248,16 +194,11 @@ Lib:[λsrc/lib/parser.js]`
 
       await expand('/test', 'test the core and cli modules')
 
+      // With small context optimization, all domains are loaded at once
       expect(getDomainIndex).toHaveBeenCalledWith('/test', ['core', 'cli'])
     })
 
     it('returns file list with reasons for Claude Code to read', async () => {
-      ai.classifyPrompt.mockResolvedValue({
-        is_project: true,
-        direct_answer: null,
-        needs_domains: ['core'],
-        block_reason: null
-      })
       ai.expandPromptCompact.mockResolvedValue({
         direct_answer: null,
         navigation_guide: 'Check the parser module',

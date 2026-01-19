@@ -8,6 +8,7 @@ import {
   buildClassifyPrompt,
   buildExpandPrompt,
   buildExpandPromptCompact,
+  buildProjectSummaryPrompt,
   parseJsonResponse,
   generateDefaultResults,
   logLlmCall,
@@ -287,4 +288,26 @@ export async function expandPromptCompact(userPrompt, projectSummary, domainInde
 
   log('ANTHROPIC', 'Parse failed - returning empty result')
   return { direct_answer: null, navigation_guide: null, files: [] }
+}
+
+/**
+ * Generate a concise project summary
+ * @param {string} projectLk - Full project.lk content
+ * @param {string[]} domainNames - List of domain names
+ * @returns {Promise<string|null>} Project summary or null on failure
+ */
+export async function generateProjectSummary(projectLk, domainNames = []) {
+  if (!client) initClient()
+
+  log('ANTHROPIC', `generateProjectSummary: ${projectLk.length} chars, ${domainNames.length} domains`)
+
+  const prompt = buildProjectSummaryPrompt(projectLk, domainNames)
+  const text = await callApi(prompt, 256, 'generateProjectSummary')
+
+  if (!text) {
+    log('ANTHROPIC', 'Empty response - no summary generated')
+    return null
+  }
+
+  return text.trim()
 }

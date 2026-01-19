@@ -14,7 +14,7 @@ import {
   hashContent, getFileHash,
   getUnsyncedFiles, getDeletedFiles,
   buildContext, buildVerboseContext, buildContextForFiles, countTokens,
-  getProjectSummary, getDomainIndex,
+  getProjectSummary, getProjectFlows, getDomainIndex,
   inferGroup, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS,
   getFileExtension, isCodeFile, getAllFiles, CODE_EXTENSIONS
 } from '../src/lib/context.js'
@@ -743,6 +743,68 @@ Some architecture info.`
     const summary = getProjectSummary(tmpDir)
     expect(summary).toContain('⦓ID: PROJECT⦔')
     expect(summary).toContain('⟪NAME: MinimalProject⟫')
+  })
+})
+
+describe('getProjectFlows', () => {
+  beforeEach(() => {
+    init(tmpDir)
+  })
+
+  it('returns empty string for no project', () => {
+    fs.unlinkSync(projectPath(tmpDir))
+    expect(getProjectFlows(tmpDir)).toBe('')
+  })
+
+  it('extracts only Flows section', () => {
+    const projectContent = `⦓ID: PROJECT⦔
+⟪VIBE: minimal⟫ ⟪NAME: TestProject⟫ ⟪VERSION: 1.0.0⟫
+
+⟦Δ: Purpose⟧
+A test project for unit testing.
+
+⟦Δ: Stack⟧
+∑ Tech [Runtime⇨node, Type⇨CLI]
+
+⟦Δ: Flows⟧
+∑ Flows [CLI → parse → execute]
+∑ Data [input → validate → process → output]
+
+⟦Δ: Architecture⟧
+Some architecture info.`
+    setProject(tmpDir, projectContent)
+
+    const flows = getProjectFlows(tmpDir)
+    expect(flows).toContain('CLI → parse → execute')
+    expect(flows).toContain('input → validate → process → output')
+    // Should not include other sections
+    expect(flows).not.toContain('Purpose')
+    expect(flows).not.toContain('Architecture')
+    expect(flows).not.toContain('test project')
+  })
+
+  it('returns empty string when no Flows section exists', () => {
+    const projectContent = `⦓ID: PROJECT⦔
+⟪NAME: NoFlowsProject⟫
+
+⟦Δ: Purpose⟧
+A project without flows.`
+    setProject(tmpDir, projectContent)
+
+    const flows = getProjectFlows(tmpDir)
+    expect(flows).toBe('')
+  })
+
+  it('handles Flows section at end of file', () => {
+    const projectContent = `⦓ID: PROJECT⦔
+⟪NAME: TestProject⟫
+
+⟦Δ: Flows⟧
+∑ Flows [start → process → end]`
+    setProject(tmpDir, projectContent)
+
+    const flows = getProjectFlows(tmpDir)
+    expect(flows).toContain('start → process → end')
   })
 })
 
