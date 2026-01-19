@@ -15,10 +15,10 @@ import { log } from './config.js'
 import * as ai from './ai.js'
 
 // Minimum prompt length to trigger expansion (skip short confirmations)
-const MIN_PROMPT_LENGTH = 18
+const MIN_PROMPT_LENGTH = 5
 
 // Maximum prompt length to trigger expansion (skip very long prompts)
-const MAX_PROMPT_LENGTH = 500
+const MAX_PROMPT_LENGTH = 2000
 
 // Threshold for single-call optimization (chars)
 const SMALL_CONTEXT_THRESHOLD = 8000
