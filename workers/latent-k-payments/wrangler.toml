@@ -12,8 +12,10 @@ id = "e5218c6720204dada0ff3a6433ad5af6"
 # - STRIPE_WEBHOOK_SECRET
 # - STRIPE_PRICE_MONTHLY
 # - STRIPE_PRICE_YEARLY
-# - NODE_SERVER_TOKEN
-# - NODE_SERVER_URL
+# - LICENSE_PRIVATE_KEY    (RSA private key in PEM format for signing licenses)
+# - ADMIN_USER             (Admin username for dashboard)
+# - ADMIN_PASS             (Admin password for dashboard)
+# - NODE_SERVER_TOKEN      (Optional: for backward compatibility)
 
 [vars]
 CORS_ORIGIN = "https://latent-k.pages.dev"
