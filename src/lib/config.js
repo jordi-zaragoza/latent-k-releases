@@ -25,7 +25,8 @@ function ensureLogDir() {
 }
 
 export function log(category, ...args) {
-  if (process.env.LK_DEV !== '1') return
+  // Only log when running from source (not compiled binary)
+  if (process.pkg) return
 
   const project = basename(process.cwd())
   const msg = `[${timestamp()}] [${project}] [${category}] ${args.join(' ')}\n`
