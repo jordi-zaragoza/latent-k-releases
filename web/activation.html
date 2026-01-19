@@ -518,12 +518,12 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    // Special handling for trial already used
+                    // Special handling when user already has a key
                     if (response.status === 409 && data.existingKey) {
                         keyValue.textContent = data.existingKey;
                         keyDisplay.classList.add('active');
                         status.className = 'status success';
-                        status.textContent = 'Trial already activated for this email. Here is your key:';
+                        status.textContent = 'You already have a license. Here is your key:';
                         return;
                     }
                     throw new Error(data.error || 'Failed to generate key');
