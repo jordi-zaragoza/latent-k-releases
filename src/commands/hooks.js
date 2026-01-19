@@ -95,15 +95,16 @@ async function enableSingleCli(cli, silent = false) {
 
     let expandCmd, syncCmd, sessionCmd
     const lkBin = '/usr/local/bin/lk'
+    const jsonFlag = cli === 'gemini' ? ' --json' : ''
     if (!process.pkg) {
       const sourcePath = getSourcePath()
       expandCmd = `node ${sourcePath} expand || true`
       syncCmd = `node ${sourcePath} sync`
-      sessionCmd = `node ${sourcePath} session-info || true`
+      sessionCmd = `node ${sourcePath} session-info${jsonFlag} || true`
     } else {
       expandCmd = `${lkBin} expand || true`
       syncCmd = `${lkBin} sync`
-      sessionCmd = `${lkBin} session-info || true`
+      sessionCmd = `${lkBin} session-info${jsonFlag} || true`
     }
 
     let added = false
