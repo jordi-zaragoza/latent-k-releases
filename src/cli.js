@@ -39,8 +39,8 @@ function terminalPrint(message) {
   } catch { /* ignore if no tty */ }
 }
 
-const DEV_MODE = process.env.LK_DEV === '1'
 const IS_BINARY = !!process.pkg  // true when running as compiled binary
+const DEV_MODE = !IS_BINARY      // dev mode only when running from source
 
 program
   .name('lk')

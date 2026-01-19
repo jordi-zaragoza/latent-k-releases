@@ -62,33 +62,23 @@ describe('crypto module', () => {
       expect(decrypted).toBe(original)
     })
 
-    it('returns plain text if content starts with LK markers', () => {
+    it('throws on plain text content', () => {
       const plainLk = '⦓PROJECT⦔ test content'
-      expect(decrypt(plainLk)).toBe(plainLk)
+      expect(() => decrypt(plainLk)).toThrow('Invalid encrypted content')
     })
 
-    it('returns plain text if content starts with sum symbol', () => {
-      const plainLk = '∑ items [a, b, c]'
-      expect(decrypt(plainLk)).toBe(plainLk)
+    it('throws on null/undefined', () => {
+      expect(() => decrypt(null)).toThrow('No content to decrypt')
+      expect(() => decrypt(undefined)).toThrow('No content to decrypt')
     })
 
-    it('returns null/undefined as-is', () => {
-      expect(decrypt(null)).toBe(null)
-      expect(decrypt(undefined)).toBe(undefined)
+    it('throws on empty string', () => {
+      expect(() => decrypt('')).toThrow('No content to decrypt')
     })
 
-    it('returns empty string as-is', () => {
-      expect(decrypt('')).toBe('')
-    })
-
-    it('returns content with LK markers inside if decryption fails', () => {
-      const plainWithMarkers = 'some text ⦓ID⦔ more text'
-      expect(decrypt(plainWithMarkers)).toBe(plainWithMarkers)
-    })
-
-    it('handles content too short to be encrypted', () => {
+    it('throws on content too short to be encrypted', () => {
       const shortBase64 = Buffer.from('short').toString('base64')
-      expect(decrypt(shortBase64)).toBe(shortBase64)
+      expect(() => decrypt(shortBase64)).toThrow('Invalid encrypted content')
     })
 
     it('decrypts large content correctly', () => {
@@ -140,15 +130,9 @@ describe('crypto module', () => {
       expect(id1).toBe(id2)
     })
 
-    it('includes version marker', () => {
+    it('returns a SHA-256 hash (64 hex chars)', () => {
       const id = getDeviceIdentifier()
-      expect(id).toContain('lk-v2')
-    })
-
-    it('contains system info', () => {
-      const id = getDeviceIdentifier()
-      // Should have multiple components separated by colons
-      expect(id.split(':').length).toBeGreaterThanOrEqual(4)
+      expect(id).toMatch(/^[a-f0-9]{64}$/)
     })
   })
 
@@ -193,19 +177,11 @@ describe('crypto module', () => {
     })
   })
 
-  describe('legacy compatibility', () => {
-    it('handles corrupted content gracefully', () => {
+  describe('error handling', () => {
+    it('throws on corrupted content', () => {
       // Content that looks encrypted but isn't valid
       const corrupted = Buffer.alloc(50).fill(1).toString('base64')
-
-      // Should either return content or throw, not crash
-      expect(() => {
-        try {
-          decrypt(corrupted)
-        } catch (e) {
-          expect(e.message).toContain('Decryption failed')
-        }
-      }).not.toThrow()
+      expect(() => decrypt(corrupted)).toThrow()
     })
   })
 })

@@ -90,6 +90,7 @@ export const statePath = root => path.join(root, LK_DIR, STATE_FILE)
 export function loadState(root) {
   try {
     const raw = fs.readFileSync(statePath(root), 'utf8')
+    if (!raw.trim()) return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
     const content = decrypt(raw)
     return JSON.parse(content)
   } catch {
@@ -106,6 +107,7 @@ export function loadIgnore(root) {
   const p = ignorePath(root)
   if (!fs.existsSync(p)) return []
   const raw = fs.readFileSync(p, 'utf8')
+  if (!raw.trim()) return []
   const content = decrypt(raw)
   return content.split('\n').filter(l => l.trim() && !l.startsWith('#'))
 }

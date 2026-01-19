@@ -4,8 +4,6 @@ import { homedir } from 'os'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
-const DEV_MODE = process.env.LK_DEV === '1'
-
 // Max settings file size (1MB) to prevent DoS from corrupted files
 const MAX_SETTINGS_SIZE = 1024 * 1024
 
@@ -95,27 +93,20 @@ async function enableSingleCli(cli, silent = false) {
     const settings = await loadSettings(cli)
     settings.hooks = settings.hooks || {}
 
-    let expandCmd, syncCmd
+    let expandCmd, syncCmd, sessionCmd
     const lkBin = '/usr/local/bin/lk'
-    if (DEV_MODE) {
+    if (!process.pkg) {
       const sourcePath = getSourcePath()
-      expandCmd = `LK_DEV=1 node ${sourcePath} expand || true`
-      syncCmd = `LK_DEV=1 node ${sourcePath} sync`
+      expandCmd = `node ${sourcePath} expand || true`
+      syncCmd = `node ${sourcePath} sync`
+      sessionCmd = `node ${sourcePath} session-info || true`
     } else {
       expandCmd = `${lkBin} expand || true`
       syncCmd = `${lkBin} sync`
+      sessionCmd = `${lkBin} session-info || true`
     }
 
     let added = false
-
-    // SessionStart hook (print message + license info)
-    let sessionCmd
-    if (DEV_MODE) {
-      const sourcePath = getSourcePath()
-      sessionCmd = `LK_DEV=1 node ${sourcePath} session-info || true`
-    } else {
-      sessionCmd = `${lkBin} session-info || true`
-    }
 
     settings.hooks.SessionStart = settings.hooks.SessionStart || []
     const hasSessionHook = settings.hooks.SessionStart.some(h => h.hooks?.some(hh =>
@@ -249,7 +240,7 @@ export async function enableHooks(target = null, silent = false) {
   const clis = target ? [target] : ALL_CLIS
 
   if (!target && !silent) {
-    console.log(`Enabling hooks (${DEV_MODE ? 'source' : 'binary'} mode)...\n`)
+    console.log(`Enabling hooks (${!process.pkg ? 'source' : 'binary'} mode)...\n`)
   }
 
   for (const cli of clis) {

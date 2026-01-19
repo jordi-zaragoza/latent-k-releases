@@ -166,15 +166,15 @@ function getHookCommands(mode) {
 
   const expandCmd = mode === 'binary'
     ? `${lkBin} expand || true`
-    : `LK_DEV=1 node ${sourcePath} expand || true`
+    : `node ${sourcePath} expand || true`
 
   const syncCmd = mode === 'binary'
     ? `${lkBin} sync`
-    : `LK_DEV=1 node ${sourcePath} sync`
+    : `node ${sourcePath} sync`
 
   const sessionCmd = mode === 'binary'
     ? `${lkBin} session-info || true`
-    : `LK_DEV=1 node ${sourcePath} session-info || true`
+    : `node ${sourcePath} session-info || true`
 
   return { expandCmd, syncCmd, sessionCmd }
 }
