@@ -93,6 +93,30 @@ function extractJava(content) {
   return [...exports].sort()
 }
 
+// HTML: extract IDs, form names, and data attributes
+function extractHTML(content) {
+  const exports = new Set()
+  // IDs
+  for (const m of content.matchAll(/\bid=["']([^"']+)["']/gi)) exports.add(m[1])
+  // Form names
+  for (const m of content.matchAll(/<form[^>]+name=["']([^"']+)["']/gi)) exports.add(m[1])
+  // Data component attributes
+  for (const m of content.matchAll(/data-component=["']([^"']+)["']/gi)) exports.add(m[1])
+  return [...exports].sort()
+}
+
+// CSS: extract class and ID selectors
+function extractCSS(content) {
+  const exports = new Set()
+  // Class selectors (followed by space, brace, comma, colon, or end)
+  for (const m of content.matchAll(/\.([a-zA-Z_][\w-]*)(?=\s|[{,:]|$)/g)) exports.add(m[1])
+  // ID selectors
+  for (const m of content.matchAll(/#([a-zA-Z_][\w-]*)(?=\s|[{,:]|$)/g)) exports.add(m[1])
+  // CSS custom properties
+  for (const m of content.matchAll(/--([\w-]+)\s*:/g)) exports.add(`--${m[1]}`)
+  return [...exports].sort()
+}
+
 // Main extractor
 export function extractExports(filePath) {
   if (!fs.existsSync(filePath)) return []
@@ -106,6 +130,8 @@ export function extractExports(filePath) {
   if (['rb'].includes(ext)) return extractRuby(stripRuby(content))
   if (['rs'].includes(ext)) return extractRust(stripRust(content))
   if (['java', 'kt', 'kts'].includes(ext)) return extractJava(stripJava(content))
+  if (['html', 'htm'].includes(ext)) return extractHTML(content)
+  if (['css'].includes(ext)) return extractCSS(content)
   return []
 }
 
