@@ -231,6 +231,35 @@ async function verifyStripeWebhook(payload, signature, secret) {
 }
 
 /**
+ * Handle trial license request
+ * POST /api/trial
+ * Proxies to Node.js server
+ */
+async function handleTrial(request, env) {
+  const origin = request.headers.get('Origin');
+
+  try {
+    const body = await request.json();
+
+    const response = await fetch(`${env.NODE_SERVER_URL}/api/trial`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    return jsonResponse(data, response.status, origin);
+
+  } catch (error) {
+    console.error('Trial error:', error);
+    return jsonResponse({ error: 'Failed to process trial request' }, 500, origin);
+  }
+}
+
+/**
  * Get license by session ID
  * GET /api/license?session_id=xxx
  */
@@ -291,6 +320,10 @@ export default {
 
     if (path === '/api/license' && method === 'GET') {
       return handleGetLicense(request, env);
+    }
+
+    if (path === '/api/trial' && method === 'POST') {
+      return handleTrial(request, env);
     }
 
     // Health check
