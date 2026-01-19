@@ -2,13 +2,6 @@
 
 Auto-sync context for AI coding assistants (Claude Code, Gemini CLI).
 
-## Benchmarks
-
-| Project Size | Files | LK Speed Improvement | Report |
-|--------------|-------|---------------------|--------|
-| Large | 28K | **1.61x faster** | [View PDF](https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.5.1/benchmark_big.pdf) |
-| Small | 6K | **1.38x faster** | [View PDF](https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.5.1/benchmark_small.pdf) |
-
 ## Features
 
 - **Prompt expansion**: AI analyzes your prompt and injects relevant code context
@@ -20,7 +13,7 @@ Auto-sync context for AI coding assistants (Claude Code, Gemini CLI).
 ## Installation
 
 ```bash
-curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.5.1/install.sh | bash
+curl -fsSL https://github.com/jordi-zaragoza/latent-k-releases/releases/download/v1.5.3/install.sh | bash
 ```
 
 Binary is installed to `/usr/local/bin/lk`.
