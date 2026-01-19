@@ -160,6 +160,13 @@ ${context.answer}
       parts.push('')
     }
 
+    // Add project summary if present
+    if (context.project_summary) {
+      parts.push('PROJECT SUMMARY:')
+      parts.push(context.project_summary)
+      parts.push('')
+    }
+
     parts.push('RELEVANT CODE CONTEXT:', '')
 
     for (const [filePath, content] of Object.entries(context.files)) {
