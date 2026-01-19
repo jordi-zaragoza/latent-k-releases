@@ -27,6 +27,8 @@ const PLAN_DAYS = {
 // Admin credentials - MUST be set via environment variables
 const ADMIN_USER = process.env.ADMIN_USER
 const ADMIN_PASS = process.env.ADMIN_PASS
+// Worker token for programmatic access from Cloudflare Worker (optional)
+const WORKER_TOKEN = process.env.WORKER_TOKEN
 
 if (!ADMIN_USER || !ADMIN_PASS) {
   console.error('ERROR: ADMIN_USER and ADMIN_PASS environment variables are required')
@@ -280,9 +282,15 @@ const server = createServer(async (req, res) => {
     return
   }
 
-  // API: Generate license (protected - admin only)
+  // API: Generate license (protected - admin or worker token)
   if (req.method === 'POST' && req.url === '/api/generate') {
-    if (!isAuthenticated()) {
+    // Check for worker token OR session authentication
+    const auth = req.headers.authorization
+    const bearerToken = auth?.startsWith('Bearer ') ? auth.slice(7) : null
+    const isWorkerAuth = WORKER_TOKEN && bearerToken === WORKER_TOKEN
+    const isSessionAuth = isAuthenticated()
+
+    if (!isWorkerAuth && !isSessionAuth) {
       res.writeHead(401, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Unauthorized' }))
       return
@@ -335,7 +343,8 @@ const server = createServer(async (req, res) => {
       })
       saveLicenses(licenses)
 
-      console.log(`[LICENSE] Generated license for ${normalizedEmail} (${plan || 'yearly'}) expires ${new Date(expires).toISOString()}`)
+      const source = isWorkerAuth ? 'worker' : 'admin'
+      console.log(`[LICENSE] Generated license for ${normalizedEmail} (${plan || 'yearly'}) via ${source}, expires ${new Date(expires).toISOString()}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({
         key,
