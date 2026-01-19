@@ -8,6 +8,7 @@ import {
   buildClassifyPrompt,
   buildExpandPrompt,
   buildExpandPromptCompact,
+  buildProjectSummaryPrompt,
   extractJsonFromText,
   generateDefaultResults,
   logLlmCall,
@@ -406,4 +407,26 @@ export async function expandPromptCompact(userPrompt, projectSummary, domainInde
 
   log('GEMINI', 'Parse failed - returning empty result')
   return { direct_answer: null, navigation_guide: null, files: [] }
+}
+
+/**
+ * Generate a concise project summary
+ * @param {string} projectLk - Full project.lk content
+ * @param {string[]} domainNames - List of domain names
+ * @returns {Promise<string|null>} Project summary or null on failure
+ */
+export async function generateProjectSummary(projectLk, domainNames = []) {
+  if (!model) initClient()
+
+  log('GEMINI', `generateProjectSummary: ${projectLk.length} chars, ${domainNames.length} domains`)
+
+  const prompt = buildProjectSummaryPrompt(projectLk, domainNames)
+  const text = await callTextApi(prompt, 'generateProjectSummary')
+
+  if (!text) {
+    log('GEMINI', 'Empty response - no summary generated')
+    return null
+  }
+
+  return text.trim()
 }

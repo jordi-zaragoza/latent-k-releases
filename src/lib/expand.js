@@ -4,13 +4,13 @@
  * Flow:
  * 1. Receive user prompt
  * 2. Load project.lk + list available domains
- * 3. Call AI: classify prompt + decide if domain needed
- * 4. If domain needed: load domain.lk, call AI again
+ * 3. For small projects: single AI call with all context
+ * 4. For large projects: classify first, then expand with selected domains
  * 5. Return file paths + reasons (Claude Code reads them with Read tool)
  */
 
 import path from 'path'
-import { getProject, listDomains, getProjectSummary, getDomainIndex } from './context.js'
+import { getProject, listDomains, getProjectHeader, getDomainIndex } from './context.js'
 import { log } from './config.js'
 import * as ai from './ai.js'
 
@@ -20,161 +20,35 @@ const MIN_PROMPT_LENGTH = 18
 // Maximum prompt length to trigger expansion (skip very long prompts)
 const MAX_PROMPT_LENGTH = 500
 
+// Threshold for single-call optimization (chars)
+const SMALL_CONTEXT_THRESHOLD = 8000
+
+// Module-level cache for project header (cleared on new root)
+let cachedHeader = { root: null, content: null }
+
 /**
- * Main expand function - returns structured JSON context
- * @param {string} root - Project root directory
- * @param {string} prompt - User's prompt
- * @returns {Promise<{type: string, calls: number, context: object|null}>}
+ * Get project header with module-level caching
  */
-export async function expand(root, prompt) {
-  // Skip short prompts (confirmations like "ok", "yes", "hazlo", etc.)
-  if (prompt.trim().length < MIN_PROMPT_LENGTH) {
-    log('EXPAND', `Prompt too short (${prompt.trim().length} chars), bypassing`)
-    return {
-      type: 'passthrough',
-      calls: 0,
-      context: null
+function getCachedHeader(root) {
+  if (cachedHeader.root !== root) {
+    cachedHeader = {
+      root,
+      content: getProjectHeader(root)
     }
   }
+  return cachedHeader.content
+}
 
-  // Skip very long prompts (likely contain their own context)
-  if (prompt.trim().length > MAX_PROMPT_LENGTH) {
-    log('EXPAND', `Prompt too long (${prompt.trim().length} chars), bypassing`)
-    return {
-      type: 'passthrough',
-      calls: 0,
-      context: null
-    }
-  }
-
-  const projectLk = getProject(root)
-
-  // No project context available
-  if (!projectLk || projectLk.includes('TODO')) {
-    log('EXPAND', 'No project context, passing through')
-    return {
-      type: 'passthrough',
-      calls: 0,
-      context: null
-    }
-  }
-
-  // Get available domains for classification
-  const availableDomains = listDomains(root)
-  log('EXPAND', `Available domains: ${availableDomains.join(', ') || 'none'}`)
-
-  // 1. First call - classify prompt
-  log('EXPAND', 'Classifying prompt...')
-  const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains)
-  log('EXPAND', `Classification: ${JSON.stringify(classification)}`)
-
-  // Block meta questions about the context system
-  if (classification.block_reason) {
-    log('EXPAND', `Blocked: ${classification.block_reason}`)
-    return {
-      type: 'blocked',
-      calls: 1,
-      context: null
-    }
-  }
-
-  // Not a project question - pass through
-  if (!classification.is_project) {
-    log('EXPAND', 'Not a project question, passing through')
-    return {
-      type: 'passthrough',
-      calls: 1,
-      context: null
-    }
-  }
-
-  // Direct answer available from project metadata
-  if (classification.direct_answer) {
-    log('EXPAND', 'Direct answer from project metadata')
-    return {
-      type: 'direct',
-      calls: 1,
-      context: {
-        _instruction: 'use_answer',
-        answer: classification.direct_answer
-      }
-    }
-  }
-
-  // Needs domain details
-  const domainNames = classification.needs_domains || []
-  if (domainNames.length === 0) {
-    log('EXPAND', 'No domains needed, passing through')
-    return {
-      type: 'passthrough',
-      calls: 1,
-      context: null
-    }
-  }
-
-  // 2. Resolve requested domains (case-insensitive matching)
-  log('EXPAND', `Loading domains: ${domainNames.join(', ')}`)
-  const availableLower = availableDomains.map(d => d.toLowerCase())
-  const resolvedDomains = []
-
-  for (const name of domainNames) {
-    const nameLower = name.toLowerCase()
-    const idx = availableLower.indexOf(nameLower)
-    if (idx >= 0) {
-      // Use actual filename from availableDomains (preserves case for file access)
-      resolvedDomains.push(availableDomains[idx])
-    }
-  }
-
-  if (resolvedDomains.length === 0) {
-    log('EXPAND', 'No domains found')
-    return {
-      type: 'passthrough',
-      calls: 1,
-      context: null
-    }
-  }
-
-  // 3. Second call - expand with compact context (reduced tokens ~60-70%)
-  const projectSummary = getProjectSummary(root)
-  const domainIndex = getDomainIndex(root, resolvedDomains)
-  log('EXPAND', `Expanding with compact context (${projectSummary.length + domainIndex.length} chars)...`)
-
-  const expansion = await ai.expandPromptCompact(prompt, projectSummary, domainIndex)
-
-  // Direct answer with domain context
-  if (expansion.direct_answer) {
-    log('EXPAND', 'Direct answer from domain context')
-    return {
-      type: 'direct',
-      calls: 2,
-      context: {
-        _instruction: 'use_answer',
-        answer: expansion.direct_answer
-      }
-    }
-  }
-
-  // Build file list with reasons
-  const files = expansion.files || []
-  if (files.length === 0) {
-    log('EXPAND', 'No files specified')
-    return {
-      type: 'passthrough',
-      calls: 2,
-      context: null
-    }
-  }
-
-  // 4. Build file list (without loading content - Claude Code will read them)
-  log('EXPAND', `Selected ${files.length} file(s) for Claude Code to read`)
+/**
+ * Build validated file list from expansion result
+ */
+function buildFileList(root, files) {
   const fileList = []
   for (const file of files) {
-    // Remove @ prefix from path aliases (e.g. @app/... -> app/...)
     const cleanPath = file.path.startsWith('@') ? file.path.slice(1) : file.path
     const fullPath = path.resolve(root, cleanPath)
 
-    // Security: validate path is within project root (prevent path traversal)
+    // Security: validate path is within project root
     if (!fullPath.startsWith(root + path.sep) && fullPath !== root) {
       log('EXPAND', `Skipping path outside project: ${file.path}`)
       continue
@@ -185,14 +59,193 @@ export async function expand(root, prompt) {
       reason: file.reason || 'Relevant to the task'
     })
   }
+  return fileList
+}
 
+/**
+ * Build success response with file context
+ */
+function buildCodeContext(calls, projectHeader, expansion, fileList) {
   return {
     type: 'code_context',
-    calls: 2,
+    calls,
     context: {
       _instruction: 'read_files',
+      project_summary: projectHeader,
       navigation_guide: expansion.navigation_guide || null,
       files: fileList
     }
   }
+}
+
+/**
+ * Main expand function - returns structured JSON context
+ * @param {string} root - Project root directory
+ * @param {string} prompt - User's prompt
+ * @returns {Promise<{type: string, calls: number, context: object|null}>}
+ */
+export async function expand(root, prompt) {
+  const trimmedPrompt = prompt.trim()
+
+  // Early exit: prompt length checks
+  if (trimmedPrompt.length < MIN_PROMPT_LENGTH) {
+    log('EXPAND', `Prompt too short (${trimmedPrompt.length} chars), bypassing`)
+    return { type: 'passthrough', calls: 0, context: null }
+  }
+
+  if (trimmedPrompt.length > MAX_PROMPT_LENGTH) {
+    log('EXPAND', `Prompt too long (${trimmedPrompt.length} chars), bypassing`)
+    return { type: 'passthrough', calls: 0, context: null }
+  }
+
+  const projectLk = getProject(root)
+
+  // Early exit: no project context
+  if (!projectLk || projectLk.includes('TODO')) {
+    log('EXPAND', 'No project context, passing through')
+    return { type: 'passthrough', calls: 0, context: null }
+  }
+
+  const availableDomains = listDomains(root)
+  log('EXPAND', `Available domains: ${availableDomains.join(', ') || 'none'}`)
+
+  // Early exit: no domains
+  if (availableDomains.length === 0) {
+    log('EXPAND', 'No domains available, passing through')
+    return { type: 'passthrough', calls: 0, context: null }
+  }
+
+  // Get cached project header (includes Purpose, Stack, Entry, Flows)
+  const projectHeader = getCachedHeader(root)
+
+  // Determine if we can use single-call optimization
+  let domainIndex = null
+  let useSingleCall = false
+
+  if (availableDomains.length === 1) {
+    // Single domain: nothing to classify
+    log('EXPAND', 'Single domain, skipping classification')
+    domainIndex = getDomainIndex(root, availableDomains)
+    useSingleCall = true
+  } else {
+    // Multiple domains: check total context size
+    const fullDomainIndex = getDomainIndex(root, availableDomains)
+    const totalSize = projectHeader.length + fullDomainIndex.length
+
+    if (totalSize <= SMALL_CONTEXT_THRESHOLD) {
+      log('EXPAND', `Small context (${totalSize} chars), skipping classification`)
+      domainIndex = fullDomainIndex
+      useSingleCall = true
+    }
+  }
+
+  // === SINGLE CALL PATH ===
+  if (useSingleCall) {
+    log('EXPAND', 'Expanding with single call...')
+    const expansion = await ai.expandPromptCompact(prompt, projectHeader, domainIndex)
+
+    if (expansion.direct_answer) {
+      log('EXPAND', 'Direct answer from context')
+      return {
+        type: 'direct',
+        calls: 1,
+        context: {
+          _instruction: 'use_answer',
+          project_summary: projectHeader,
+          answer: expansion.direct_answer
+        }
+      }
+    }
+
+    const files = expansion.files || []
+    if (files.length === 0) {
+      log('EXPAND', 'No files specified')
+      return { type: 'passthrough', calls: 1, context: null }
+    }
+
+    log('EXPAND', `Selected ${files.length} file(s) for Claude Code to read`)
+    const fileList = buildFileList(root, files)
+
+    return buildCodeContext(1, projectHeader, expansion, fileList)
+  }
+
+  // === DUAL CALL PATH ===
+  // 1. First call - classify prompt
+  log('EXPAND', 'Classifying prompt...')
+  const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains)
+  log('EXPAND', `Classification: ${JSON.stringify(classification)}`)
+
+  if (classification.block_reason) {
+    log('EXPAND', `Blocked: ${classification.block_reason}`)
+    return { type: 'blocked', calls: 1, context: null }
+  }
+
+  if (!classification.is_project) {
+    log('EXPAND', 'Not a project question, passing through')
+    return { type: 'passthrough', calls: 1, context: null }
+  }
+
+  if (classification.direct_answer) {
+    log('EXPAND', 'Direct answer from project metadata')
+    return {
+      type: 'direct',
+      calls: 1,
+      context: {
+        _instruction: 'use_answer',
+        project_summary: projectHeader,
+        answer: classification.direct_answer
+      }
+    }
+  }
+
+  // Resolve requested domains
+  const domainNames = classification.needs_domains || []
+  if (domainNames.length === 0) {
+    log('EXPAND', 'No domains needed, passing through')
+    return { type: 'passthrough', calls: 1, context: null }
+  }
+
+  log('EXPAND', `Loading domains: ${domainNames.join(', ')}`)
+  const availableLower = availableDomains.map(d => d.toLowerCase())
+  const resolvedDomains = domainNames
+    .map(name => {
+      const idx = availableLower.indexOf(name.toLowerCase())
+      return idx >= 0 ? availableDomains[idx] : null
+    })
+    .filter(Boolean)
+
+  if (resolvedDomains.length === 0) {
+    log('EXPAND', 'No domains found')
+    return { type: 'passthrough', calls: 1, context: null }
+  }
+
+  // 2. Second call - expand with selected domains
+  domainIndex = getDomainIndex(root, resolvedDomains)
+  log('EXPAND', `Expanding with compact context (${projectHeader.length + domainIndex.length} chars)...`)
+
+  const expansion = await ai.expandPromptCompact(prompt, projectHeader, domainIndex)
+
+  if (expansion.direct_answer) {
+    log('EXPAND', 'Direct answer from domain context')
+    return {
+      type: 'direct',
+      calls: 2,
+      context: {
+        _instruction: 'use_answer',
+        project_summary: projectHeader,
+        answer: expansion.direct_answer
+      }
+    }
+  }
+
+  const files = expansion.files || []
+  if (files.length === 0) {
+    log('EXPAND', 'No files specified')
+    return { type: 'passthrough', calls: 2, context: null }
+  }
+
+  log('EXPAND', `Selected ${files.length} file(s) for Claude Code to read`)
+  const fileList = buildFileList(root, files)
+
+  return buildCodeContext(2, projectHeader, expansion, fileList)
 }

@@ -13,7 +13,7 @@ import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, loadDomain, listDomains, buildDomain } from './lib/context.js'
+import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getSyntax, loadDomain, listDomains, buildDomain } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, isLicensed, checkAccess } from './lib/license.js'
 import { isConfigured, getAiProvider } from './lib/config.js'
@@ -188,6 +188,7 @@ if (!IS_BINARY) {
     .description('[DEV] Output full .lk context (syntax + project + domains)')
     .option('-v, --verbose', 'Verbose output (human readable)')
     .option('-t, --tokens', 'Count tokens')
+    .option('-s, --syntax', 'Only syntax.lk')
     .option('-p, --project', 'Only project.lk')
     .option('-d, --domain <name>', 'Filter by domain')
     .action((options) => {
@@ -200,7 +201,11 @@ if (!IS_BINARY) {
 
       let context = ''
 
-      if (options.project) {
+      // Get raw content
+      if (options.syntax) {
+        // -s: Only syntax.lk
+        context = getSyntax(cwd)
+      } else if (options.project) {
         // -p: Only project.lk
         context = getProject(cwd)
       } else if (options.domain) {
@@ -212,12 +217,21 @@ if (!IS_BINARY) {
           process.exit(1)
         }
         context = buildDomain(domain.id, domain.domain, domain.vibe, domain.groups, domain.invariants)
-      } else if (options.verbose) {
-        // -v: Verbose (human readable)
-        context = buildVerboseContext(cwd)
       } else {
-        // Default: compact (minified)
-        context = buildContext(cwd)
+        // Full context
+        context = buildVerboseContext(cwd)
+      }
+
+      // Minify unless verbose
+      if (!options.verbose) {
+        context = context
+          .split('\n').map(l => l.trim()).filter(l => l).join(' ')
+          .replace(/  +/g, ' ')
+          .replace(/⦓ID: DOMAIN-/g, '⦓').replace(/⦓ID: /g, '⦓')
+          .replace(/⟦Δ: Domain ⫸ /g, '⟦').replace(/⟦Δ: /g, '⟦')
+          .replace(/∑ /g, '∑')
+          .replace(/\[\s+/g, '[').replace(/\s+\]/g, ']').replace(/,\s+/g, ',')
+          .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[').replace(/\s+\[\]/g, '')
       }
 
       if (options.tokens) {

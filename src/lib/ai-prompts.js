@@ -135,6 +135,11 @@ Generate a project.lk file with this EXACT format (fill in the values):
 
 ⟦Δ: Stack⟧
 ∑ Tech [Runtime⇨[node/python/go/etc], Type⇨[CLI/API/Web/Library]]
+∑ Deps [list 3-6 KEY dependencies only: frameworks, ORMs, AI SDKs, etc. Skip trivial utils]
+
+⟦Δ: Entry⟧
+∑ Run [how to run: "npm start", "python main.py", etc.]
+∑ Commands [if CLI: list main commands. If API: list main endpoints. If library: list main exports]
 
 ⟦Δ: Flows⟧
 ∑ Flows [
@@ -459,6 +464,31 @@ EXAMPLES:
 - "add a new command" → {"direct_answer": null, "navigation_guide": "Commands are in src/commands/", "files": [{"path": "src/commands/init.js", "reason": "Template for new commands"}, {"path": "src/cli.js", "reason": "Register new command here"}]}
 
 Return ONLY JSON, no markdown.`
+}
+
+/**
+ * Build prompt for generating a concise project summary for Claude Code
+ * @param {string} projectLk - Full project.lk content
+ * @param {string[]} domainNames - List of domain names
+ * @returns {string} Prompt for generating summary
+ */
+export function buildProjectSummaryPrompt(projectLk, domainNames = []) {
+  const domainList = domainNames.length > 0 ? domainNames.join(', ') : 'none'
+
+  return `Generate a concise project summary for an AI coding assistant.
+
+PROJECT METADATA:
+${projectLk}
+
+DOMAINS: [${domainList}]
+
+Write a brief summary with this format:
+1. First line: 1-2 sentences explaining what this project does and what type it is (CLI, API, library, etc.)
+2. Second line: "Domains: ${domainList}" (list the available code domains)
+
+Do NOT include flows or data pipelines - those will be shown separately.
+
+Return ONLY the summary text, no markdown.`
 }
 
 /**
