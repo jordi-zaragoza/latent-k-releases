@@ -293,7 +293,19 @@ export async function generateProject({ files, packageJson, context }) {
     throw new Error('Empty response from API')
   }
 
-  return text.replace(/```[a-z]*\n?/g, '').trim()
+  // Parse JSON response with lk and human versions
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  try {
+    const parsed = JSON.parse(clean)
+    if (parsed.lk && parsed.human) {
+      return { lk: parsed.lk.trim(), human: parsed.human.trim() }
+    }
+  } catch (err) {
+    log('GEMINI', `Failed to parse project JSON: ${err.message}`)
+  }
+
+  // Fallback: treat entire response as lk content (backwards compatibility)
+  return { lk: clean, human: null }
 }
 
 export async function generateIgnore({ files, globalPatterns = [] }) {

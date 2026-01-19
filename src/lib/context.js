@@ -238,11 +238,11 @@ export function getProjectHeader(root) {
   return buildProjectHeader(project)
 }
 
-export function setProject(root, content) {
+export function setProject(root, content, humanContent = null) {
   init(root)
   fs.writeFileSync(projectPath(root), encrypt(content))
-  // Also generate project_h.lk (header/summary)
-  const header = buildProjectHeader(content)
+  // Save project_h.lk - use provided human content or fallback to extracted header
+  const header = humanContent || buildProjectHeader(content)
   fs.writeFileSync(projectHeaderPath(root), encrypt(header))
 }
 

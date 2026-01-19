@@ -168,13 +168,25 @@ export async function generateProject({ files, packageJson, context }) {
   log('ANTHROPIC', `generateProject: ${files.length} files, context: ${context?.length || 0} chars`)
 
   const prompt = buildProjectPrompt({ files, packageJson, context })
-  const text = await callApi(prompt, 1024, 'generateProject')
+  const text = await callApi(prompt, 2048, 'generateProject')
 
   if (!text) {
     throw new Error('Empty response from API')
   }
 
-  return text.replace(/```[a-z]*\n?/g, '').trim()
+  // Parse JSON response with lk and human versions
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  try {
+    const parsed = JSON.parse(clean)
+    if (parsed.lk && parsed.human) {
+      return { lk: parsed.lk.trim(), human: parsed.human.trim() }
+    }
+  } catch (err) {
+    log('ANTHROPIC', `Failed to parse project JSON: ${err.message}`)
+  }
+
+  // Fallback: treat entire response as lk content (backwards compatibility)
+  return { lk: clean, human: null }
 }
 
 export async function generateIgnore({ files, globalPatterns = [] }) {

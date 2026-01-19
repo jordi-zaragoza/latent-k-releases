@@ -6,8 +6,8 @@ import os from 'os'
 // Enable DEV mode for tests (bypasses license requirement)
 process.env.LK_DEV = '1'
 import {
-  lkPath, domainsPath, domainPath, syntaxPath, projectPath, exists,
-  init, getSyntax, setSyntax, getProject, setProject,
+  lkPath, domainsPath, domainPath, syntaxPath, projectPath, projectHeaderPath, exists,
+  init, getSyntax, setSyntax, getProject, getProjectHeader, setProject,
   parseEntry, buildEntry,
   parseDomain, buildDomain, listDomains, loadDomain, saveDomain,
   addEntry, removeEntry, getAllEntries,
@@ -107,6 +107,33 @@ describe('Syntax and Project getters/setters', () => {
   it('setProject creates and writes content', () => {
     setProject(tmpDir, 'test project')
     expect(getProject(tmpDir)).toBe('test project')
+  })
+
+  it('setProject saves human content to project_h.lk when provided', () => {
+    const lkContent = '⦓ID: PROJECT⦔\n⟪NAME: Test⟫'
+    const humanContent = 'PROJECT: Test v1.0\nPurpose: A test project.'
+    setProject(tmpDir, lkContent, humanContent)
+    expect(getProject(tmpDir)).toBe(lkContent)
+    expect(getProjectHeader(tmpDir)).toBe(humanContent)
+  })
+
+  it('setProject generates header from lk content when humanContent is null', () => {
+    const lkContent = `⦓ID: PROJECT⦔
+⟪NAME: Test⟫
+⟦Δ: Purpose⟧
+Test purpose here.`
+    setProject(tmpDir, lkContent, null)
+    const header = getProjectHeader(tmpDir)
+    expect(header).toContain('⦓ID: PROJECT⦔')
+    expect(header).toContain('Purpose')
+  })
+
+  it('getProjectHeader returns empty for uninitialized', () => {
+    expect(getProjectHeader(tmpDir)).toBe('')
+  })
+
+  it('projectHeaderPath returns correct path', () => {
+    expect(projectHeaderPath('/root')).toBe('/root/.lk/project_h.lk')
   })
 })
 

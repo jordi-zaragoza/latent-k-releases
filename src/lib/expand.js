@@ -27,13 +27,21 @@ const SMALL_CONTEXT_THRESHOLD = 8000
 let cachedHeader = { root: null, content: null }
 
 /**
- * Get project header with module-level caching
+ * Compact text by removing extra whitespace and joining lines
+ */
+function compactText(text) {
+  if (!text) return ''
+  return text.split('\n').map(l => l.trim()).filter(l => l).join(' ')
+}
+
+/**
+ * Get project header with module-level caching (compacted for context)
  */
 function getCachedHeader(root) {
   if (cachedHeader.root !== root) {
     cachedHeader = {
       root,
-      content: getProjectHeader(root)
+      content: compactText(getProjectHeader(root))
     }
   }
   return cachedHeader.content

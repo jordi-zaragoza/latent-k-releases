@@ -81,8 +81,8 @@ export async function syncProjectOnly() {
     const fullContext = buildContext(cwd)
 
     log('SYNC', `Regenerating project.lk (${allFiles.length} files)...`)
-    const projectContent = await generateProject({ files: allFiles, packageJson, context: fullContext })
-    setProject(cwd, projectContent)
+    const result = await generateProject({ files: allFiles, packageJson, context: fullContext })
+    setProject(cwd, result.lk, result.human)
 
     log('SYNC', '=== Project sync complete ===')
     return { synced: true }
@@ -347,10 +347,10 @@ async function handleProjectRegeneration(
       const pkgPath = path.join(cwd, 'package.json')
       const packageJson = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, 'utf8') : null
       const fullContext = buildContext(cwd)
-      const projectContent = await withSpinner('Regenerating project.lk...', () =>
+      const result = await withSpinner('Regenerating project.lk...', () =>
         generateProject({ files: allFiles, packageJson, context: fullContext })
       )
-      setProject(cwd, projectContent)
+      setProject(cwd, result.lk, result.human)
       print(`✓ Regenerated project.lk (${reason})`)
       state.pendingRegen = false
       state.pendingChanges = 0
