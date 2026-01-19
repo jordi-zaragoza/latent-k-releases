@@ -32,6 +32,66 @@ const DEFAULT_FILE_THRESHOLD = 5
 const DEFAULT_DOMAIN_THRESHOLD = 2
 const REGEN_INTERVAL = 10
 
+/**
+ * Sync only the project.lk file (no domain analysis)
+ * Called at session start to avoid empty API calls and keep project context fresh
+ * @returns {{ synced: boolean, error?: string }}
+ */
+export async function syncProjectOnly() {
+  const cwd = process.cwd()
+
+  log('SYNC', '=== Starting project-only sync ===')
+
+  // Check access (license or trial, verify email)
+  const userEmail = getClaudeUserEmail()
+  const access = await checkAccess(userEmail)
+  if (!access.allowed) {
+    log('SYNC', 'Access denied:', access.message)
+    return { synced: false, error: access.message }
+  }
+
+  if (!isConfigured()) {
+    log('SYNC', 'Not configured')
+    return { synced: false, error: 'Not configured' }
+  }
+
+  // Check if .lk exists
+  if (!fs.existsSync(path.join(cwd, '.lk'))) {
+    log('SYNC', 'No .lk directory')
+    return { synced: false, error: 'No context' }
+  }
+
+  // Check if project needs regeneration
+  const currentProject = getProject(cwd)
+  const needsRegen = currentProject.includes('TODO') || currentProject.trim() === ''
+
+  if (!needsRegen) {
+    log('SYNC', 'Project already up to date')
+    return { synced: true }
+  }
+
+  // Regenerate project.lk
+  try {
+    const pkgPath = path.join(cwd, 'package.json')
+    const packageJson = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, 'utf8') : null
+    const globalPatterns = getIgnorePatterns()
+    const projectPatterns = loadIgnore(cwd)
+    const ignorePatterns = [...globalPatterns, ...projectPatterns]
+    const allFiles = getAllFiles(cwd).filter(f => !isIgnored(f, ignorePatterns))
+    const fullContext = buildContext(cwd)
+
+    log('SYNC', `Regenerating project.lk (${allFiles.length} files)...`)
+    const projectContent = await generateProject({ files: allFiles, packageJson, context: fullContext })
+    setProject(cwd, projectContent)
+
+    log('SYNC', '=== Project sync complete ===')
+    return { synced: true }
+  } catch (err) {
+    log('SYNC', `Failed to generate project.lk: ${err.message}`)
+    return { synced: false, error: err.message }
+  }
+}
+
 export async function sync(options = {}) {
   log('HOOK', '#### Stop hook started ####')
 
