@@ -440,10 +440,10 @@
                             <input type="radio" name="plan" value="monthly">
                             <div class="plan-card">
                                 <div class="plan-name">Monthly</div>
-                                <div class="plan-price">$9<span>/mo</span></div>
+                                <div class="plan-price">$9</div>
                                 <div class="plan-features">
-                                    <div class="plan-feature">1 month license</div>
-                                    <div class="plan-feature">All features</div>
+                                    <div class="plan-feature">30-day license</div>
+                                    <div class="plan-feature">One-time payment</div>
                                     <div class="plan-feature">Email support</div>
                                 </div>
                             </div>
@@ -452,10 +452,10 @@
                             <input type="radio" name="plan" value="yearly">
                             <div class="plan-card">
                                 <div class="plan-name">Yearly</div>
-                                <div class="plan-price">$79<span>/yr</span></div>
+                                <div class="plan-price">$79</div>
                                 <div class="plan-features">
-                                    <div class="plan-feature">12 month license</div>
-                                    <div class="plan-feature">All features</div>
+                                    <div class="plan-feature">365-day license</div>
+                                    <div class="plan-feature">One-time payment</div>
                                     <div class="plan-feature">Priority support</div>
                                 </div>
                             </div>
@@ -483,15 +483,93 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <p>LATENT-K v1.3.6</p>
+            <p>LATENT-K v1.4.7</p>
         </footer>
     </div>
 
     <script>
+        // Configuration - Payments Worker URL
+        const PAYMENTS_API = 'https://api.latent-k.dev';
+
         const form = document.getElementById('activationForm');
         const status = document.getElementById('status');
         const keyDisplay = document.getElementById('keyDisplay');
         const keyValue = document.getElementById('keyValue');
+
+        // Check for return from Stripe checkout
+        async function checkStripeReturn() {
+            const params = new URLSearchParams(window.location.search);
+            const success = params.get('success');
+            const canceled = params.get('canceled');
+            const sessionId = params.get('session_id');
+
+            if (canceled) {
+                status.className = 'status error';
+                status.textContent = 'Payment was canceled. You can try again when ready.';
+                // Clean URL
+                window.history.replaceState({}, '', window.location.pathname);
+                return;
+            }
+
+            if (success && sessionId) {
+                // Show loading while fetching license
+                form.classList.add('loading');
+                status.className = 'status success';
+                status.textContent = 'Payment successful! Retrieving your license...';
+
+                // Poll for license (webhook may take a moment)
+                let attempts = 0;
+                const maxAttempts = 10;
+                const pollInterval = 2000;
+
+                const pollForLicense = async () => {
+                    try {
+                        const response = await fetch(`${PAYMENTS_API}/api/license?session_id=${sessionId}`);
+                        const data = await response.json();
+
+                        if (response.ok && data.key) {
+                            // Got the license!
+                            keyValue.textContent = data.key;
+                            keyDisplay.classList.add('active');
+
+                            const expiresDate = data.expires ? new Date(data.expires).toLocaleDateString() : 'N/A';
+                            const planLabel = data.plan === 'monthly' ? 'Monthly' : 'Yearly';
+                            status.className = 'status success';
+                            status.textContent = `${planLabel} license activated for ${data.email}. Valid until ${expiresDate}.`;
+
+                            form.classList.remove('loading');
+                            // Clean URL
+                            window.history.replaceState({}, '', window.location.pathname);
+                            return;
+                        }
+
+                        // Not ready yet, retry
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            setTimeout(pollForLicense, pollInterval);
+                        } else {
+                            status.className = 'status error';
+                            status.textContent = 'License is being processed. Please check back in a few minutes or contact support.';
+                            form.classList.remove('loading');
+                        }
+                    } catch (error) {
+                        attempts++;
+                        if (attempts < maxAttempts) {
+                            setTimeout(pollForLicense, pollInterval);
+                        } else {
+                            status.className = 'status error';
+                            status.textContent = 'Unable to retrieve license. Please contact support with your session ID: ' + sessionId;
+                            form.classList.remove('loading');
+                        }
+                    }
+                };
+
+                pollForLicense();
+            }
+        }
+
+        // Run on page load
+        checkStripeReturn();
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -507,41 +585,62 @@
             keyDisplay.classList.remove('active');
 
             try {
-                // Use /api/trial for trial plan, /api/generate for paid plans
-                const endpoint = plan === 'trial14' ? '/api/trial' : '/api/generate';
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, name, plan })
-                });
+                if (plan === 'trial14') {
+                    // Trial: use local /api/trial endpoint
+                    const response = await fetch('/api/trial', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, name, plan })
+                    });
 
-                const data = await response.json();
+                    const data = await response.json();
 
-                if (!response.ok) {
-                    // Special handling when user already has a key
-                    if (response.status === 409 && data.existingKey) {
-                        keyValue.textContent = data.existingKey;
-                        keyDisplay.classList.add('active');
-                        status.className = 'status success';
-                        status.textContent = 'You already have a license. Here is your key:';
-                        return;
+                    if (!response.ok) {
+                        // Special handling when user already has a key
+                        if (response.status === 409 && data.existingKey) {
+                            keyValue.textContent = data.existingKey;
+                            keyDisplay.classList.add('active');
+                            status.className = 'status success';
+                            status.textContent = 'You already have a license. Here is your key:';
+                            form.classList.remove('loading');
+                            return;
+                        }
+                        throw new Error(data.error || 'Failed to generate key');
                     }
-                    throw new Error(data.error || 'Failed to generate key');
+
+                    // Show success
+                    keyValue.textContent = data.key;
+                    keyDisplay.classList.add('active');
+
+                    const expiresDate = data.expires ? new Date(data.expires).toLocaleDateString() : 'N/A';
+                    status.className = 'status success';
+                    status.textContent = `Trial license generated for ${data.email}. Valid until ${expiresDate}.`;
+                    form.classList.remove('loading');
+
+                } else {
+                    // Paid plan: redirect to Stripe Checkout via Worker
+                    status.className = 'status success';
+                    status.textContent = 'Redirecting to secure checkout...';
+
+                    const response = await fetch(`${PAYMENTS_API}/api/checkout`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, name, plan })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to create checkout session');
+                    }
+
+                    // Redirect to Stripe Checkout
+                    window.location.href = data.url;
                 }
-
-                // Show success
-                keyValue.textContent = data.key;
-                keyDisplay.classList.add('active');
-
-                const expiresDate = data.expires ? new Date(data.expires).toLocaleDateString() : 'N/A';
-                const planLabel = plan === 'trial14' ? 'Trial' : plan === 'monthly' ? 'Monthly' : 'Yearly';
-                status.className = 'status success';
-                status.textContent = `${planLabel} license generated for ${data.email}. Valid until ${expiresDate}.`;
 
             } catch (error) {
                 status.className = 'status error';
-                status.textContent = error.message || 'Failed to generate key. Please try again.';
-            } finally {
+                status.textContent = error.message || 'Failed to process request. Please try again.';
                 form.classList.remove('loading');
             }
         });
@@ -562,7 +661,13 @@
         const btnText = document.querySelector('.btn-text');
         document.querySelectorAll('input[name="plan"]').forEach(radio => {
             radio.addEventListener('change', () => {
-                btnText.textContent = radio.value === 'trial14' ? 'Start Free Trial' : 'Get License';
+                if (radio.value === 'trial14') {
+                    btnText.textContent = 'Start Free Trial';
+                } else if (radio.value === 'monthly') {
+                    btnText.textContent = 'Pay $9 - Monthly';
+                } else {
+                    btnText.textContent = 'Pay $79 - Yearly';
+                }
             });
         });
     </script>

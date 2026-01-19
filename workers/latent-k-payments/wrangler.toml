@@ -1,0 +1,21 @@
+name = "latent-k-payments"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespace for caching licenses (create with: wrangler kv:namespace create "LICENSES")
+# Then uncomment and add the ID:
+# [[kv_namespaces]]
+# binding = "LICENSES"
+# id = "your-kv-namespace-id"
+
+# Environment variables (set secrets with: wrangler secret put <NAME>)
+# Required secrets:
+# - STRIPE_SECRET_KEY
+# - STRIPE_WEBHOOK_SECRET
+# - STRIPE_PRICE_MONTHLY
+# - STRIPE_PRICE_YEARLY
+# - NODE_SERVER_TOKEN
+# - NODE_SERVER_URL
+
+[vars]
+CORS_ORIGIN = "https://latent-k.dev"
