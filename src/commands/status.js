@@ -74,9 +74,7 @@ export async function status() {
   if (hasKey) {
     if (licenseValid) {
       if (expiration && expiration.expires) {
-        if (expiration.inGrace) {
-          console.log(`  Status: expired (grace period: ${expiration.graceDaysLeft} day${expiration.graceDaysLeft === 1 ? '' : 's'} left)`)
-        } else if (expiration.daysLeft <= 7) {
+        if (expiration.daysLeft <= 7 && expiration.daysLeft > 0) {
           console.log(`  Status: valid (expires in ${expiration.daysLeft} day${expiration.daysLeft === 1 ? '' : 's'})`)
         } else {
           console.log('  Status: valid')
@@ -86,7 +84,7 @@ export async function status() {
         console.log('  Status: valid (lifetime)')
       }
     } else {
-      if (expiration && expiration.fullyExpired) {
+      if (expiration && expiration.expired) {
         console.log('  Status: expired')
         console.log(`  Expired: ${expiration.expires.toLocaleDateString()}`)
       } else {
