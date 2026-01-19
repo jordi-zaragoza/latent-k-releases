@@ -1,24 +1,12 @@
 import { createInterface } from 'readline'
 import { execFile } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
 import { setApiKey, setAiProvider, isConfigured, getAiProvider } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
 import { enableHooks } from './hooks.js'
 import { validateApiKey } from '../lib/ai.js'
 import { withSpinner } from '../lib/spinner.js'
-import { platform, homedir } from 'os'
-
-function getClaudeUserEmail() {
-  try {
-    const claudeConfigPath = join(homedir(), '.claude.json')
-    if (!existsSync(claudeConfigPath)) return null
-    const config = JSON.parse(readFileSync(claudeConfigPath, 'utf8'))
-    return config.oauthAccount?.emailAddress || null
-  } catch {
-    return null
-  }
-}
+import { platform } from 'os'
+import { getClaudeUserEmail } from '../lib/claude-utils.js'
 
 const ANTHROPIC_KEY_URL = 'https://console.anthropic.com/settings/keys'
 const GEMINI_KEY_URL = 'https://aistudio.google.com/app/apikey'

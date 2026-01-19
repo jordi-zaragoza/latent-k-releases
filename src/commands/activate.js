@@ -1,19 +1,6 @@
 import { createInterface } from 'readline'
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
-import { homedir } from 'os'
 import { activateLicense, isLicensed, clearLicense } from '../lib/license.js'
-
-function getClaudeUserEmail() {
-  try {
-    const claudeConfigPath = join(homedir(), '.claude.json')
-    if (!existsSync(claudeConfigPath)) return null
-    const config = JSON.parse(readFileSync(claudeConfigPath, 'utf8'))
-    return config.oauthAccount?.emailAddress || null
-  } catch {
-    return null
-  }
-}
+import { getClaudeUserEmail } from '../lib/claude-utils.js'
 
 let rl = null
 

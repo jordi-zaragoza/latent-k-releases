@@ -1,19 +1,8 @@
 import fs from 'fs'
 import path from 'path'
-import { homedir } from 'os'
 import { isConfigured, log, getIgnorePatterns } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
-
-function getClaudeUserEmail() {
-  try {
-    const claudeConfigPath = path.join(homedir(), '.claude.json')
-    if (!fs.existsSync(claudeConfigPath)) return null
-    const config = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'))
-    return config.oauthAccount?.emailAddress || null
-  } catch {
-    return null
-  }
-}
+import { getClaudeUserEmail } from '../lib/claude-utils.js'
 import { generateProject, generateIgnore } from '../lib/ai.js'
 import {
   init, buildContext, buildContextForFiles, removeEntry,
