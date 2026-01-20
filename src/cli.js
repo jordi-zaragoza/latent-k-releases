@@ -23,6 +23,20 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { readFileSync } from 'fs'
 
+// Pro tips shown randomly at session start
+const PRO_TIPS = [
+  'Start your prompt with "lk" to inject fresh context anytime',
+  'Use "!lk status" to see your current context health',
+  'Run "!lk sync" manually after major code changes',
+  'Use "!lk clean" to reset context if things get stale',
+  'Use "!lk ignore --list" to see excluded paths',
+  'Use "!lk stats" to check your API token consumption',
+  'Run "!lk update" to get the latest version',
+  'Use "!lk pro-tips" to see all tips',
+  'LK works with both Claude Code and Gemini CLI',
+  'The more you code, the smarter LK context becomes'
+]
+
 function getClaudeUserEmail() {
   try {
     const claudeConfigPath = join(homedir(), '.claude.json')
@@ -412,7 +426,26 @@ program
       }
     }
 
+    // Show random pro tip
+    const tip = PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
+
     output(jsonMode ? infoParts.join(' | ') : infoParts.join(' | ').replace('⦓ LK', 'Context loaded'))
+    if (!jsonMode) {
+      terminalPrint(`${cyan}✦ ${tip} ✦${reset}`)
+    }
+  })
+
+program
+  .command('pro-tips')
+  .description('Show all LK pro tips')
+  .action(() => {
+    const cyan = '\x1b[36m'
+    const reset = '\x1b[0m'
+    console.log('')
+    PRO_TIPS.forEach(tip => {
+      console.log(`${cyan}✦ ${tip} ✦${reset}`)
+    })
+    console.log('')
   })
 
 // Dev-only commands (only from source, never in compiled binary)
