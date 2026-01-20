@@ -16,7 +16,8 @@ const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const RATE_LIMIT = {
   login: { maxAttempts: 5, windowSeconds: 300 },    // 5 attempts per 5 minutes
   trial: { maxAttempts: 3, windowSeconds: 3600 },   // 3 attempts per hour
-  checkout: { maxAttempts: 10, windowSeconds: 60 }  // 10 attempts per minute
+  checkout: { maxAttempts: 10, windowSeconds: 60 }, // 10 attempts per minute
+  chat: { maxAttempts: 529, windowSeconds: 86400 }  // 529 messages per day
 };
 
 // In-memory fallback for rate limiting when KV fails
@@ -273,11 +274,20 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000' // For local development
 ];
 
+// Check if origin matches allowed patterns (including *.latent-k.pages.dev)
+function isOriginAllowed(origin) {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow Cloudflare Pages preview deployments
+  if (/^https:\/\/[a-z0-9]+\.latent-k\.pages\.dev$/.test(origin)) return true;
+  return false;
+}
+
 /**
  * CORS headers for responses - restricted to allowed origins
  */
 function corsHeaders(origin) {
-  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowedOrigin = origin && isOriginAllowed(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -880,6 +890,132 @@ async function handleGetLicense(request, env) {
 }
 
 /**
+ * Handle chatbot messages
+ * POST /api/chat
+ */
+async function handleChat(request, env) {
+  const origin = request.headers.get('Origin');
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  // Rate limiting
+  const rateLimit = await checkRateLimit(env, 'chat', clientIP);
+  if (!rateLimit.allowed) {
+    return jsonResponse({
+      error: 'Daily chat limit reached. Please try again tomorrow.',
+      retryAfter: rateLimit.resetIn
+    }, 429, origin);
+  }
+
+  try {
+    const { message } = await request.json();
+
+    if (!message || typeof message !== 'string') {
+      return jsonResponse({ error: 'Message is required' }, 400, origin);
+    }
+
+    if (!env.GEMINI_API_KEY) {
+      return jsonResponse({ error: 'Chatbot not configured' }, 500, origin);
+    }
+
+    const systemPrompt = `You are the LATENT-K assistant, a helpful chatbot on the LATENT-K website.
+
+## WHAT IS LATENT-K
+LATENT-K is a CLI tool that automatically injects relevant code context into AI coding assistants like Claude Code and Gemini CLI. It analyzes your prompt and injects only the relevant code, provides instant answers to simple questions, and auto-syncs at session start and end.
+
+## BENCHMARK RESULTS
+Small Project (6,596 files): 1.38x faster overall, saved 4 min 2 sec
+- High complexity: 1.45x faster
+- Trivial questions: 1.63x faster
+
+Large Project (27,985 files): 1.61x faster overall, saved 5 min 46 sec
+- High complexity: 2.1x faster
+- Low complexity: 2.1x faster
+
+LK won 73% of test questions in both projects.
+
+## PRICING
+- Free Trial: 14 days, all features, no credit card
+- Monthly: $9/month
+- Yearly: $79/year (best value, 2 months free)
+
+## QUICK START
+1. Download binary from latent-k.dev
+2. lk activate (enter license key)
+3. lk setup (configure AI provider: Anthropic or Gemini)
+4. lk enable (enable hooks for Claude/Gemini)
+5. lk sync (initial sync)
+Then just run "claude" or "gemini" normally - context is injected automatically!
+
+## ALL COMMANDS
+- lk activate: Enter license key
+- lk setup: Configure AI provider (Anthropic Claude Haiku or Gemini free)
+- lk sync: Sync project files. Options: -r (regenerate), -a (all files), --hash-only
+- lk status: Show project status, files tracked, license info
+- lk stats: Show LLM usage, costs, token usage. Options: --json, --reset
+- lk enable: Enable hooks for Claude Code and/or Gemini CLI. Options: -t claude, -t gemini
+- lk disable: Disable hooks
+- lk ignore [pattern]: Manage ignore patterns. Options: -a (add), -r (remove)
+- lk update: Update to latest version (auto-detects platform)
+- lk clean: Remove lk data. Options: -c (context), -l (license), -C (config), -a (all)
+
+## HOW IT WORKS
+1. Session Start: Context banner shown, auto-sync runs
+2. During Session: Prompts are analyzed and relevant context injected
+3. Session End: Modified files auto-synced
+
+## SUPPORTED INTEGRATIONS
+- Claude Code: Full support (SessionStart, UserPromptSubmit, Stop hooks)
+- Gemini CLI: Full support (SessionStart, BeforeAgent, SessionEnd hooks)
+
+## AI PROVIDERS FOR SYNC
+- Anthropic (Claude Haiku): Requires API key from console.anthropic.com
+- Gemini: Free option, key from aistudio.google.com
+
+## FILES & LOCATIONS
+- Project context stored in .lk/ folder
+- Config at ~/.config/lk/
+- License at ~/.config/lk-license/
+
+## INSTRUCTIONS
+Be concise and friendly. Answer questions about LATENT-K features, commands, pricing, and setup.
+If asked something unrelated, politely redirect to LATENT-K topics.
+Keep responses short (2-3 sentences) unless more detail is requested.
+Use bullet points for lists. Never invent features that don't exist.`;
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ parts: [{ text: message }] }],
+          generationConfig: {
+            maxOutputTokens: 512,
+            temperature: 0.7
+          }
+        })
+      }
+    );
+
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      console.error('[CHAT] Gemini API error:', errText);
+      return jsonResponse({ error: 'AI service error' }, 500, origin);
+    }
+
+    const geminiData = await geminiRes.json();
+    const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+
+    return jsonResponse({ reply }, 200, origin);
+
+  } catch (error) {
+    console.error('Chat error:', error);
+    return jsonResponse({ error: 'Internal error' }, 500, origin);
+  }
+}
+
+/**
  * Main request handler
  */
 export default {
@@ -911,6 +1047,10 @@ export default {
 
     if (path === '/api/trial' && method === 'POST') {
       return handleTrial(request, env);
+    }
+
+    if (path === '/api/chat' && method === 'POST') {
+      return handleChat(request, env);
     }
 
     // Admin endpoints
