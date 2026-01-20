@@ -13,11 +13,11 @@ import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain } from './lib/context.js'
+import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, getLicenseKey, isLicensed, checkAccess } from './lib/license.js'
 import { parseLicense } from './lib/license-gen.js'
-import { isConfigured, getAiProvider } from './lib/config.js'
+import { isConfigured, getAiProvider, getIgnorePatterns } from './lib/config.js'
 import { sync as runSync, syncProjectOnly } from './commands/sync.js'
 import { join } from 'path'
 import { homedir } from 'os'
@@ -145,6 +145,7 @@ program
   .description('Manage ignore patterns')
   .option('-a, --add <pattern>', 'Add pattern to ignore list')
   .option('-r, --remove <pattern>', 'Remove pattern from ignore list')
+  .option('-l, --list', 'List all ignored files')
   .action((pattern, options) => {
     const cwd = process.cwd()
 
@@ -153,15 +154,15 @@ program
       return
     }
 
-    const patterns = loadIgnore(cwd)
+    const projectPatterns = loadIgnore(cwd)
 
     // Add pattern
     if (options.add) {
-      if (patterns.includes(options.add)) {
+      if (projectPatterns.includes(options.add)) {
         console.log(`Pattern already exists: ${options.add}`)
       } else {
-        patterns.push(options.add)
-        saveIgnore(cwd, patterns)
+        projectPatterns.push(options.add)
+        saveIgnore(cwd, projectPatterns)
         console.log(`Added: ${options.add}`)
       }
       return
@@ -169,23 +170,46 @@ program
 
     // Remove pattern
     if (options.remove) {
-      const idx = patterns.indexOf(options.remove)
+      const idx = projectPatterns.indexOf(options.remove)
       if (idx === -1) {
         console.log(`Pattern not found: ${options.remove}`)
       } else {
-        patterns.splice(idx, 1)
-        saveIgnore(cwd, patterns)
+        projectPatterns.splice(idx, 1)
+        saveIgnore(cwd, projectPatterns)
         console.log(`Removed: ${options.remove}`)
       }
       return
     }
 
+    // Calculate ignored files for both views
+    const globalPatterns = getIgnorePatterns()
+    const allPatterns = [...globalPatterns, ...projectPatterns]
+    const allFiles = getAllFiles(cwd)
+    const ignoredByGlobal = allFiles.filter(f => isIgnored(f, globalPatterns))
+    const ignoredByProject = allFiles.filter(f => isIgnored(f, projectPatterns))
+    const ignoredFiles = allFiles.filter(f => isIgnored(f, allPatterns))
+
+    // List ignored files
+    if (options.list) {
+      console.log(`Ignored files: ${ignoredByGlobal.length} global, ${ignoredByProject.length} project\n`)
+      if (ignoredFiles.length === 0) {
+        console.log('No files are being ignored.')
+      } else {
+        ignoredFiles.forEach(f => console.log(`  ${f}`))
+      }
+      return
+    }
+
     // Show patterns
-    if (patterns.length === 0) {
-      console.log('No ignore patterns configured.')
-    } else {
-      console.log('Ignore patterns:\n')
-      patterns.forEach(p => console.log(`  ${p}`))
+    console.log(`Global patterns (${globalPatterns.length}): ${ignoredByGlobal.length} files`)
+    if (globalPatterns.length > 0) {
+      globalPatterns.forEach(p => console.log(`  ${p}`))
+    }
+    console.log('')
+
+    console.log(`Project patterns (${projectPatterns.length}): ${ignoredByProject.length} files`)
+    if (projectPatterns.length > 0) {
+      projectPatterns.forEach(p => console.log(`  ${p}`))
     }
   })
 
