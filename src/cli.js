@@ -6,7 +6,7 @@ import { setup } from './commands/setup.js'
 import { sync } from './commands/sync.js'
 import { status } from './commands/status.js'
 import { stats } from './commands/stats.js'
-import { update } from './commands/update.js'
+import { update, checkMinVersion } from './commands/update.js'
 import { dev } from './commands/dev.js'
 import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
@@ -120,7 +120,8 @@ program
 program
   .command('update')
   .description('Update lk to latest version')
-  .action(update)
+  .option('-f, --force', 'Force update even if already on latest version')
+  .action((options) => update({ force: options.force }))
 
 program
   .command('enable')
@@ -367,6 +368,17 @@ program
         })
       } else {
         banner.forEach(line => terminalPrint(`${cyan}${line}${reset}`))
+      }
+    }
+
+    // Check minimum version requirement (skip in dev mode)
+    if (!DEV_MODE) {
+      const versionCheck = await checkMinVersion()
+      if (!versionCheck.ok) {
+        output(jsonMode
+          ? `❌ Update required: v${versionCheck.minVersion} (current: v${versionCheck.currentVersion}) - run: lk update`
+          : `${red}Update required: v${versionCheck.minVersion} (current: v${versionCheck.currentVersion})${reset}\n${yellow}Run: lk update${reset}`, true)
+        return
       }
     }
 
