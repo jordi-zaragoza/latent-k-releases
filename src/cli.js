@@ -338,6 +338,8 @@ program
     // Check for true color support
     const supportsTrueColor = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit'
     const cyan = '\x1b[36m'
+    const lkBlue = supportsTrueColor ? '\x1b[38;2;0;212;255m' : cyan
+    const lilac = supportsTrueColor ? '\x1b[38;2;168;85;247m' : '\x1b[35m'
 
     // Diagonal gradient function (cyan #00d4ff to purple #a855f7)
     const gradientChar = (char, row, col, rows, cols) => {
@@ -421,7 +423,7 @@ program
         if (jsonMode) {
           infoParts.push(`trial (${daysText})`)
         } else {
-          infoParts.push(`${yellow}trial (${daysText})${reset}`)
+          infoParts.push(`${yellow}\x1b[1mtrial (${daysText})\x1b[22m${reset}${lkBlue}`)
         }
       }
     }
@@ -429,9 +431,9 @@ program
     // Show random pro tip
     const tip = PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
 
-    output(jsonMode ? infoParts.join(' | ') : infoParts.join(' | ').replace('⦓ LK', 'Context loaded'))
+    output(jsonMode ? infoParts.join(' | ') : `${lkBlue}${infoParts.join(' | ').replace('⦓ LK', 'Context loaded')}${reset}`)
     if (!jsonMode) {
-      terminalPrint(`${cyan}✦ ${tip} ✦${reset}`)
+      terminalPrint(`${lilac}✦ ${tip} ✦${reset}`)
     }
   })
 
