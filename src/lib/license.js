@@ -7,6 +7,8 @@ import { homedir } from 'os'
 import { validateLicenseOffline, parseLicense } from './license-gen.js'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
+const ONLINE_CHECK_INTERVAL = 24 * 60 * 60 * 1000 // 24 hours
+const LICENSE_API_URL = 'https://latent-k-payments.latent-k.workers.dev/api/check-license'
 
 // Dev mode only when running from source (not compiled binary)
 // This cannot be bypassed via environment variables
@@ -148,10 +150,86 @@ export function getLicenseExpiration() {
   }
 }
 
+/**
+ * Check license status online (non-blocking)
+ * Updates local cache and clears license if revoked
+ */
+async function checkOnline(email) {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000) // 5s timeout
+
+    const res = await fetch(`${LICENSE_API_URL}?email=${encodeURIComponent(email)}`, {
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+
+    if (!res.ok) {
+      store.set('lastOnlineCheck', Date.now())
+      return null
+    }
+
+    const data = await res.json()
+    store.set('lastOnlineCheck', Date.now())
+    store.set('lastOnlineResult', data)
+
+    // If license was revoked, clear local license
+    if (data.revoked) {
+      clearLicense()
+      store.set('revokedReason', data.revokeReason || 'License revoked')
+    }
+
+    return data
+  } catch (err) {
+    // Network error - ignore, will retry next time
+    // Still update timestamp to avoid hammering on network issues
+    store.set('lastOnlineCheck', Date.now())
+    return null
+  }
+}
+
+/**
+ * Force an online check and wait for result (blocking)
+ * Use this when you need immediate status (e.g., lk status command)
+ */
+export async function forceCheckOnline() {
+  const key = getLicenseKey()
+  if (!key) return null
+
+  const data = parseLicense(key)
+  if (!data?.email) return null
+
+  return checkOnline(data.email)
+}
+
+/**
+ * Check if license was revoked (from cached online check)
+ */
+export function isLicenseRevoked() {
+  const result = store.get('lastOnlineResult')
+  return result?.revoked || false
+}
+
+/**
+ * Get revocation reason if license was revoked
+ */
+export function getRevokedReason() {
+  return store.get('revokedReason') || null
+}
+
 // Unified access check
 export async function checkAccess(userEmail = null) {
   if (isDevMode()) {
     return { allowed: true, message: null }
+  }
+
+  // Check if license was previously revoked
+  const revokedReason = getRevokedReason()
+  if (revokedReason && !getLicenseKey()) {
+    return {
+      allowed: false,
+      message: `License revoked: ${revokedReason}. Contact support.`
+    }
   }
 
   const key = getLicenseKey()
@@ -176,6 +254,14 @@ export async function checkAccess(userEmail = null) {
           message: `License registered to different email (${result.data.email})`
         }
       }
+    }
+
+    // Trigger online check if interval has passed (non-blocking)
+    const lastCheck = store.get('lastOnlineCheck') || 0
+    const now = Date.now()
+    if (now - lastCheck > ONLINE_CHECK_INTERVAL && result.data.email) {
+      // Fire and forget - don't block on network
+      checkOnline(result.data.email).catch(() => {})
     }
 
     const expiration = getLicenseExpiration()

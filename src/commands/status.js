@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { getConfig, isConfigured, getAiProvider, getIgnorePatterns } from '../lib/config.js'
-import { isLicensed, validateLicense, getLicenseExpiration, getLicenseKey } from '../lib/license.js'
+import { isLicensed, validateLicense, getLicenseExpiration, getLicenseKey, isLicenseRevoked, getRevokedReason, forceCheckOnline } from '../lib/license.js'
 import { parseLicense } from '../lib/license-gen.js'
 import {
   exists, getUnsyncedFiles, getDeletedFiles, getAllEntries, loadIgnore, ignoreExists, isIgnored,
@@ -69,13 +69,30 @@ export async function status() {
 
   // License status
   console.log('License:')
-  const licenseKey = getLicenseKey()
-  const hasKey = !!licenseKey
+  let licenseKey = getLicenseKey()
+  let hasKey = !!licenseKey
+
+  // Check online status (blocking) to get fresh revocation status
+  if (hasKey) {
+    await forceCheckOnline()
+    // Re-check after online validation (license may have been cleared if revoked)
+    licenseKey = getLicenseKey()
+    hasKey = !!licenseKey
+  }
+
   const expiration = hasKey ? getLicenseExpiration() : null
   const licenseData = hasKey ? parseLicense(licenseKey) : null
   const isTrial = licenseData?.type === 'trial'
+  const revoked = isLicenseRevoked()
+  const revokedReason = getRevokedReason()
 
-  if (hasKey) {
+  if (revoked || revokedReason) {
+    console.log('  Status: REVOKED')
+    if (revokedReason) {
+      console.log(`  Reason: ${revokedReason}`)
+    }
+    console.log('  Contact support for assistance.')
+  } else if (hasKey) {
     if (licenseValid) {
       if (isTrial) {
         const daysText = expiration?.daysLeft === 1 ? '1 day' : `${expiration?.daysLeft} days`
