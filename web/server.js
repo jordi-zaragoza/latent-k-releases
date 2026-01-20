@@ -46,6 +46,19 @@ const ADMIN_PASS = process.env.ADMIN_PASS
 // Worker token for programmatic access from Cloudflare Worker (optional)
 const WORKER_TOKEN = process.env.WORKER_TOKEN
 
+// Load Gemini API key from lk_viewer/.env if not set
+function loadGeminiKey() {
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY
+  const envPath = join(__dirname, '..', 'lk_viewer', '.env')
+  if (existsSync(envPath)) {
+    const content = readFileSync(envPath, 'utf8')
+    const match = content.match(/GEMINI_API_KEY=(.+)/)
+    if (match) return match[1].trim()
+  }
+  return null
+}
+const GEMINI_API_KEY = loadGeminiKey()
+
 if (!ADMIN_USER || !ADMIN_PASS) {
   console.error('ERROR: ADMIN_USER and ADMIN_PASS environment variables are required')
   console.error('Example: ADMIN_USER=admin ADMIN_PASS=your-secure-password node web/server.js')
@@ -55,6 +68,69 @@ if (!ADMIN_USER || !ADMIN_PASS) {
 // Session tokens (persisted to file) with expiration
 const SESSIONS_FILE = join(__dirname, '.sessions.json')
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+// Rate limiting configuration
+const RATE_LIMIT = {
+  login: { maxAttempts: 5, windowSeconds: 300 },    // 5 attempts per 5 minutes
+  trial: { maxAttempts: 3, windowSeconds: 3600 }    // 3 attempts per hour
+}
+
+// In-memory rate limiting store
+const rateLimitStore = new Map()
+
+/**
+ * Check rate limit for an action
+ * @param {string} action - 'login' or 'trial'
+ * @param {string} identifier - IP address or other identifier
+ * @returns {{ allowed: boolean, remaining: number, resetIn: number }}
+ */
+function checkRateLimit(action, identifier) {
+  const config = RATE_LIMIT[action]
+  if (!config) return { allowed: true, remaining: 999, resetIn: 0 }
+
+  const key = `${action}:${identifier}`
+  const now = Math.floor(Date.now() / 1000)
+
+  let record = rateLimitStore.get(key) || { count: 0, windowStart: now }
+
+  // Reset window if expired
+  if (now - record.windowStart >= config.windowSeconds) {
+    record = { count: 0, windowStart: now }
+  }
+
+  const remaining = Math.max(0, config.maxAttempts - record.count)
+  const resetIn = config.windowSeconds - (now - record.windowStart)
+
+  if (record.count >= config.maxAttempts) {
+    return { allowed: false, remaining: 0, resetIn }
+  }
+
+  // Increment counter
+  record.count++
+  rateLimitStore.set(key, record)
+
+  // Clean old entries periodically (every 100 entries)
+  if (rateLimitStore.size > 100) {
+    for (const [k, v] of rateLimitStore) {
+      const a = k.split(':')[0]
+      const c = RATE_LIMIT[a]
+      if (c && now - v.windowStart >= c.windowSeconds * 2) {
+        rateLimitStore.delete(k)
+      }
+    }
+  }
+
+  return { allowed: true, remaining: remaining - 1, resetIn }
+}
+
+/**
+ * Get client IP from request
+ */
+function getClientIP(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+         req.socket?.remoteAddress ||
+         'unknown'
+}
 
 function loadSessions() {
   if (existsSync(SESSIONS_FILE)) {
@@ -182,6 +258,18 @@ const server = createServer(async (req, res) => {
 
   // API: Login
   if (req.method === 'POST' && req.url === '/api/login') {
+    const clientIP = getClientIP(req)
+    const rateLimit = checkRateLimit('login', clientIP)
+
+    if (!rateLimit.allowed) {
+      res.writeHead(429, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        error: 'Too many login attempts. Please try again later.',
+        retryAfter: rateLimit.resetIn
+      }))
+      return
+    }
+
     try {
       const body = await readBody(req)
       const { username, password } = JSON.parse(body)
@@ -223,6 +311,18 @@ const server = createServer(async (req, res) => {
 
   // API: Request trial (public - one per email)
   if (req.method === 'POST' && req.url === '/api/trial') {
+    const clientIP = getClientIP(req)
+    const rateLimit = checkRateLimit('trial', clientIP)
+
+    if (!rateLimit.allowed) {
+      res.writeHead(429, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        error: 'Too many trial requests. Please try again later.',
+        retryAfter: rateLimit.resetIn
+      }))
+      return
+    }
+
     try {
       const body = await readBody(req)
       const { email, name } = JSON.parse(body)
@@ -313,7 +413,8 @@ const server = createServer(async (req, res) => {
     // Check for worker token OR session authentication
     const auth = req.headers.authorization
     const bearerToken = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-    const isWorkerAuth = WORKER_TOKEN && bearerToken === WORKER_TOKEN
+    // Use timing-safe comparison for worker token
+    const isWorkerAuth = WORKER_TOKEN && bearerToken && timingSafeEqual(bearerToken, WORKER_TOKEN)
     const isSessionAuth = isAuthenticated()
 
     if (!isWorkerAuth && !isSessionAuth) {
@@ -440,6 +541,81 @@ const server = createServer(async (req, res) => {
     const licenses = loadLicenses()
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(licenses))
+    return
+  }
+
+  // API: Chatbot (public - uses Gemini API)
+  if (req.method === 'POST' && req.url === '/api/chat') {
+    try {
+      const body = await readBody(req)
+      const { message } = JSON.parse(body)
+
+      if (!message || typeof message !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Message is required' }))
+        return
+      }
+
+      if (!GEMINI_API_KEY) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Chatbot not configured' }))
+        return
+      }
+
+      const systemPrompt = `You are the LATENT-K assistant, a helpful chatbot on the LATENT-K website.
+LATENT-K is a CLI tool that automatically injects relevant code context into AI coding assistants like Claude Code and Gemini CLI.
+
+Key facts about LATENT-K:
+- Reduces token usage by ~38%
+- Speeds up responses by ~40%
+- Reduces tool calls by ~60%
+- Works with Claude Code and Gemini CLI
+- Pricing: Free 14-day trial, $9/month, or $79/year (best value)
+- Simple setup: download binary, run "lk activate" with license key, then "lk enable" to enable hooks
+
+Be concise, friendly, and helpful. Answer questions about LATENT-K features, pricing, installation, and how it works.
+If asked something unrelated to LATENT-K, politely redirect to LATENT-K topics.
+Keep responses short (2-3 sentences max) unless more detail is specifically requested.`
+
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ parts: [{ text: message }] }],
+            generationConfig: {
+              maxOutputTokens: 256,
+              temperature: 0.7
+            }
+          })
+        }
+      )
+
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text()
+        console.error('[CHAT] Gemini API error:', errText)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'AI service error' }))
+        return
+      }
+
+      const geminiData = await geminiRes.json()
+      const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.'
+
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ reply }))
+    } catch (err) {
+      if (err.message === 'BODY_TOO_LARGE') {
+        res.writeHead(413, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Message too large' }))
+      } else {
+        console.error('[CHAT] Error:', err.message)
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Internal error' }))
+      }
+    }
     return
   }
 

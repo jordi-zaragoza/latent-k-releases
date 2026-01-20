@@ -1,13 +1,56 @@
 import Conf from 'conf'
-import { createHash } from 'crypto'
-import { appendFileSync, mkdirSync } from 'fs'
+import { createHash, randomBytes } from 'crypto'
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { homedir, hostname, userInfo } from 'os'
 import { join, basename } from 'path'
+
+// Cache installation salt
+let cachedInstallationSalt = null
+
+/**
+ * Get or create a unique installation salt
+ * Shared with crypto.js for consistent encryption
+ */
+function getInstallationSalt() {
+  if (cachedInstallationSalt) {
+    return cachedInstallationSalt
+  }
+
+  const lkDir = join(homedir(), '.lk')
+  const saltPath = join(lkDir, '.salt')
+
+  if (existsSync(saltPath)) {
+    try {
+      const salt = readFileSync(saltPath, 'utf8').trim()
+      if (salt.length >= 64) {
+        cachedInstallationSalt = salt
+        return salt
+      }
+    } catch {
+      // Fall through to generate new salt
+    }
+  }
+
+  // Generate new salt (64 bytes = 128 hex chars)
+  const newSalt = randomBytes(64).toString('hex')
+
+  try {
+    mkdirSync(lkDir, { recursive: true, mode: 0o700 })
+    writeFileSync(saltPath, newSalt, { mode: 0o600 })
+  } catch {
+    // If we can't write, use ephemeral salt
+  }
+
+  cachedInstallationSalt = newSalt
+  return newSalt
+}
 
 function deriveEncryptionKey(salt) {
   const h = hostname()
   const u = userInfo().username
-  return createHash('sha256').update(`${h}:${u}:${salt}`).digest('hex')
+  // Use installation-specific salt for added security
+  const installationSalt = getInstallationSalt()
+  return createHash('sha256').update(`${h}:${u}:${salt}:${installationSalt}`).digest('hex')
 }
 
 export const DEBUG = process.env.LK_DEBUG === '1'
@@ -67,12 +110,52 @@ export function getApiKey(provider = null) {
   return p === 'anthropic' ? config.get('anthropicApiKey') : config.get('geminiApiKey')
 }
 
+/**
+ * Validate API key format before storing
+ * @param {string} key - API key to validate
+ * @param {string} provider - 'anthropic' or 'gemini'
+ * @returns {{valid: boolean, error?: string}}
+ */
+export function validateApiKeyFormat(key, provider) {
+  if (!key || typeof key !== 'string') {
+    return { valid: false, error: 'API key is required' }
+  }
+
+  const trimmed = key.trim()
+
+  if (provider === 'anthropic') {
+    // Anthropic keys: sk-ant-api03-... (108 chars) or sk-... format
+    if (!trimmed.startsWith('sk-')) {
+      return { valid: false, error: 'Anthropic API key must start with "sk-"' }
+    }
+    if (trimmed.length < 40) {
+      return { valid: false, error: 'Anthropic API key is too short (expected 40+ characters)' }
+    }
+  } else if (provider === 'gemini') {
+    // Gemini keys: typically 39 alphanumeric characters
+    if (trimmed.length < 30) {
+      return { valid: false, error: 'Gemini API key is too short (expected 30+ characters)' }
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) {
+      return { valid: false, error: 'Gemini API key contains invalid characters' }
+    }
+  }
+
+  return { valid: true }
+}
+
 export function setApiKey(key, provider = null) {
   const p = provider || config.get('aiProvider')
+  const validation = validateApiKeyFormat(key, p)
+
+  if (!validation.valid) {
+    throw new Error(validation.error)
+  }
+
   if (p === 'anthropic') {
-    config.set('anthropicApiKey', key)
+    config.set('anthropicApiKey', key.trim())
   } else {
-    config.set('geminiApiKey', key)
+    config.set('geminiApiKey', key.trim())
   }
 }
 

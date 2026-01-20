@@ -199,3 +199,252 @@ describe('License KV Key Format', () => {
     expect(getLicenseKey('cs_test_xyz789')).toBe('session:cs_test_xyz789')
   })
 })
+
+describe('Rate Limiting', () => {
+  // Replicate rate limit logic for testing
+  const RATE_LIMIT = {
+    login: { maxAttempts: 5, windowSeconds: 300 },
+    trial: { maxAttempts: 3, windowSeconds: 3600 },
+    checkout: { maxAttempts: 10, windowSeconds: 60 }
+  }
+
+  // In-memory fallback (simulates worker behavior)
+  let memoryRateLimit
+
+  beforeEach(() => {
+    memoryRateLimit = new Map()
+  })
+
+  function cleanMemoryRateLimit(now) {
+    for (const [key, record] of memoryRateLimit) {
+      const action = key.split(':')[1]
+      const config = RATE_LIMIT[action]
+      if (config && now - record.windowStart >= config.windowSeconds * 2) {
+        memoryRateLimit.delete(key)
+      }
+    }
+  }
+
+  function checkRateLimitMemory(key, config, now) {
+    if (memoryRateLimit.size > 100) {
+      cleanMemoryRateLimit(now)
+    }
+
+    let record = memoryRateLimit.get(key) || { count: 0, windowStart: now }
+
+    if (now - record.windowStart >= config.windowSeconds) {
+      record = { count: 0, windowStart: now }
+    }
+
+    const remaining = Math.max(0, config.maxAttempts - record.count)
+    const resetIn = config.windowSeconds - (now - record.windowStart)
+
+    if (record.count >= config.maxAttempts) {
+      return { allowed: false, remaining: 0, resetIn }
+    }
+
+    record.count++
+    memoryRateLimit.set(key, record)
+
+    return { allowed: true, remaining: remaining - 1, resetIn }
+  }
+
+  async function checkRateLimit(env, action, identifier) {
+    const config = RATE_LIMIT[action]
+    if (!config) return { allowed: true, remaining: 999, resetIn: 0 }
+
+    const key = `ratelimit:${action}:${identifier}`
+    const now = Math.floor(Date.now() / 1000)
+
+    if (!env.LICENSES) {
+      return checkRateLimitMemory(key, config, now)
+    }
+
+    try {
+      const data = await env.LICENSES.get(key)
+      let record = data ? JSON.parse(data) : { count: 0, windowStart: now }
+
+      if (now - record.windowStart >= config.windowSeconds) {
+        record = { count: 0, windowStart: now }
+      }
+
+      const remaining = Math.max(0, config.maxAttempts - record.count)
+      const resetIn = config.windowSeconds - (now - record.windowStart)
+
+      if (record.count >= config.maxAttempts) {
+        return { allowed: false, remaining: 0, resetIn }
+      }
+
+      record.count++
+      await env.LICENSES.put(key, JSON.stringify(record), {
+        expirationTtl: config.windowSeconds
+      })
+
+      return { allowed: true, remaining: remaining - 1, resetIn }
+    } catch (error) {
+      // Fail CLOSED with memory fallback
+      return checkRateLimitMemory(key, config, now)
+    }
+  }
+
+  describe('with KV available', () => {
+    it('allows requests under limit', async () => {
+      const kvStore = new Map()
+      const env = {
+        LICENSES: {
+          get: async (key) => kvStore.get(key) || null,
+          put: async (key, value) => kvStore.set(key, value)
+        }
+      }
+
+      const result = await checkRateLimit(env, 'login', '192.168.1.1')
+      expect(result.allowed).toBe(true)
+      expect(result.remaining).toBe(4) // 5 max - 1 used
+    })
+
+    it('blocks after exceeding limit', async () => {
+      const kvStore = new Map()
+      const env = {
+        LICENSES: {
+          get: async (key) => kvStore.get(key) || null,
+          put: async (key, value) => kvStore.set(key, value)
+        }
+      }
+
+      // Exhaust login limit (5 attempts)
+      for (let i = 0; i < 5; i++) {
+        await checkRateLimit(env, 'login', '192.168.1.1')
+      }
+
+      const result = await checkRateLimit(env, 'login', '192.168.1.1')
+      expect(result.allowed).toBe(false)
+      expect(result.remaining).toBe(0)
+    })
+
+    it('tracks different IPs separately', async () => {
+      const kvStore = new Map()
+      const env = {
+        LICENSES: {
+          get: async (key) => kvStore.get(key) || null,
+          put: async (key, value) => kvStore.set(key, value)
+        }
+      }
+
+      // Exhaust limit for IP1
+      for (let i = 0; i < 5; i++) {
+        await checkRateLimit(env, 'login', '192.168.1.1')
+      }
+
+      // IP2 should still be allowed
+      const result = await checkRateLimit(env, 'login', '192.168.1.2')
+      expect(result.allowed).toBe(true)
+    })
+  })
+
+  describe('with KV unavailable (fallback)', () => {
+    it('uses memory fallback when KV is null', async () => {
+      const env = { LICENSES: null }
+
+      const result = await checkRateLimit(env, 'login', '192.168.1.1')
+      expect(result.allowed).toBe(true)
+      expect(result.remaining).toBe(4)
+    })
+
+    it('blocks after exceeding limit in memory fallback', async () => {
+      const env = { LICENSES: null }
+
+      // Exhaust login limit (5 attempts)
+      for (let i = 0; i < 5; i++) {
+        await checkRateLimit(env, 'login', '192.168.1.1')
+      }
+
+      const result = await checkRateLimit(env, 'login', '192.168.1.1')
+      expect(result.allowed).toBe(false)
+      expect(result.remaining).toBe(0)
+    })
+  })
+
+  describe('with KV errors (fail-closed)', () => {
+    it('falls back to memory when KV throws', async () => {
+      const env = {
+        LICENSES: {
+          get: async () => { throw new Error('KV unavailable') },
+          put: async () => { throw new Error('KV unavailable') }
+        }
+      }
+
+      const result = await checkRateLimit(env, 'login', '192.168.1.1')
+      expect(result.allowed).toBe(true) // First request allowed
+      expect(result.remaining).toBe(4)
+    })
+
+    it('does NOT fail-open when KV errors', async () => {
+      const env = {
+        LICENSES: {
+          get: async () => { throw new Error('KV unavailable') },
+          put: async () => { throw new Error('KV unavailable') }
+        }
+      }
+
+      // Exhaust limit (should use memory fallback)
+      for (let i = 0; i < 5; i++) {
+        await checkRateLimit(env, 'login', '192.168.1.1')
+      }
+
+      const result = await checkRateLimit(env, 'login', '192.168.1.1')
+      expect(result.allowed).toBe(false) // BLOCKED, not fail-open
+      expect(result.remaining).toBe(0)
+    })
+  })
+
+  describe('memory cleanup', () => {
+    it('cleans expired entries when map exceeds 100 entries', () => {
+      const now = Math.floor(Date.now() / 1000)
+      const config = RATE_LIMIT.login
+
+      // Add 101 entries with old timestamps
+      for (let i = 0; i < 101; i++) {
+        memoryRateLimit.set(`ratelimit:login:ip${i}`, {
+          count: 1,
+          windowStart: now - (config.windowSeconds * 3) // Expired
+        })
+      }
+
+      expect(memoryRateLimit.size).toBe(101)
+
+      // Trigger cleanup via new request
+      checkRateLimitMemory('ratelimit:login:newip', config, now)
+
+      // Old entries should be cleaned
+      expect(memoryRateLimit.size).toBeLessThan(101)
+    })
+  })
+
+  describe('unknown actions', () => {
+    it('allows unknown actions without rate limiting', async () => {
+      const env = { LICENSES: null }
+
+      const result = await checkRateLimit(env, 'unknown_action', '192.168.1.1')
+      expect(result.allowed).toBe(true)
+      expect(result.remaining).toBe(999)
+    })
+  })
+
+  describe('window reset', () => {
+    it('resets count after window expires', () => {
+      const config = RATE_LIMIT.login
+      const now = Math.floor(Date.now() / 1000)
+      const key = 'ratelimit:login:192.168.1.1'
+
+      // Simulate old record that should be reset
+      memoryRateLimit.set(key, {
+        count: 5,
+        windowStart: now - config.windowSeconds - 1
+      })
+
+      const result = checkRateLimitMemory(key, config, now)
+      expect(result.allowed).toBe(true) // Reset, so allowed again
+      expect(result.remaining).toBe(4)
+    })
+  })
+})

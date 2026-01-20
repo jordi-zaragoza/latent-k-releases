@@ -184,4 +184,51 @@ describe('crypto module', () => {
       expect(() => decrypt(corrupted)).toThrow()
     })
   })
+
+  describe('installation salt security', () => {
+    it('salt file exists after encryption operation', async () => {
+      const { existsSync, statSync } = await import('fs')
+      const { join } = await import('path')
+      const { homedir } = await import('os')
+
+      // Trigger salt creation via encryption
+      encrypt('test')
+
+      const saltPath = join(homedir(), '.lk', '.salt')
+      expect(existsSync(saltPath)).toBe(true)
+    })
+
+    it('salt file has correct permissions (0600)', async () => {
+      const { statSync } = await import('fs')
+      const { join } = await import('path')
+      const { homedir } = await import('os')
+
+      const saltPath = join(homedir(), '.lk', '.salt')
+      const stats = statSync(saltPath)
+
+      // Check permissions: 0o600 = rw------- = 384 in decimal
+      // On some systems we check the last 9 bits (mode & 0o777)
+      const permissions = stats.mode & 0o777
+      expect(permissions).toBe(0o600)
+    })
+
+    it('salt is 128 hex characters (64 bytes)', async () => {
+      const { readFileSync } = await import('fs')
+      const { join } = await import('path')
+      const { homedir } = await import('os')
+
+      const saltPath = join(homedir(), '.lk', '.salt')
+      const salt = readFileSync(saltPath, 'utf8').trim()
+
+      expect(salt).toMatch(/^[a-f0-9]{128}$/)
+    })
+
+    it('device ID is stable with same salt', () => {
+      const id1 = getDeviceIdentifier()
+      clearKeyCache()
+      const id2 = getDeviceIdentifier()
+
+      expect(id1).toBe(id2)
+    })
+  })
 })
