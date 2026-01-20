@@ -153,7 +153,7 @@ export async function expand(root, prompt, options = {}) {
   // === SINGLE CALL PATH ===
   if (useSingleCall) {
     log('EXPAND', 'Expanding with single call...')
-    const expansion = await ai.expandPromptCompact(prompt, projectHeader, domainIndex)
+    const expansion = await ai.expandPromptCompact(prompt, projectHeader, domainIndex, previousContext)
 
     if (expansion.direct_answer) {
       log('EXPAND', 'Direct answer from context')
@@ -183,7 +183,7 @@ export async function expand(root, prompt, options = {}) {
   // === DUAL CALL PATH ===
   // 1. First call - classify prompt
   log('EXPAND', 'Classifying prompt...')
-  const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains)
+  const classification = await ai.classifyPrompt(prompt, projectLk, availableDomains, previousContext)
   log('EXPAND', `Classification: ${JSON.stringify(classification)}`)
 
   if (classification.block_reason) {
@@ -234,7 +234,7 @@ export async function expand(root, prompt, options = {}) {
   domainIndex = getDomainIndex(root, resolvedDomains)
   log('EXPAND', `Expanding with compact context (${projectHeader.length + domainIndex.length} chars)...`)
 
-  const expansion = await ai.expandPromptCompact(prompt, projectHeader, domainIndex)
+  const expansion = await ai.expandPromptCompact(prompt, projectHeader, domainIndex, previousContext)
 
   if (expansion.direct_answer) {
     log('EXPAND', 'Direct answer from domain context')
