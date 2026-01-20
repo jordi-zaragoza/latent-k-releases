@@ -297,15 +297,37 @@ program
     const red = '\x1b[31m'
     const reset = '\x1b[0m'
 
+    // Check for true color support
+    const supportsTrueColor = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit'
+    const cyan = '\x1b[36m'
+
+    // Diagonal gradient function (cyan #00d4ff to purple #a855f7)
+    const gradientChar = (char, row, col, rows, cols) => {
+      const t = (row / rows) * 0.1 + (col / cols) * 0.9
+      const r = Math.round(0 + t * 168)
+      const g = Math.round(212 - t * 127)
+      const b = Math.round(255 - t * 8)
+      return `\x1b[38;2;${r};${g};${b}m${char}`
+    }
+
     // ASCII banner (only for Claude/tty mode)
     if (!jsonMode) {
       const banner = [
-        '',
         '╔═══════════════════════════════════╗',
         '║       ⦓  L A T E N T - K  ⦔       ║',
         '╚═══════════════════════════════════╝'
       ]
-      banner.forEach(line => terminalPrint(`${green}${line}${reset}`))
+      terminalPrint('')
+      if (supportsTrueColor) {
+        const rows = banner.length - 1
+        const cols = banner[0].length - 1
+        banner.forEach((line, row) => {
+          const coloredLine = [...line].map((char, col) => gradientChar(char, row, col, rows, cols)).join('')
+          terminalPrint(coloredLine + reset)
+        })
+      } else {
+        banner.forEach(line => terminalPrint(`${cyan}${line}${reset}`))
+      }
     }
 
     // Check license with email verification (skip in dev mode)
