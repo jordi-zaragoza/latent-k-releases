@@ -12,7 +12,7 @@ import crypto from 'crypto'
 import readline from 'readline'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
-import { isConfigured, log } from '../lib/config.js'
+import { isConfigured, log, getPureMode } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
 
@@ -445,11 +445,17 @@ export async function expandCommand(prompt, options = {}) {
       console.log(output)
       // Mark as expanded only if we actually provided context (not passthrough)
       markAsExpanded(transcriptPath)
+    } else if (getPureMode()) {
+      // No expand output but pure mode active - send short reminder
+      console.log('<system-reminder>⟦PURE_MODE⟧ active</system-reminder>')
     }
   } catch (err) {
     if (debug) {
       console.error(`[lk expand] Error: ${err.message}`)
     }
-    // On error, output nothing (passthrough)
+    // On error, output pure mode reminder if active
+    if (getPureMode()) {
+      console.log('<system-reminder>⟦PURE_MODE⟧ active</system-reminder>')
+    }
   }
 }

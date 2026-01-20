@@ -141,7 +141,8 @@ function createConfig() {
       ignorePatterns: {
         type: 'array',
         default: ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/*.lock', '**/package-lock.json', '**/venv/**', '**/.venv/**', '**/__pycache__/**']
-      }
+      },
+      pureMode: { type: 'boolean', default: false }
     }
   }
 
@@ -238,8 +239,17 @@ export function getConfig() {
     geminiApiKey: config.get('geminiApiKey'),
     autoSync: config.get('autoSync'),
     watchPatterns: config.get('watchPatterns'),
-    ignorePatterns: config.get('ignorePatterns')
+    ignorePatterns: config.get('ignorePatterns'),
+    pureMode: config.get('pureMode')
   }
+}
+
+export function getPureMode() {
+  return config.get('pureMode')
+}
+
+export function setPureMode(enabled) {
+  config.set('pureMode', !!enabled)
 }
 
 export function getIgnorePatterns() {
