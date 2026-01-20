@@ -258,6 +258,8 @@ export async function expandCommand(prompt, options = {}) {
   if (!forceExpand && wasAlreadyExpanded(transcriptPath)) {
     log('HOOK', 'Already expanded this session, skipping further expansions')
     if (debug) console.error('[lk expand] Already expanded this session, skipping')
+    // Show hint to user (stderr doesn't affect LLM output)
+    console.error('💡 Tip: Start your prompt with "lk" to inject fresh context')
     return
   }
 
