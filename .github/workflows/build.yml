@@ -63,6 +63,7 @@ jobs:
             dist/lk-macos
             dist/lk-win.exe
             dist/install.sh
+            dist/benchmarks/
 
   release:
     needs: build
@@ -106,5 +107,7 @@ jobs:
             ../dist/lk-macos \
             ../dist/lk-win.exe \
             ../dist/install.sh \
+            ../dist/benchmarks/benchmark_small.pdf \
+            ../dist/benchmarks/benchmark_big.pdf \
             --title "lk $VERSION" \
             --notes "Automated release from lk repo"
