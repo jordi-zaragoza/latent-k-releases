@@ -64,7 +64,7 @@ describe('expand command', () => {
       await expandCommand('{"prompt": "test from json"}', {})
 
       // The expand function should receive the extracted prompt
-      expect(expand).toHaveBeenCalledWith(tempDir, 'test from json')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'test from json', { previousContext: '' })
     })
 
     it('handles plain text input', async () => {
@@ -76,7 +76,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('plain text prompt', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'plain text prompt')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'plain text prompt', { previousContext: '' })
     })
 
     it('handles JSON without prompt field', async () => {
@@ -89,7 +89,7 @@ describe('expand command', () => {
       await expandCommand('{"other": "field"}', {})
 
       // Should treat entire JSON string as the prompt
-      expect(expand).toHaveBeenCalledWith(tempDir, '{"other": "field"}')
+      expect(expand).toHaveBeenCalledWith(tempDir, '{"other": "field"}', { previousContext: '' })
     })
   })
 
@@ -315,7 +315,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('lk how does auth work?', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'how does auth work?')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'how does auth work?', { previousContext: '' })
     })
 
     it('strips lk prefix case-insensitively', async () => {
@@ -324,7 +324,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('LK explain this function', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'explain this function')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'explain this function', { previousContext: '' })
     })
 
     it('handles lk prefix with extra whitespace', async () => {
@@ -333,7 +333,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('lk   what is this?', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'what is this?')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'what is this?', { previousContext: '' })
     })
 
     it('does not strip lk from middle of prompt', async () => {
@@ -342,7 +342,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('explain the lk command', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'explain the lk command')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'explain the lk command', { previousContext: '' })
     })
 
     it('handles JSON input with lk prefix in prompt', async () => {
@@ -351,7 +351,7 @@ describe('expand command', () => {
       const { expandCommand } = await import('../src/commands/expand.js')
       await expandCommand('{"prompt": "lk help me with this"}', {})
 
-      expect(expand).toHaveBeenCalledWith(tempDir, 'help me with this')
+      expect(expand).toHaveBeenCalledWith(tempDir, 'help me with this', { previousContext: '' })
     })
   })
 })
