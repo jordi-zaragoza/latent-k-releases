@@ -19,18 +19,39 @@ const RATE_LIMIT = {
   checkout: { maxAttempts: 10, windowSeconds: 60 }  // 10 attempts per minute
 };
 
+// In-memory fallback for rate limiting when KV fails
+// Note: In Workers, this persists per isolate (not globally shared)
+const memoryRateLimit = new Map();
+
+/**
+ * Clean expired entries from memory fallback (prevent memory leak)
+ */
+function cleanMemoryRateLimit() {
+  const now = Math.floor(Date.now() / 1000);
+  for (const [key, record] of memoryRateLimit) {
+    const action = key.split(':')[1];
+    const config = RATE_LIMIT[action];
+    if (config && now - record.windowStart >= config.windowSeconds * 2) {
+      memoryRateLimit.delete(key);
+    }
+  }
+}
+
 /**
  * Check rate limit for an action
  * Returns { allowed: boolean, remaining: number, resetIn: number }
  */
 async function checkRateLimit(env, action, identifier) {
-  if (!env.LICENSES) return { allowed: true, remaining: 999, resetIn: 0 };
-
   const config = RATE_LIMIT[action];
   if (!config) return { allowed: true, remaining: 999, resetIn: 0 };
 
   const key = `ratelimit:${action}:${identifier}`;
   const now = Math.floor(Date.now() / 1000);
+
+  // If KV not configured, use memory fallback
+  if (!env.LICENSES) {
+    return checkRateLimitMemory(key, config, now);
+  }
 
   try {
     const data = await env.LICENSES.get(key);
@@ -56,9 +77,41 @@ async function checkRateLimit(env, action, identifier) {
 
     return { allowed: true, remaining: remaining - 1, resetIn };
   } catch (error) {
-    console.error('Rate limit error:', error);
-    return { allowed: true, remaining: 999, resetIn: 0 }; // Fail open
+    console.error('Rate limit KV error, using memory fallback:', error);
+    // Fail CLOSED with memory fallback instead of fail-open
+    return checkRateLimitMemory(key, config, now);
   }
+}
+
+/**
+ * Memory-based rate limiting fallback
+ * Less accurate than KV (per-isolate) but secure
+ */
+function checkRateLimitMemory(key, config, now) {
+  // Periodically clean old entries
+  if (memoryRateLimit.size > 100) {
+    cleanMemoryRateLimit();
+  }
+
+  let record = memoryRateLimit.get(key) || { count: 0, windowStart: now };
+
+  // Reset window if expired
+  if (now - record.windowStart >= config.windowSeconds) {
+    record = { count: 0, windowStart: now };
+  }
+
+  const remaining = Math.max(0, config.maxAttempts - record.count);
+  const resetIn = config.windowSeconds - (now - record.windowStart);
+
+  if (record.count >= config.maxAttempts) {
+    return { allowed: false, remaining: 0, resetIn };
+  }
+
+  // Increment counter
+  record.count++;
+  memoryRateLimit.set(key, record);
+
+  return { allowed: true, remaining: remaining - 1, resetIn };
 }
 
 /**
@@ -199,8 +252,8 @@ async function checkAuth(request, env) {
 
   const token = auth.slice(7);
 
-  // Check worker token first
-  if (env.NODE_SERVER_TOKEN && token === env.NODE_SERVER_TOKEN) {
+  // Check worker token first (timing-safe comparison)
+  if (env.NODE_SERVER_TOKEN && timingSafeEqual(token, env.NODE_SERVER_TOKEN)) {
     return { authenticated: true, source: 'worker' };
   }
 

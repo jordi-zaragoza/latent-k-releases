@@ -6,10 +6,15 @@ import {
   setAiProvider,
   getApiKey,
   setApiKey,
+  validateApiKeyFormat,
   getConfig,
   isConfigured,
   config
 } from '../src/lib/config.js'
+
+// Valid test keys (format only - not real keys)
+const VALID_ANTHROPIC_KEY = 'sk-ant-api03-test-key-for-testing-purposes-only-1234567890abcdef1234567890abcdef1234567890abcdef'
+const VALID_GEMINI_KEY = 'AIzaSyTestKeyForTestingPurposesOnly12345'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -56,41 +61,70 @@ describe('AI Provider', () => {
 describe('API Key management', () => {
   it('setApiKey stores anthropic key when provider is anthropic', () => {
     setAiProvider('anthropic')
-    setApiKey('test-anthropic-key')
-    expect(config.get('anthropicApiKey')).toBe('test-anthropic-key')
+    setApiKey(VALID_ANTHROPIC_KEY)
+    expect(config.get('anthropicApiKey')).toBe(VALID_ANTHROPIC_KEY)
   })
 
   it('setApiKey stores gemini key when provider is gemini', () => {
     setAiProvider('gemini')
-    setApiKey('test-gemini-key')
-    expect(config.get('geminiApiKey')).toBe('test-gemini-key')
+    setApiKey(VALID_GEMINI_KEY)
+    expect(config.get('geminiApiKey')).toBe(VALID_GEMINI_KEY)
   })
 
   it('getApiKey returns correct key for current provider', () => {
     setAiProvider('anthropic')
-    setApiKey('anthro-key', 'anthropic')
-    setApiKey('gem-key', 'gemini')
+    setApiKey(VALID_ANTHROPIC_KEY, 'anthropic')
+    setApiKey(VALID_GEMINI_KEY, 'gemini')
 
     setAiProvider('anthropic')
-    expect(getApiKey()).toBe('anthro-key')
+    expect(getApiKey()).toBe(VALID_ANTHROPIC_KEY)
 
     setAiProvider('gemini')
-    expect(getApiKey()).toBe('gem-key')
+    expect(getApiKey()).toBe(VALID_GEMINI_KEY)
   })
 
   it('getApiKey with explicit provider parameter', () => {
-    setApiKey('anthro-key', 'anthropic')
-    setApiKey('gem-key', 'gemini')
+    setApiKey(VALID_ANTHROPIC_KEY, 'anthropic')
+    setApiKey(VALID_GEMINI_KEY, 'gemini')
 
-    expect(getApiKey('anthropic')).toBe('anthro-key')
-    expect(getApiKey('gemini')).toBe('gem-key')
+    expect(getApiKey('anthropic')).toBe(VALID_ANTHROPIC_KEY)
+    expect(getApiKey('gemini')).toBe(VALID_GEMINI_KEY)
+  })
+
+  it('setApiKey throws on invalid anthropic key format', () => {
+    expect(() => setApiKey('invalid-key', 'anthropic')).toThrow('must start with "sk-"')
+    expect(() => setApiKey('sk-short', 'anthropic')).toThrow('too short')
+  })
+
+  it('setApiKey throws on invalid gemini key format', () => {
+    expect(() => setApiKey('short', 'gemini')).toThrow('too short')
+    expect(() => setApiKey('invalid key with spaces!!!!!!!!!!!!!!!!', 'gemini')).toThrow('invalid characters')
+  })
+})
+
+describe('validateApiKeyFormat', () => {
+  it('validates anthropic key format', () => {
+    expect(validateApiKeyFormat(VALID_ANTHROPIC_KEY, 'anthropic').valid).toBe(true)
+    expect(validateApiKeyFormat('invalid', 'anthropic').valid).toBe(false)
+    expect(validateApiKeyFormat('sk-short', 'anthropic').valid).toBe(false)
+  })
+
+  it('validates gemini key format', () => {
+    expect(validateApiKeyFormat(VALID_GEMINI_KEY, 'gemini').valid).toBe(true)
+    expect(validateApiKeyFormat('short', 'gemini').valid).toBe(false)
+  })
+
+  it('returns error message on invalid key', () => {
+    const result = validateApiKeyFormat('bad', 'anthropic')
+    expect(result.valid).toBe(false)
+    expect(result.error).toBeDefined()
   })
 })
 
 describe('getConfig', () => {
   it('returns full configuration object', () => {
     setAiProvider('anthropic')
-    setApiKey('test-key', 'anthropic')
+    setApiKey(VALID_ANTHROPIC_KEY, 'anthropic')
 
     const cfg = getConfig()
     expect(cfg).toHaveProperty('aiProvider')
@@ -123,13 +157,13 @@ describe('isConfigured', () => {
 
   it('returns true when anthropic provider and key set', () => {
     setAiProvider('anthropic')
-    setApiKey('valid-key', 'anthropic')
+    setApiKey(VALID_ANTHROPIC_KEY, 'anthropic')
     expect(isConfigured()).toBe(true)
   })
 
   it('returns true when gemini provider and key set', () => {
     setAiProvider('gemini')
-    setApiKey('valid-key', 'gemini')
+    setApiKey(VALID_GEMINI_KEY, 'gemini')
     expect(isConfigured()).toBe(true)
   })
 })

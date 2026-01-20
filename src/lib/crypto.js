@@ -1,5 +1,7 @@
 import crypto from 'crypto'
 import os from 'os'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { join } from 'path'
 
 const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 16
@@ -11,9 +13,52 @@ const PBKDF2_ITERATIONS = 100000
 let cachedKey = null
 let cachedKeyId = null
 
+// Cache installation salt
+let cachedInstallationSalt = null
+
+/**
+ * Get or create a unique installation salt
+ * Generated once per installation, stored in ~/.lk/.salt
+ * This prevents the salt from being extracted from the binary
+ */
+function getInstallationSalt() {
+  if (cachedInstallationSalt) {
+    return cachedInstallationSalt
+  }
+
+  const lkDir = join(os.homedir(), '.lk')
+  const saltPath = join(lkDir, '.salt')
+
+  if (existsSync(saltPath)) {
+    try {
+      const salt = readFileSync(saltPath, 'utf8').trim()
+      if (salt.length >= 64) {
+        cachedInstallationSalt = salt
+        return salt
+      }
+    } catch {
+      // Fall through to generate new salt
+    }
+  }
+
+  // Generate new salt (64 bytes = 128 hex chars)
+  const newSalt = crypto.randomBytes(64).toString('hex')
+
+  try {
+    mkdirSync(lkDir, { recursive: true, mode: 0o700 })
+    writeFileSync(saltPath, newSalt, { mode: 0o600 })
+  } catch {
+    // If we can't write, use ephemeral salt (less secure but functional)
+    // This will cause re-encryption issues on restart
+  }
+
+  cachedInstallationSalt = newSalt
+  return newSalt
+}
+
 /**
  * Derive a device-specific encryption key using PBKDF2
- * Key is derived from hostname + username + machine-specific data
+ * Key is derived from hostname + username + machine-specific data + installation salt
  */
 function deriveKey() {
   const keyId = getDeviceId()
@@ -33,12 +78,9 @@ function deriveKey() {
   return cachedKey
 }
 
-// Secret salt - makes device ID unguessable even if system info is known
-const SECRET_SALT = '_Ic6PUYl3e6umu78QPZE-njsKjIYfQ4W6ihmjKDw_ky_bv9QSD5XwK8PYxDZBaRl'
-
 /**
  * Get a unique device identifier
- * Combines hostname, username, system info and secret salt
+ * Combines hostname, username, system info and installation-specific salt
  */
 function getDeviceId() {
   const hostname = os.hostname()
@@ -46,8 +88,11 @@ function getDeviceId() {
   const platform = os.platform()
   const arch = os.arch()
 
-  // Hash with secret salt - cannot be reversed without knowing the salt
-  const base = `${hostname}:${username}:${platform}:${arch}:${SECRET_SALT}`
+  // Use installation-specific salt instead of hardcoded value
+  const installationSalt = getInstallationSalt()
+
+  // Hash with installation salt - cannot be reversed without access to ~/.lk/.salt
+  const base = `${hostname}:${username}:${platform}:${arch}:${installationSalt}`
   return crypto.createHash('sha256').update(base).digest('hex')
 }
 
@@ -117,9 +162,10 @@ export function getDeviceIdentifier() {
 }
 
 /**
- * Clear the cached key (useful for testing)
+ * Clear the cached key and salt (useful for testing)
  */
 export function clearKeyCache() {
   cachedKey = null
   cachedKeyId = null
+  cachedInstallationSalt = null
 }
