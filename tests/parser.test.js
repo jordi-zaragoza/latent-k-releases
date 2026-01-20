@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { extractExports } from '../src/lib/parser.js'
+import { extractExports, extractFunctionBody, extractFunctions, getFileContext } from '../src/lib/parser.js'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'

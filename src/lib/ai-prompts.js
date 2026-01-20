@@ -529,10 +529,14 @@ Return ONLY the summary text, no markdown.`
  * Uses projectSummary + domainIndex instead of full content (~60-70% smaller)
  * Returns: { direct_answer, navigation_guide, files: [{path, reason}] }
  */
-export function buildExpandPromptCompact(userPrompt, projectSummary, domainIndex) {
+export function buildExpandPromptCompact(userPrompt, projectSummary, domainIndex, previousContext = null) {
+  const contextSection = previousContext
+    ? `\nRECENT CONVERSATION:\n${previousContext}\n`
+    : ''
+
   return `Code context selector for Claude Code.
 User prompt: "${userPrompt}"
-
+${contextSection}
 Select files Claude Code should READ.
 
 PROJECT:
@@ -554,6 +558,7 @@ RULES:
 1. direct_answer: ONLY for info questions answerable from context. For ACTIONs → null
 2. navigation_guide: Brief guidance on approach
 3. files: 1-5 relevant files from FILES list above
+4. Use RECENT CONVERSATION to understand context (what was discussed, what files were mentioned)
 
 Return ONLY JSON.`
 }

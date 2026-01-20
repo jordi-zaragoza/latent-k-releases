@@ -279,12 +279,15 @@ export async function expandPrompt(userPrompt, projectLk, domainLk) {
  * @param {string} domainIndex - Compact domain index (paths + symbols only)
  * @returns {Promise<{direct_answer: string|null, navigation_guide: string|null, files: Array<{path: string, reason: string}>}>}
  */
-export async function expandPromptCompact(userPrompt, projectSummary, domainIndex) {
+export async function expandPromptCompact(userPrompt, projectSummary, domainIndex, previousContext = null) {
   if (!client) initClient()
 
   log('ANTHROPIC', `expandPromptCompact: ${userPrompt.slice(0, 100)}...`)
+  if (previousContext) {
+    log('ANTHROPIC', `Including previous context: ${previousContext.length} chars`)
+  }
 
-  const prompt = buildExpandPromptCompact(userPrompt, projectSummary, domainIndex)
+  const prompt = buildExpandPromptCompact(userPrompt, projectSummary, domainIndex, previousContext)
   const text = await callApi(prompt, 512, 'expandPromptCompact')
 
   if (!text) {
