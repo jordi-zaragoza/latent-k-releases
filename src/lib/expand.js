@@ -90,9 +90,12 @@ function buildCodeContext(calls, projectHeader, expansion, fileList) {
  * Main expand function - returns structured JSON context
  * @param {string} root - Project root directory
  * @param {string} prompt - User's prompt
+ * @param {object} options - Additional options
+ * @param {string} options.previousContext - Previous conversation context (formatted)
  * @returns {Promise<{type: string, calls: number, context: object|null}>}
  */
-export async function expand(root, prompt) {
+export async function expand(root, prompt, options = {}) {
+  const { previousContext } = options
   const trimmedPrompt = prompt.trim()
 
   // Early exit: prompt length checks
