@@ -9,11 +9,19 @@
 
 import fs from 'fs'
 import crypto from 'crypto'
+import readline from 'readline'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log } from '../lib/config.js'
 import { checkAccess } from '../lib/license.js'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
+
+// Number of previous messages to include as context
+const PREV_MESSAGES_COUNT = 3
+// Max chars per message to prevent bloat
+const MAX_MESSAGE_CHARS = 1500
+// Max total chars for all previous messages
+const MAX_TOTAL_PREV_CHARS = 3000
 
 const MARKER_PREFIX = 'lk-expanded-'
 const MARKER_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -131,6 +139,131 @@ function extractInput(input) {
   }
 
   return { prompt: input, transcriptPath: null }
+}
+
+/**
+ * Extract text content from a message
+ * Handles both user messages (string or tool_result array) and assistant messages (content array)
+ */
+function extractTextFromMessage(message) {
+  if (!message || !message.content) return null
+
+  const { role, content } = message
+
+  // User message - can be string or array of tool_results
+  if (role === 'user') {
+    if (typeof content === 'string') {
+      return content
+    }
+    // Array of tool_results - skip these (not useful context)
+    if (Array.isArray(content) && content.some(c => c.type === 'tool_result')) {
+      return null
+    }
+  }
+
+  // Assistant message - array of content blocks
+  if (role === 'assistant' && Array.isArray(content)) {
+    const textParts = content
+      .filter(c => c.type === 'text' && c.text)
+      .map(c => c.text)
+
+    if (textParts.length > 0) {
+      return textParts.join('\n')
+    }
+  }
+
+  return null
+}
+
+/**
+ * Read the last N messages from Claude Code transcript
+ * @param {string} transcriptPath - Path to the .jsonl transcript file
+ * @param {number} count - Number of messages to retrieve
+ * @returns {Promise<Array<{role: string, content: string}>>}
+ */
+async function readPreviousMessages(transcriptPath, count = PREV_MESSAGES_COUNT) {
+  if (!transcriptPath || !fs.existsSync(transcriptPath)) {
+    return []
+  }
+
+  try {
+    const messages = []
+    const fileStream = fs.createReadStream(transcriptPath)
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity
+    })
+
+    for await (const line of rl) {
+      if (!line.trim()) continue
+
+      try {
+        const entry = JSON.parse(line)
+
+        // Only process user and assistant message entries
+        if ((entry.type === 'user' || entry.type === 'assistant') && entry.message) {
+          const text = extractTextFromMessage(entry.message)
+          if (text) {
+            messages.push({
+              role: entry.message.role,
+              content: text
+            })
+          }
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+
+    // Get last N messages (excluding the current prompt which is the very last user message)
+    // We want the context BEFORE the current message
+    if (messages.length <= 1) return []
+
+    const prevMessages = messages.slice(-count - 1, -1)
+    return prevMessages
+  } catch (err) {
+    log('HOOK', `Error reading transcript: ${err.message}`)
+    return []
+  }
+}
+
+/**
+ * Format previous messages as compact context string
+ * @param {Array<{role: string, content: string}>} messages
+ * @returns {string}
+ */
+function formatPreviousMessages(messages) {
+  if (!messages || messages.length === 0) return ''
+
+  let totalChars = 0
+  const formatted = []
+
+  for (const msg of messages) {
+    let content = msg.content.trim()
+
+    // Truncate individual message if too long
+    if (content.length > MAX_MESSAGE_CHARS) {
+      content = content.slice(0, MAX_MESSAGE_CHARS) + '...[truncated]'
+    }
+
+    // Check if adding this would exceed total limit
+    const prefix = msg.role === 'user' ? 'U: ' : 'A: '
+    const line = prefix + content
+
+    if (totalChars + line.length > MAX_TOTAL_PREV_CHARS) {
+      // Truncate to fit
+      const remaining = MAX_TOTAL_PREV_CHARS - totalChars
+      if (remaining > 50) {
+        formatted.push(line.slice(0, remaining) + '...[truncated]')
+      }
+      break
+    }
+
+    formatted.push(line)
+    totalChars += line.length + 1 // +1 for newline
+  }
+
+  return formatted.join('\n')
 }
 
 
@@ -288,10 +421,21 @@ export async function expandCommand(prompt, options = {}) {
   }
 
   try {
-    const result = await expand(root, processedInput)
+    // Read previous messages from transcript for context
+    const prevMessages = await readPreviousMessages(transcriptPath)
+    const prevContext = formatPreviousMessages(prevMessages)
+
+    if (prevContext) {
+      log('HOOK', `Including ${prevMessages.length} previous message(s) as context (${prevContext.length} chars)`)
+    }
+
+    const result = await expand(root, processedInput, { previousContext: prevContext })
 
     if (debug) {
       console.error(`[lk expand] ${result.calls} API call(s), type: ${result.type}`)
+      if (prevContext) {
+        console.error(`[lk expand] Included ${prevMessages.length} previous message(s)`)
+      }
     }
 
     // Format as system-reminder for LLM consumption
