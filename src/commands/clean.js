@@ -1,13 +1,45 @@
 import fs from 'fs'
 import path from 'path'
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 import readline from 'readline'
 import { lkPath } from '../lib/context.js'
 import { clearLicense } from '../lib/license.js'
 import { config } from '../lib/config.js'
 
-const CONFIG_DIR = path.join(homedir(), '.config', 'lk')
-const LICENSE_DIR = path.join(homedir(), '.config', 'lk-license')
+/**
+ * Get platform-specific config directory for conf library
+ * conf uses projectName + '-nodejs' suffix
+ */
+function getConfigDir() {
+  const home = homedir()
+  switch (platform()) {
+    case 'darwin':
+      return path.join(home, 'Library', 'Preferences', 'lk-nodejs')
+    case 'win32':
+      return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'lk-nodejs')
+    default: // linux, freebsd, etc.
+      return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'lk-nodejs')
+  }
+}
+
+/**
+ * Get platform-specific license directory
+ * conf uses projectName + '-nodejs' suffix, license uses projectName: 'lk-license'
+ */
+function getLicenseDir() {
+  const home = homedir()
+  switch (platform()) {
+    case 'darwin':
+      return path.join(home, 'Library', 'Preferences', 'lk-license-nodejs')
+    case 'win32':
+      return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'lk-license-nodejs')
+    default:
+      return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'lk-license-nodejs')
+  }
+}
+
+const CONFIG_DIR = getConfigDir()
+const LICENSE_DIR = getLicenseDir()
 const DEVICE_FILE = path.join(homedir(), '.lk-device')
 const LOG_DIR = path.join(homedir(), '.lk')
 
