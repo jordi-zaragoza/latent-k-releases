@@ -9,7 +9,9 @@ import {
   validateLicense,
   activateLicense,
   isLicensed,
-  checkAccess
+  checkAccess,
+  isLicenseRevoked,
+  getRevokedReason
 } from '../src/lib/license.js'
 import { generateLicense } from '../scripts/license-admin.js'
 
@@ -115,5 +117,39 @@ describe.skipIf(!hasPrivateKey)('Email verification', () => {
 
     const result = await activateLicense(license, 'user@example.com')
     expect(result.success).toBe(true)
+  })
+})
+
+describe('License revocation', () => {
+  it('isLicenseRevoked returns false when no revocation state', () => {
+    // After clearLicense and setLicenseKey, revocation state should be clear
+    setLicenseKey('test-key')
+    expect(isLicenseRevoked()).toBe(false)
+  })
+
+  it('getRevokedReason returns null when no revocation', () => {
+    setLicenseKey('test-key')
+    expect(getRevokedReason()).toBeNull()
+  })
+
+  it('setLicenseKey clears previous revocation state', () => {
+    // First verify functions work
+    expect(isLicenseRevoked()).toBe(false)
+    expect(getRevokedReason()).toBeNull()
+
+    // Set a new key should maintain clean state
+    setLicenseKey('another-test-key')
+    expect(isLicenseRevoked()).toBe(false)
+    expect(getRevokedReason()).toBeNull()
+  })
+
+  it('clearLicense removes license but revocation functions still work', () => {
+    setLicenseKey('test-key')
+    clearLicense()
+
+    expect(getLicenseKey()).toBeUndefined()
+    // Functions should still return sensible defaults
+    expect(isLicenseRevoked()).toBe(false)
+    expect(getRevokedReason()).toBeNull()
   })
 })

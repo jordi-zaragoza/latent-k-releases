@@ -1,0 +1,9 @@
+{
+  "app": {
+    "name": "latent_k",
+    "version": "1.0.0"
+  },
+  "server": {
+    "port": 3334
+  }
+}
