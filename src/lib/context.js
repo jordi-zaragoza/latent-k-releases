@@ -5,6 +5,27 @@ import { log } from './config.js'
 import { encrypt, decrypt } from './crypto.js'
 
 const LK_DIR = '.lk'
+
+/**
+ * Safely decrypt content, handling corruption by deleting the file
+ * @param {string} content - Encrypted content
+ * @param {string} filePath - Path to the file (for deletion on corruption)
+ * @returns {string|null} Decrypted content or null if corrupted
+ */
+function safeDecrypt(content, filePath) {
+  try {
+    return decrypt(content)
+  } catch (err) {
+    // Encryption key changed or file corrupted
+    log('CONTEXT', `Corrupted file detected: ${filePath} - removing for resync`)
+    try {
+      fs.unlinkSync(filePath)
+    } catch {
+      // File may already be gone
+    }
+    return null
+  }
+}
 const DOMAINS_DIR = 'domains'
 const SYNTAX_FILE = 'syntax.lk'
 const PROJECT_FILE = 'project.lk'
@@ -90,9 +111,11 @@ export const statePath = root => path.join(root, LK_DIR, STATE_FILE)
 // State tracking for deferred project regeneration
 export function loadState(root) {
   try {
-    const raw = fs.readFileSync(statePath(root), 'utf8')
+    const p = statePath(root)
+    const raw = fs.readFileSync(p, 'utf8')
     if (!raw.trim()) return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
-    const content = decrypt(raw)
+    const content = safeDecrypt(raw, p)
+    if (content === null) return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
     return JSON.parse(content)
   } catch {
     return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
@@ -109,7 +132,8 @@ export function loadIgnore(root) {
   if (!fs.existsSync(p)) return []
   const raw = fs.readFileSync(p, 'utf8')
   if (!raw.trim()) return []
-  const content = decrypt(raw)
+  const content = safeDecrypt(raw, p)
+  if (content === null) return []
   return content.split('\n').filter(l => l.trim() && !l.startsWith('#'))
 }
 
@@ -120,12 +144,17 @@ export function saveIgnore(root, patterns) {
   log('CONTEXT', `Saved ${patterns.length} ignore patterns`)
 }
 
-// Glob pattern matching with regex caching
+// Glob pattern matching with LRU cache (prevents memory leak)
+const PATTERN_CACHE_MAX = 100
 const patternCache = new Map()
 
 function compilePattern(pattern) {
   if (patternCache.has(pattern)) {
-    return patternCache.get(pattern)
+    // Move to end (most recently used)
+    const cached = patternCache.get(pattern)
+    patternCache.delete(pattern)
+    patternCache.set(pattern, cached)
+    return cached
   }
 
   let regex = ''
@@ -143,6 +172,13 @@ function compilePattern(pattern) {
   }
 
   const compiled = new RegExp(`^${regex}$`)
+
+  // Evict oldest entry if cache is full
+  if (patternCache.size >= PATTERN_CACHE_MAX) {
+    const oldest = patternCache.keys().next().value
+    patternCache.delete(oldest)
+  }
+
   patternCache.set(pattern, compiled)
   return compiled
 }
@@ -213,7 +249,7 @@ export function getSyntax(root) {
   const p = syntaxPath(root)
   if (!fs.existsSync(p)) return ''
   const raw = fs.readFileSync(p, 'utf8').trim()
-  return decrypt(raw)
+  return safeDecrypt(raw, p) || ''
 }
 
 export function setSyntax(root, content) {
@@ -226,7 +262,7 @@ export function getProject(root) {
   const p = projectPath(root)
   if (!fs.existsSync(p)) return ''
   const raw = fs.readFileSync(p, 'utf8').trim()
-  return decrypt(raw)
+  return safeDecrypt(raw, p) || ''
 }
 
 // Project header (compact summary - pre-generated)
@@ -234,9 +270,10 @@ export function getProjectHeader(root) {
   const p = projectHeaderPath(root)
   if (fs.existsSync(p)) {
     const raw = fs.readFileSync(p, 'utf8').trim()
-    return decrypt(raw)
+    const content = safeDecrypt(raw, p)
+    if (content !== null) return content
   }
-  // Fallback: generate from project.lk if header doesn't exist
+  // Fallback: generate from project.lk if header doesn't exist or corrupted
   const project = getProject(root)
   return buildProjectHeader(project)
 }
@@ -420,7 +457,9 @@ export function loadDomain(root, name) {
   const p = domainPath(root, name)
   if (!fs.existsSync(p)) return null
   const raw = fs.readFileSync(p, 'utf8')
-  return parseDomain(decrypt(raw))
+  const content = safeDecrypt(raw, p)
+  if (content === null) return null
+  return parseDomain(content)
 }
 
 // Save domain
@@ -455,7 +494,10 @@ export function addEntry(root, domainName, group, symbol, hash, filePath, desc, 
   for (const d of allDomains) {
     if (d === domainName) continue
     const dp = domainPath(root, d)
-    const dom = parseDomain(decrypt(fs.readFileSync(dp, 'utf8')))
+    const rawDom = fs.readFileSync(dp, 'utf8')
+    const decryptedDom = safeDecrypt(rawDom, dp)
+    if (decryptedDom === null) continue
+    const dom = parseDomain(decryptedDom)
     let modified = false
     for (const [g, items] of Object.entries(dom.groups)) {
       const idx = items.findIndex(e => e.path === filePath)
@@ -467,8 +509,12 @@ export function addEntry(root, domainName, group, symbol, hash, filePath, desc, 
   const p = domainPath(root, domainName)
   let domain
   if (fs.existsSync(p)) {
-    domain = parseDomain(decrypt(fs.readFileSync(p, 'utf8')))
-  } else {
+    const rawContent = fs.readFileSync(p, 'utf8')
+    const decryptedContent = safeDecrypt(rawContent, p)
+    domain = decryptedContent ? parseDomain(decryptedContent) : null
+  }
+  // Create new domain if doesn't exist or was corrupted
+  if (!domain) {
     domain = {
       id: `DOMAIN-${domainName.toUpperCase()}`,
       domain: domainName.charAt(0).toUpperCase() + domainName.slice(1),
@@ -503,7 +549,10 @@ export function removeEntry(root, filePath) {
   const allDomains = listDomains(root)
   for (const d of allDomains) {
     const dp = domainPath(root, d)
-    const dom = parseDomain(decrypt(fs.readFileSync(dp, 'utf8')))
+    const rawDom = fs.readFileSync(dp, 'utf8')
+    const decryptedDom = safeDecrypt(rawDom, dp)
+    if (decryptedDom === null) continue
+    const dom = parseDomain(decryptedDom)
     let modified = false
     for (const [g, items] of Object.entries(dom.groups)) {
       const idx = items.findIndex(e => e.path === filePath)
@@ -561,7 +610,8 @@ export function buildVerboseContext(root) {
       const p = domainPath(root, name)
       if (fs.existsSync(p)) {
         const raw = fs.readFileSync(p, 'utf8').trim()
-        parts.push(decrypt(raw))
+        const content = safeDecrypt(raw, p)
+        if (content) parts.push(content)
       }
     }
 
@@ -849,7 +899,8 @@ export function buildContextForFiles(root, files) {
     const p = domainPath(root, name)
     if (fs.existsSync(p)) {
       const raw = fs.readFileSync(p, 'utf8').trim()
-      parts.push(decrypt(raw))
+      const content = safeDecrypt(raw, p)
+      if (content) parts.push(content)
     }
   }
 
