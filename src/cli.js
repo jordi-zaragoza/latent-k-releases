@@ -431,7 +431,7 @@ program
     // Show random pro tip
     const tip = PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
 
-    output(jsonMode ? infoParts.join(' | ') : `${lkBlue}${infoParts.join(' | ').replace('⦓ LK', 'Context loaded')}${reset}`)
+    output(jsonMode ? infoParts.join(' | ') : `${infoParts.join(' | ').replace('⦓ LK', 'Context loaded')}`)
     if (!jsonMode) {
       terminalPrint(`${lilac}✦ ${tip} ✦${reset}`)
     }
