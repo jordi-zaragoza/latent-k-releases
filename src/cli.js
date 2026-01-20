@@ -27,7 +27,7 @@ import { readFileSync } from 'fs'
 const PRO_TIPS = [
   'Start your prompt with "lk" to inject fresh context anytime',
   'Use "!lk status" to see your current context health',
-  'Run "!lk sync" manually after major code changes',
+  'Run "!lk sync -a" to re-sync all files after major changes',
   'Use "!lk clean" to reset context if things get stale',
   'Use "!lk ignore --list" to see excluded paths',
   'Use "!lk stats" to check your API token consumption',
