@@ -670,67 +670,6 @@
             color: var(--accent-green);
         }
 
-        /* Pro Tip Banners */
-        .pro-tips-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1rem;
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-
-        .pro-tip-banner {
-            padding: 1.25rem 1.5rem;
-            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(0, 212, 255, 0.1));
-            border: 1px solid var(--accent-purple);
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .pro-tip-label {
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-            color: var(--bg-primary);
-            padding: 0.35rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            width: fit-content;
-        }
-
-        .pro-tip-text {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            line-height: 1.5;
-        }
-
-        .pro-tip-text code {
-            background: var(--bg-primary);
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            color: var(--accent-cyan);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-        }
-
-        .pro-tip-example {
-            background: var(--bg-primary);
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: var(--accent-green);
-            width: fit-content;
-        }
-
-        @media (max-width: 768px) {
-            .pro-tips-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
         /* Quick Start */
         .quick-start {
             max-width: 700px;
@@ -1380,21 +1319,6 @@
                 <div class="how-card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                 <h3>Selective Extraction</h3>
                 <p>Only relevant code is extracted from the map. No bloat, no noise—just the context your AI needs to give accurate answers.</p>
-            </div>
-        </div>
-
-        <!-- Pro Tip Banners -->
-        <div class="pro-tips-grid">
-            <div class="pro-tip-banner">
-                <div class="pro-tip-label">PRO TIP</div>
-                <div class="pro-tip-text">Changed topics? Prefix with <code>lk</code> to force context</div>
-                <code class="pro-tip-example">lk how does auth work?</code>
-            </div>
-
-            <div class="pro-tip-banner">
-                <div class="pro-tip-label">PRO TIP</div>
-                <div class="pro-tip-text">Use <code>lk ignore</code> to see ignored patterns or <code>-a</code> to add new ones</div>
-                <code class="pro-tip-example">lk ignore -a "docs/*"</code>
             </div>
         </div>
 
