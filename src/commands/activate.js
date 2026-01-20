@@ -25,7 +25,7 @@ export async function activate() {
     clearLicense()
   }
 
-  console.log('Get your license key at: https://latent-k.dev\n')
+  console.log('Get your license key at: https://latent-k.pages.dev/activation\n')
 
   const key = await question('Enter license key: ')
 

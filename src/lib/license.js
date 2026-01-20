@@ -191,7 +191,7 @@ export async function checkAccess(userEmail = null) {
   if (result.error === 'License expired') {
     return {
       allowed: false,
-      message: 'License expired. Renew at: https://latent-k.dev'
+      message: 'License expired. Renew at: https://latent-k.pages.dev/activation'
     }
   }
 
