@@ -67,9 +67,18 @@ export function isCodeFile(filePath) {
   return CODE_EXTENSIONS.includes(getFileExtension(filePath))
 }
 
-export function getAllFiles(dir, root = dir, options = {}) {
+// Maximum directory depth to prevent stack overflow on deeply nested projects
+const MAX_DEPTH = 15
+
+export function getAllFiles(dir, root = dir, options = {}, depth = 0) {
   const { codeOnly = true } = options
   const files = []
+
+  // Prevent stack overflow on deeply nested directories
+  if (depth >= MAX_DEPTH) {
+    log('CONTEXT', `Max depth (${MAX_DEPTH}) reached at ${dir} - skipping deeper directories`)
+    return files
+  }
 
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -82,7 +91,7 @@ export function getAllFiles(dir, root = dir, options = {}) {
       const relativePath = path.relative(root, fullPath)
 
       if (entry.isDirectory()) {
-        files.push(...getAllFiles(fullPath, root, options))
+        files.push(...getAllFiles(fullPath, root, options, depth + 1))
       } else if (entry.isFile()) {
         if (IGNORE_FILES.includes(entry.name)) continue
         if (codeOnly && !isCodeFile(entry.name)) continue

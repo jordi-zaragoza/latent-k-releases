@@ -275,6 +275,31 @@ describe('parseJsonResponse', () => {
   it('returns null fallback by default', () => {
     expect(parseJsonResponse('invalid')).toBe(null)
   })
+
+  it('sanitizes dangerous keys', () => {
+    const result = parseJsonResponse('{"__proto__": {}, "valid": "yes", "prototype": {}}')
+    expect(result).toEqual({ valid: 'yes' })
+  })
+
+  it('handles deeply nested arrays', () => {
+    // Create deeply nested array (25 levels)
+    let deep = ['bottom']
+    for (let i = 0; i < 25; i++) {
+      deep = [deep]
+    }
+    const json = JSON.stringify(deep)
+    const result = parseJsonResponse(json)
+
+    // Should be truncated at depth 20
+    let current = result
+    for (let i = 0; i < 20; i++) {
+      if (Array.isArray(current) && current.length > 0) {
+        current = current[0]
+      }
+    }
+    // At depth 20+, should be empty array
+    expect(current).toEqual([])
+  })
 })
 
 describe('extractJsonFromText', () => {
@@ -311,6 +336,51 @@ describe('extractJsonFromText', () => {
   it('returns null for empty input', () => {
     expect(extractJsonFromText(null, false)).toBe(null)
     expect(extractJsonFromText('', true)).toBe(null)
+  })
+
+  it('blocks dangerous keys (__proto__, constructor, prototype)', () => {
+    const dangerous = '{"__proto__": {"polluted": true}, "safe": "value", "constructor": "bad", "prototype": {}}'
+    const result = extractJsonFromText(dangerous, false)
+    // Only 'safe' key should be present, dangerous keys stripped
+    expect(Object.keys(result)).toEqual(['safe'])
+    expect(result.safe).toBe('value')
+  })
+
+  it('truncates deeply nested JSON beyond max depth', () => {
+    // Create deeply nested object (25 levels, beyond MAX_JSON_DEPTH=20)
+    let deep = { value: 'bottom' }
+    for (let i = 0; i < 25; i++) {
+      deep = { nested: deep }
+    }
+    const json = JSON.stringify(deep)
+    const result = extractJsonFromText(json, false)
+
+    // Navigate to depth 20 - should be empty object (truncated)
+    let current = result
+    for (let i = 0; i < 20; i++) {
+      if (current.nested) {
+        current = current.nested
+      }
+    }
+    // At depth 20+, content should be truncated to empty object
+    expect(current).toEqual({})
+  })
+
+  it('preserves JSON within max depth', () => {
+    // Create nested object within limits (10 levels)
+    let nested = { value: 'found' }
+    for (let i = 0; i < 10; i++) {
+      nested = { level: nested }
+    }
+    const json = JSON.stringify(nested)
+    const result = extractJsonFromText(json, false)
+
+    // Navigate to the bottom
+    let current = result
+    for (let i = 0; i < 10; i++) {
+      current = current.level
+    }
+    expect(current.value).toBe('found')
   })
 })
 

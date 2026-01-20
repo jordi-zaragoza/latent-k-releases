@@ -735,6 +735,33 @@ describe('getAllFiles', () => {
     expect(files).not.toContain('src/package-lock.json')
     expect(files).not.toContain('src/__init__.py')
   })
+
+  it('respects max depth limit', () => {
+    // Create deeply nested structure (16 levels deep, beyond MAX_DEPTH=15)
+    let currentDir = tmpDir
+    for (let i = 0; i < 16; i++) {
+      currentDir = path.join(currentDir, `level${i}`)
+      fs.mkdirSync(currentDir, { recursive: true })
+    }
+    fs.writeFileSync(path.join(currentDir, 'deep.js'), 'code')
+
+    const files = getAllFiles(tmpDir)
+    // File at depth 16 should not be found (MAX_DEPTH is 15)
+    expect(files).not.toContain('level0/level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/deep.js')
+  })
+
+  it('finds files within max depth', () => {
+    // Create structure at depth 10 (within MAX_DEPTH=15)
+    let currentDir = tmpDir
+    for (let i = 0; i < 10; i++) {
+      currentDir = path.join(currentDir, `d${i}`)
+      fs.mkdirSync(currentDir, { recursive: true })
+    }
+    fs.writeFileSync(path.join(currentDir, 'ok.js'), 'code')
+
+    const files = getAllFiles(tmpDir)
+    expect(files).toContain('d0/d1/d2/d3/d4/d5/d6/d7/d8/d9/ok.js')
+  })
 })
 
 describe('getProjectSummary', () => {

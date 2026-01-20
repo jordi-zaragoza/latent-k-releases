@@ -200,19 +200,30 @@ Rules:
 Return ONLY project-specific patterns, one per line. Empty response is OK.`
 }
 
+// Maximum nesting depth to prevent DoS via deeply nested JSON
+const MAX_JSON_DEPTH = 20
+
 /**
- * Sanitize parsed JSON to prevent prototype pollution attacks
+ * Sanitize parsed JSON to prevent prototype pollution attacks and DoS
  * Removes dangerous keys like __proto__, constructor, prototype
+ * Limits nesting depth to prevent stack overflow
  * @param {*} obj - Object to sanitize
+ * @param {number} depth - Current nesting depth
  * @returns {*} Sanitized object
  */
-function sanitizeJson(obj) {
+function sanitizeJson(obj, depth = 0) {
   if (obj === null || typeof obj !== 'object') {
     return obj
   }
 
+  // Prevent DoS via deeply nested payloads
+  if (depth >= MAX_JSON_DEPTH) {
+    log('AI-PROMPTS', `Max JSON depth (${MAX_JSON_DEPTH}) exceeded - truncating`)
+    return Array.isArray(obj) ? [] : {}
+  }
+
   if (Array.isArray(obj)) {
-    return obj.map(sanitizeJson)
+    return obj.map(item => sanitizeJson(item, depth + 1))
   }
 
   const dangerous = ['__proto__', 'constructor', 'prototype']
@@ -223,7 +234,7 @@ function sanitizeJson(obj) {
       log('AI-PROMPTS', `Blocked dangerous JSON key: ${key}`)
       continue
     }
-    sanitized[key] = sanitizeJson(obj[key])
+    sanitized[key] = sanitizeJson(obj[key], depth + 1)
   }
 
   return sanitized
