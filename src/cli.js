@@ -13,7 +13,7 @@ import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored } from './lib/context.js'
+import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored, validateProjectDirectory, isHomeOrRoot } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, getLicenseKey, isLicensed, checkAccess } from './lib/license.js'
 import { parseLicense } from './lib/license-gen.js'
@@ -403,11 +403,29 @@ program
       return
     }
 
+    // Block home/root directory (always invalid, even if .lk/ exists)
+    if (isHomeOrRoot(process.cwd())) {
+      const msg = 'Cannot run in home/root directory. Use "lk clean -c" to remove .lk/ if needed.'
+      output(jsonMode ? `❌ ${msg}` : `${red}${msg}${reset}`, true)
+      return
+    }
+
     // Sync context: full sync if no .lk, project-only if exists
     const provider = getAiProvider()
     let syncResult
 
     if (!existsSync('.lk')) {
+      // Validate directory before auto-sync
+      const validation = validateProjectDirectory(process.cwd())
+      if (!validation.valid) {
+        const msg = validation.reason === 'home_or_root'
+          ? 'Not a project directory. Run "lk sync" manually if intended.'
+          : validation.reason === 'too_many_files'
+          ? `Found ${validation.count} files. Run "lk sync" manually to confirm.`
+          : 'No project detected. Run "lk sync" manually if intended.'
+        output(jsonMode ? `⚠ ${msg}` : `${yellow}${msg}${reset}`)
+        return
+      }
       // No context yet - do full sync
       if (!jsonMode) terminalPrint(`${yellow}Initializing context...${reset}`)
       await runSync({ quiet: true })
