@@ -68,6 +68,10 @@ export function getLicenseKey() {
 
 export function setLicenseKey(key) {
   store.set('licenseKey', key)
+  // Clear any previous revocation state when setting a new license
+  store.delete('revokedReason')
+  store.delete('lastOnlineResult')
+  store.delete('lastOnlineCheck')
 }
 
 export function clearLicense() {
@@ -173,10 +177,12 @@ async function checkOnline(email) {
     store.set('lastOnlineCheck', Date.now())
     store.set('lastOnlineResult', data)
 
-    // If license was revoked, clear local license
+    // Update local revocation state based on server response
     if (data.revoked) {
-      clearLicense()
       store.set('revokedReason', data.revokeReason || 'License revoked')
+    } else {
+      // Clear revocation state if server says not revoked (unrevoke case)
+      store.delete('revokedReason')
     }
 
     return data
