@@ -59,6 +59,11 @@ lk ignore "**/fixtures/**"
 | Claude Code | Supported |
 | Gemini CLI | Supported |
 
+## Benchmarks
+
+- [Small project benchmark (PDF)](benchmarks/benchmark_small.pdf) - 6,596 files, **1.38x faster**
+- [Large project benchmark (PDF)](benchmarks/benchmark_big.pdf) - 27,985 files, **1.61x faster**
+
 ## License
 
 Commercial software - license required.
