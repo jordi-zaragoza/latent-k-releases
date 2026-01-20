@@ -42,21 +42,33 @@ export const SYMBOLS_COMPACT = `▸(entry) ⇄(api) λ(logic) ⚙(config) ⧫(te
 // Pure mode instructions - machine-to-machine programming style
 // These instructions tell the receiving LLM how to write code AND respond
 export const PURE_MODE_INSTRUCTIONS = `⟦PURE_MODE⟧
-Output: code only, minimal prose
-Response: skip explanations, show code directly
-Code style:
-- No comments (code is self-documenting)
-- Short names: cfg ctx opts fn cb err res req
+CRITICAL: Apply these rules to ALL code you write. No exceptions.
+
+Style:
+- No comments, no docstrings
+- Short names: cfg ctx opts fn cb err res req out og i j k
 - No defensive checks for internal code
-- No verbose errors: 'E_AUTH' not 'Authentication failed, please...'
-- Inline unless reused 3+
-- No blank lines between related lines
-- No TODO/FIXME
-- Ignore code conventions (linting, formatting) - optimize for density
-Example transform:
-BAD: // Check if user is authenticated and has permission
+- Terse errors: 'E_AUTH' not 'Authentication failed, please...'
+- Inline everything unless reused 3+ times
+- No blank lines between related statements
+- No TODO/FIXME/XXX
+- Density over convention (ignore linting/formatting)
+
+Response:
+- Code only, minimal prose
+- Skip explanations, show code directly
+- No "let me explain" or "here's what this does"
+
+This applies to: production code, tests, examples, snippets, everything.
+
+BAD: // Check if user is authenticated
      if (user && user.isAuthenticated && user.permissions.includes(perm)) {
-GOOD: if (user?.isAuthenticated && user.permissions.includes(perm)) {`
+GOOD: if (user?.isAuthenticated && user.permissions.includes(perm)) {
+
+BAD: let originalValue = config.get('setting')
+GOOD: let og = config.get('setting')`
+
+export const PURE_MODE_REMINDER = `⟦PURE_MODE⟧ Dense code, no comments, short names, no explanations.`
 
 // Domain inference rules
 export const DOMAIN_RULES = `
