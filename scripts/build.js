@@ -2,7 +2,7 @@
 
 import { build } from 'esbuild'
 import { execSync } from 'child_process'
-import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs'
+import { mkdirSync, rmSync, writeFileSync, readFileSync, cpSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -43,6 +43,22 @@ writeFileSync(join(distDir, 'package.json'), JSON.stringify({
 }, null, 2))
 
 console.log('✅ Bundle created: dist/cli.js')
+
+// Copy benchmarks
+const benchmarksDir = join(root, 'benchmarks')
+if (existsSync(benchmarksDir)) {
+  console.log('📊 Copying benchmarks...')
+  cpSync(benchmarksDir, join(distDir, 'benchmarks'), { recursive: true })
+  console.log('✅ Benchmarks copied to dist/benchmarks/')
+}
+
+// Copy README
+const readmePath = join(root, 'README.md')
+if (existsSync(readmePath)) {
+  console.log('📄 Copying README...')
+  cpSync(readmePath, join(distDir, 'README.md'))
+  console.log('✅ README copied to dist/')
+}
 
 // Determine which targets to build
 const targets = process.argv.includes('--all')
