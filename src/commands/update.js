@@ -10,6 +10,7 @@ const HTTP_TIMEOUT_MS = 30000  // 30 seconds timeout for HTTP requests
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
 const LK_BIN_PATH = '/usr/local/bin/lk'
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+const MIN_VERSION_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/min_version`
 
 function canWrite(path) {
   try {
@@ -17,6 +18,56 @@ function canWrite(path) {
     return true
   } catch {
     return false
+  }
+}
+
+function fetchText(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: { 'User-Agent': 'lk' },
+      timeout: HTTP_TIMEOUT_MS
+    }, (res) => {
+      if (res.statusCode === 302 || res.statusCode === 301) {
+        return fetchText(res.headers.location).then(resolve).catch(reject)
+      }
+      if (res.statusCode === 404) {
+        resolve(null)
+        return
+      }
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => resolve(data.trim()))
+    })
+    req.on('error', reject)
+    req.on('timeout', () => {
+      req.destroy()
+      reject(new Error('Request timed out'))
+    })
+  })
+}
+
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1
+  }
+  return 0
+}
+
+export async function checkMinVersion() {
+  try {
+    const minVersion = await fetchText(MIN_VERSION_URL)
+    if (!minVersion) return { ok: true }
+
+    if (compareVersions(VERSION, minVersion) < 0) {
+      return { ok: false, minVersion, currentVersion: VERSION }
+    }
+    return { ok: true }
+  } catch {
+    // Si falla la verificación, permitir continuar
+    return { ok: true }
   }
 }
 
@@ -140,7 +191,8 @@ function getPlatformAsset(assets) {
   })
 }
 
-export async function update() {
+export async function update(options = {}) {
+  const { force } = options
   console.log('Checking for updates...\n')
 
   try {
@@ -156,9 +208,13 @@ export async function update() {
     console.log(`Current version: ${VERSION}`)
     console.log(`Latest version:  ${latestVersion}`)
 
-    if (VERSION === latestVersion) {
+    if (VERSION === latestVersion && !force) {
       console.log('\nAlready up to date!')
       return
+    }
+
+    if (VERSION === latestVersion && force) {
+      console.log('\nForcing reinstall...')
     }
 
     const asset = getPlatformAsset(release.assets)

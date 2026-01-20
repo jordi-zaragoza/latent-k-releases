@@ -28,7 +28,9 @@ jobs:
 
       - name: Create install script
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG%-force}"
+
           cat > dist/install.sh << 'SCRIPT'
           #!/bin/bash
           set -e
@@ -84,7 +86,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Detect -force suffix and extract clean version
+          if [[ "$TAG" == *-force ]]; then
+            VERSION="${TAG%-force}"
+            FORCE_UPDATE=true
+          else
+            VERSION="$TAG"
+            FORCE_UPDATE=false
+          fi
 
           # Clone releases repo
           git clone https://x-access-token:${GH_TOKEN}@github.com/jordi-zaragoza/latent-k-releases.git releases
@@ -96,9 +107,17 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
           git diff --cached --quiet || git commit -m "Update README for $VERSION"
+
+          # Update min_version if force_update is enabled
+          if [ "$FORCE_UPDATE" = "true" ]; then
+            echo "${VERSION#v}" > min_version
+            git add min_version
+            git commit -m "Force update to $VERSION"
+          fi
+
           git push
 
-          # Delete existing release if exists (for forced tags)
+          # Delete existing release if exists (for re-releases)
           gh release delete $VERSION --yes 2>/dev/null || true
 
           # Create release using gh CLI
