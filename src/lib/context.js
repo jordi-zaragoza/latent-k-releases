@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { homedir } from 'os'
 import { createHash } from 'crypto'
 import { log } from './config.js'
 import { encrypt, decrypt } from './crypto.js'
@@ -65,6 +66,45 @@ export function getFileExtension(filePath) {
 
 export function isCodeFile(filePath) {
   return CODE_EXTENSIONS.includes(getFileExtension(filePath))
+}
+
+/**
+ * Check if directory is home or root (always invalid)
+ */
+export function isHomeOrRoot(dir) {
+  const home = homedir()
+  return dir === home || dir === '/' || dir === home + '/'
+}
+
+/**
+ * Check if directory looks like a valid project root
+ */
+export function validateProjectDirectory(dir) {
+  // Project indicators
+  const PROJECT_MARKERS = [
+    'package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod',
+    'pom.xml', 'build.gradle', 'Makefile', 'CMakeLists.txt',
+    '.git', 'composer.json', 'Gemfile', 'requirements.txt'
+  ]
+
+  // Check if it's home or root (always invalid)
+  if (isHomeOrRoot(dir)) {
+    return { valid: false, reason: 'home_or_root' }
+  }
+
+  // Check for project markers
+  const hasMarker = PROJECT_MARKERS.some(m => fs.existsSync(path.join(dir, m)))
+  if (!hasMarker) {
+    return { valid: false, reason: 'no_project_markers' }
+  }
+
+  // Check file count (quick scan)
+  const files = getAllFiles(dir)
+  if (files.length > 500) {
+    return { valid: false, reason: 'too_many_files', count: files.length }
+  }
+
+  return { valid: true }
 }
 
 // Maximum directory depth to prevent stack overflow on deeply nested projects

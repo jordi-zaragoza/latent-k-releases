@@ -8,7 +8,7 @@ import {
   init, buildContext, buildContextForFiles, removeEntry,
   getAllEntries, getUnsyncedFiles, getDeletedFiles,
   getProject, setProject, ignoreExists, loadIgnore, saveIgnore, isIgnored,
-  loadState, saveState, getAllFiles
+  loadState, saveState, getAllFiles, exists, validateProjectDirectory, isHomeOrRoot
 } from '../lib/context.js'
 import { withSpinner } from '../lib/spinner.js'
 import {
@@ -98,6 +98,12 @@ export async function sync(options = {}) {
   log('SYNC', '=== Starting sync ===')
   log('SYNC', `Working directory: ${cwd}`)
 
+  // Block home/root directory entirely
+  if (isHomeOrRoot(cwd)) {
+    printErr('Cannot sync in home/root directory.')
+    process.exit(1)
+  }
+
   // Check access (license or trial, verify email)
   const userEmail = getClaudeUserEmail()
   const access = await checkAccess(userEmail)
@@ -115,6 +121,21 @@ export async function sync(options = {}) {
     process.exit(1)
   }
   log('SYNC', 'Config OK')
+
+  // Warn if directory doesn't look like a project (only when .lk/ doesn't exist)
+  if (!exists(cwd)) {
+    const validation = validateProjectDirectory(cwd)
+    if (!validation.valid) {
+      const reason = validation.reason === 'home_or_root'
+        ? 'This looks like your home directory.'
+        : validation.reason === 'too_many_files'
+        ? `Found ${validation.count} code files (>500).`
+        : 'No project markers found (package.json, .git, etc).'
+      print(`⚠ Warning: ${reason}`)
+      print('Press Ctrl+C within 3 seconds to cancel...')
+      await new Promise(r => setTimeout(r, 3000))
+    }
+  }
 
   // Initialize .lk if needed
   init(cwd)

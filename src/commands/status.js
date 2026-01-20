@@ -5,15 +5,36 @@ import { isLicensed, validateLicense, getLicenseExpiration, getLicenseKey, isLic
 import { parseLicense } from '../lib/license-gen.js'
 import {
   exists, getUnsyncedFiles, getDeletedFiles, getAllEntries, loadIgnore, ignoreExists, isIgnored,
-  getAllFiles
+  getAllFiles, validateProjectDirectory, isHomeOrRoot
 } from '../lib/context.js'
 
 export async function status() {
   const cwd = process.cwd()
   console.log('lk status\n')
 
+  // Block home/root directory entirely
+  if (isHomeOrRoot(cwd)) {
+    console.log('⚠ Cannot run in home/root directory.')
+    console.log('Use "lk clean -c" to remove .lk/ if needed.\n')
+    return
+  }
+
   const config = getConfig()
   const hasContext = exists(cwd)
+
+  // Early validation when no context exists
+  if (!hasContext) {
+    const validation = validateProjectDirectory(cwd)
+    if (!validation.valid) {
+      const reason = validation.reason === 'too_many_files'
+        ? `Found ${validation.count} code files.`
+        : 'No project markers found.'
+      console.log(`⚠ ${reason}`)
+      console.log('Run "lk sync" in a project directory to initialize.\n')
+      return
+    }
+  }
+
   const licensed = isLicensed()
   let licenseValid = false
 
