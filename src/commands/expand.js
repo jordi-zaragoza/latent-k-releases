@@ -13,6 +13,7 @@ import readline from 'readline'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log, getPureMode } from '../lib/config.js'
+import { PURE_MODE_REMINDER } from '../lib/ai-prompts.js'
 import { checkAccess } from '../lib/license.js'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
 
@@ -391,8 +392,10 @@ export async function expandCommand(prompt, options = {}) {
   if (!forceExpand && wasAlreadyExpanded(transcriptPath)) {
     log('HOOK', 'Already expanded this session, skipping further expansions')
     if (debug) console.error('[lk expand] Already expanded this session, skipping')
-    // Show hint to user (stderr doesn't affect LLM output)
     console.error('💡 Tip: Start your prompt with "lk" to inject fresh context')
+    if (getPureMode()) {
+      console.log(`<system-reminder>\n${PURE_MODE_REMINDER}\n</system-reminder>`)
+    }
     return
   }
 
@@ -447,7 +450,7 @@ export async function expandCommand(prompt, options = {}) {
       markAsExpanded(transcriptPath)
     } else if (getPureMode()) {
       // No expand output but pure mode active - send short reminder
-      console.log('<system-reminder>⟦PURE_MODE⟧ active</system-reminder>')
+      console.log(`<system-reminder>\n${PURE_MODE_REMINDER}\n</system-reminder>`)
     }
   } catch (err) {
     if (debug) {
@@ -455,7 +458,7 @@ export async function expandCommand(prompt, options = {}) {
     }
     // On error, output pure mode reminder if active
     if (getPureMode()) {
-      console.log('<system-reminder>⟦PURE_MODE⟧ active</system-reminder>')
+      console.log(`<system-reminder>\n${PURE_MODE_REMINDER}\n</system-reminder>`)
     }
   }
 }
