@@ -17,7 +17,8 @@ const RATE_LIMIT = {
   login: { maxAttempts: 5, windowSeconds: 300 },    // 5 attempts per 5 minutes
   trial: { maxAttempts: 3, windowSeconds: 3600 },   // 3 attempts per hour
   checkout: { maxAttempts: 10, windowSeconds: 60 }, // 10 attempts per minute
-  chat: { maxAttempts: 529, windowSeconds: 86400 }  // 529 messages per day
+  chat: { maxAttempts: 529, windowSeconds: 86400 },  // 529 messages per day
+  checkLicense: { maxAttempts: 30, windowSeconds: 60 }  // 30 checks per minute
 };
 
 // In-memory fallback for rate limiting when KV fails
@@ -857,6 +858,208 @@ async function handleListLicenses(request, env) {
 }
 
 /**
+ * Check license status (for online validation)
+ * GET /api/check-license?email=xxx
+ */
+async function handleCheckLicense(request, env) {
+  const origin = request.headers.get('Origin');
+  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  // Rate limiting
+  const rateLimit = await checkRateLimit(env, 'checkLicense', clientIP);
+  if (!rateLimit.allowed) {
+    return jsonResponse({
+      error: 'Too many requests. Please try again later.',
+      retryAfter: rateLimit.resetIn
+    }, 429, origin);
+  }
+
+  const url = new URL(request.url);
+  const email = url.searchParams.get('email');
+
+  if (!email) {
+    return jsonResponse({ error: 'email is required' }, 400, origin);
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  try {
+    // Check paid license first
+    let licenseData = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
+
+    // Fall back to trial
+    if (!licenseData) {
+      licenseData = await env.LICENSES.get(`license:trial:${normalizedEmail}`);
+    }
+
+    if (!licenseData) {
+      return jsonResponse({
+        valid: false,
+        error: 'License not found'
+      }, 404, origin);
+    }
+
+    const license = JSON.parse(licenseData);
+    const now = Date.now();
+    const expires = license.expires ? new Date(license.expires).getTime() : null;
+    const expired = expires ? now > expires : false;
+    const daysLeft = expires ? Math.ceil((expires - now) / (24 * 60 * 60 * 1000)) : null;
+
+    return jsonResponse({
+      valid: !license.revoked && !expired,
+      revoked: !!license.revoked,
+      revokedAt: license.revokedAt || null,
+      revokeReason: license.revokeReason || null,
+      expired,
+      expires: license.expires,
+      daysLeft,
+      plan: license.plan
+    }, 200, origin);
+
+  } catch (error) {
+    console.error('Check license error:', error);
+    return jsonResponse({ error: 'Failed to check license' }, 500, origin);
+  }
+}
+
+/**
+ * Revoke a license (keeps record but marks as invalid)
+ * POST /api/revoke
+ * Body: { email, reason? }
+ */
+async function handleRevoke(request, env) {
+  const origin = request.headers.get('Origin');
+  const auth = await checkAuth(request, env);
+
+  if (!auth.authenticated || auth.source !== 'admin') {
+    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
+  }
+
+  try {
+    const { email, reason } = await request.json();
+
+    if (!email) {
+      return jsonResponse({ error: 'Email is required' }, 400, origin);
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check paid license first
+    let licenseKey = `license:paid:${normalizedEmail}`;
+    let licenseData = await env.LICENSES.get(licenseKey);
+
+    // Fall back to trial
+    if (!licenseData) {
+      licenseKey = `license:trial:${normalizedEmail}`;
+      licenseData = await env.LICENSES.get(licenseKey);
+    }
+
+    if (!licenseData) {
+      return jsonResponse({ error: 'License not found' }, 404, origin);
+    }
+
+    const license = JSON.parse(licenseData);
+
+    if (license.revoked) {
+      return jsonResponse({ error: 'License already revoked' }, 409, origin);
+    }
+
+    // Mark as revoked (keep all data for audit)
+    license.revoked = true;
+    license.revokedAt = new Date().toISOString();
+    license.revokeReason = reason || 'Revoked by admin';
+
+    // Update in KV
+    await env.LICENSES.put(licenseKey, JSON.stringify(license));
+
+    // Also update by ID if exists
+    if (license.id) {
+      await env.LICENSES.put(`license:id:${license.id}`, JSON.stringify(license));
+    }
+
+    console.log(`[LICENSE] Revoked license for ${normalizedEmail}: ${reason || 'No reason'}`);
+
+    return jsonResponse({
+      success: true,
+      email: normalizedEmail,
+      revokedAt: license.revokedAt
+    }, 200, origin);
+
+  } catch (error) {
+    console.error('Revoke error:', error);
+    return jsonResponse({ error: error.message || 'Failed to revoke license' }, 500, origin);
+  }
+}
+
+/**
+ * Unrevoke a license (restore access)
+ * POST /api/unrevoke
+ * Body: { email }
+ */
+async function handleUnrevoke(request, env) {
+  const origin = request.headers.get('Origin');
+  const auth = await checkAuth(request, env);
+
+  if (!auth.authenticated || auth.source !== 'admin') {
+    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
+  }
+
+  try {
+    const { email } = await request.json();
+
+    if (!email) {
+      return jsonResponse({ error: 'Email is required' }, 400, origin);
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check paid license first
+    let licenseKey = `license:paid:${normalizedEmail}`;
+    let licenseData = await env.LICENSES.get(licenseKey);
+
+    // Fall back to trial
+    if (!licenseData) {
+      licenseKey = `license:trial:${normalizedEmail}`;
+      licenseData = await env.LICENSES.get(licenseKey);
+    }
+
+    if (!licenseData) {
+      return jsonResponse({ error: 'License not found' }, 404, origin);
+    }
+
+    const license = JSON.parse(licenseData);
+
+    if (!license.revoked) {
+      return jsonResponse({ error: 'License is not revoked' }, 409, origin);
+    }
+
+    // Remove revocation
+    delete license.revoked;
+    delete license.revokedAt;
+    delete license.revokeReason;
+
+    // Update in KV
+    await env.LICENSES.put(licenseKey, JSON.stringify(license));
+
+    // Also update by ID if exists
+    if (license.id) {
+      await env.LICENSES.put(`license:id:${license.id}`, JSON.stringify(license));
+    }
+
+    console.log(`[LICENSE] Unrevoked license for ${normalizedEmail}`);
+
+    return jsonResponse({
+      success: true,
+      email: normalizedEmail
+    }, 200, origin);
+
+  } catch (error) {
+    console.error('Unrevoke error:', error);
+    return jsonResponse({ error: error.message || 'Failed to unrevoke license' }, 500, origin);
+  }
+}
+
+/**
  * Get license by session ID
  * GET /api/license?session_id=xxx
  */
@@ -1043,6 +1246,18 @@ export default {
 
     if (path === '/api/license' && method === 'GET') {
       return handleGetLicense(request, env);
+    }
+
+    if (path === '/api/check-license' && method === 'GET') {
+      return handleCheckLicense(request, env);
+    }
+
+    if (path === '/api/revoke' && method === 'POST') {
+      return handleRevoke(request, env);
+    }
+
+    if (path === '/api/unrevoke' && method === 'POST') {
+      return handleUnrevoke(request, env);
     }
 
     if (path === '/api/trial' && method === 'POST') {

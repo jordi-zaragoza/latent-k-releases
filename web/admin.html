@@ -173,6 +173,11 @@
             color: var(--text-secondary);
         }
 
+        .status.revoked {
+            background: rgba(255, 71, 87, 0.1);
+            color: var(--accent-red);
+        }
+
         .btn {
             padding: 0.4rem 0.75rem;
             border: none;
@@ -190,6 +195,28 @@
         .btn-delete:hover {
             background: var(--accent-red);
             color: white;
+        }
+
+        .btn-revoke {
+            background: rgba(255, 165, 0, 0.1);
+            color: #ffa500;
+            margin-right: 0.25rem;
+        }
+
+        .btn-revoke:hover {
+            background: #ffa500;
+            color: white;
+        }
+
+        .btn-unrevoke {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--accent-green);
+            margin-right: 0.25rem;
+        }
+
+        .btn-unrevoke:hover {
+            background: var(--accent-green);
+            color: var(--bg-primary);
         }
 
 
@@ -659,6 +686,10 @@
                 <div class="stat-label">Expired</div>
             </div>
             <div class="stat-card">
+                <div class="stat-value" id="revoked-count">0</div>
+                <div class="stat-label">Revoked</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-value" id="monthly-count">0</div>
                 <div class="stat-label">Monthly</div>
             </div>
@@ -672,6 +703,7 @@
             <button class="filter-btn active" data-filter="all">All</button>
             <button class="filter-btn" data-filter="active">Active</button>
             <button class="filter-btn" data-filter="expired">Expired</button>
+            <button class="filter-btn" data-filter="revoked">Revoked</button>
             <input type="text" class="search-box" placeholder="Search by email..." id="search-input">
         </div>
 
@@ -802,19 +834,22 @@
 
         function updateStats() {
             const now = new Date();
-            const active = allLicenses.filter(l => new Date(l.expires) > now);
-            const expired = allLicenses.filter(l => new Date(l.expires) <= now);
+            const revoked = allLicenses.filter(l => l.revoked);
+            const active = allLicenses.filter(l => !l.revoked && new Date(l.expires) > now);
+            const expired = allLicenses.filter(l => !l.revoked && new Date(l.expires) <= now);
             const monthly = allLicenses.filter(l => l.plan === 'monthly');
             const yearly = allLicenses.filter(l => l.plan === 'yearly');
 
             document.getElementById('total-count').textContent = allLicenses.length;
             document.getElementById('active-count').textContent = active.length;
             document.getElementById('expired-count').textContent = expired.length;
+            document.getElementById('revoked-count').textContent = revoked.length;
             document.getElementById('monthly-count').textContent = monthly.length;
             document.getElementById('yearly-count').textContent = yearly.length;
         }
 
         function getStatus(license) {
+            if (license.revoked) return 'revoked';
             if (new Date(license.expires) < new Date()) return 'expired';
             return 'active';
         }
@@ -836,6 +871,8 @@
                 filtered = filtered.filter(l => getStatus(l) === 'active');
             } else if (currentFilter === 'expired') {
                 filtered = filtered.filter(l => getStatus(l) === 'expired');
+            } else if (currentFilter === 'revoked') {
+                filtered = filtered.filter(l => getStatus(l) === 'revoked');
             }
 
             // Apply search
@@ -861,6 +898,10 @@
                 const safeName = escapeHtml(license.name) || '-';
                 const safePlan = escapeHtml(license.plan);
 
+                const revokeBtn = license.revoked
+                    ? `<button class="btn btn-unrevoke" data-email="${safeEmail}">Unrevoke</button>`
+                    : `<button class="btn btn-revoke" data-email="${safeEmail}">Revoke</button>`;
+
                 return `
                     <tr>
                         <td>${safeEmail}</td>
@@ -873,7 +914,10 @@
                             <span class="key-preview">${safeKey}</span>
                             <button class="btn-show-key" data-key="${safeKey}">Show</button>
                         </td>
-                        <td><button class="btn btn-delete" data-key="${safeKey}">Delete</button></td>
+                        <td>
+                            ${revokeBtn}
+                            <button class="btn btn-delete" data-key="${safeKey}">Delete</button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -894,6 +938,46 @@
             }
         }
 
+        async function revokeLicense(email) {
+            const reason = prompt('Reason for revocation (optional):');
+            if (reason === null) return; // Cancelled
+
+            try {
+                const res = await apiCall('/api/revoke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, reason: reason || undefined })
+                });
+                if (res.ok) {
+                    loadLicenses();
+                } else {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to revoke license');
+                }
+            } catch (err) {
+                alert('Failed to revoke license');
+            }
+        }
+
+        async function unrevokeLicense(email) {
+            if (!confirm('Restore access for this license?')) return;
+
+            try {
+                const res = await apiCall('/api/unrevoke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                if (res.ok) {
+                    loadLicenses();
+                } else {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to unrevoke license');
+                }
+            } catch (err) {
+                alert('Failed to unrevoke license');
+            }
+        }
 
         // Filter buttons
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -917,6 +1001,12 @@
             } else if (target.classList.contains('btn-show-key')) {
                 const key = target.dataset.key;
                 if (key) showKey(key);
+            } else if (target.classList.contains('btn-revoke')) {
+                const email = target.dataset.email;
+                if (email) revokeLicense(email);
+            } else if (target.classList.contains('btn-unrevoke')) {
+                const email = target.dataset.email;
+                if (email) unrevokeLicense(email);
             }
         });
 
