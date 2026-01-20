@@ -301,4 +301,57 @@ describe('expand command', () => {
       )
     })
   })
+
+  describe('lk prefix force expand', () => {
+    beforeEach(() => {
+      exists.mockReturnValue(true)
+      isConfigured.mockReturnValue(true)
+      checkAccess.mockReturnValue({ allowed: true })
+    })
+
+    it('strips lk prefix from prompt before processing', async () => {
+      expand.mockResolvedValue({ type: 'passthrough', calls: 1, context: null })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('lk how does auth work?', {})
+
+      expect(expand).toHaveBeenCalledWith(tempDir, 'how does auth work?')
+    })
+
+    it('strips lk prefix case-insensitively', async () => {
+      expand.mockResolvedValue({ type: 'passthrough', calls: 1, context: null })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('LK explain this function', {})
+
+      expect(expand).toHaveBeenCalledWith(tempDir, 'explain this function')
+    })
+
+    it('handles lk prefix with extra whitespace', async () => {
+      expand.mockResolvedValue({ type: 'passthrough', calls: 1, context: null })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('lk   what is this?', {})
+
+      expect(expand).toHaveBeenCalledWith(tempDir, 'what is this?')
+    })
+
+    it('does not strip lk from middle of prompt', async () => {
+      expand.mockResolvedValue({ type: 'passthrough', calls: 1, context: null })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('explain the lk command', {})
+
+      expect(expand).toHaveBeenCalledWith(tempDir, 'explain the lk command')
+    })
+
+    it('handles JSON input with lk prefix in prompt', async () => {
+      expand.mockResolvedValue({ type: 'passthrough', calls: 1, context: null })
+
+      const { expandCommand } = await import('../src/commands/expand.js')
+      await expandCommand('{"prompt": "lk help me with this"}', {})
+
+      expect(expand).toHaveBeenCalledWith(tempDir, 'help me with this')
+    })
+  })
 })

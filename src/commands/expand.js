@@ -245,8 +245,17 @@ export async function expandCommand(prompt, options = {}) {
     return
   }
 
-  // Skip if already expanded for this session
-  if (wasAlreadyExpanded(transcriptPath)) {
+  // Check if prompt starts with "lk" - force expand bypass
+  const forceExpand = input.toLowerCase().startsWith('lk')
+  let processedInput = input
+  if (forceExpand) {
+    log('HOOK', 'Force expand triggered (prompt starts with "lk")')
+    // Strip "lk" prefix from prompt for processing
+    processedInput = input.slice(2).trimStart()
+  }
+
+  // Skip if already expanded for this session (unless forced)
+  if (!forceExpand && wasAlreadyExpanded(transcriptPath)) {
     log('HOOK', 'Already expanded this session, skipping further expansions')
     if (debug) console.error('[lk expand] Already expanded this session, skipping')
     return
@@ -277,7 +286,7 @@ export async function expandCommand(prompt, options = {}) {
   }
 
   try {
-    const result = await expand(root, input)
+    const result = await expand(root, processedInput)
 
     if (debug) {
       console.error(`[lk expand] ${result.calls} API call(s), type: ${result.type}`)
