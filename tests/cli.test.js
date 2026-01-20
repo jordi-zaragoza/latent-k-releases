@@ -46,6 +46,32 @@ describe('CLI binary protection', () => {
 })
 
 
+describe('CLI banner gradient', () => {
+  const cliContent = readFileSync(join(srcDir, 'cli.js'), 'utf8')
+
+  it('checks COLORTERM for true color support', () => {
+    expect(cliContent).toContain("process.env.COLORTERM === 'truecolor'")
+    expect(cliContent).toContain("process.env.COLORTERM === '24bit'")
+  })
+
+  it('has gradient function with RGB colors', () => {
+    expect(cliContent).toContain('gradientChar')
+    expect(cliContent).toMatch(/\\x1b\[38;2;/)
+  })
+
+  it('has cyan fallback for unsupported terminals', () => {
+    expect(cliContent).toContain("const cyan = '\\x1b[36m'")
+    expect(cliContent).toContain('if (supportsTrueColor)')
+    expect(cliContent).toMatch(/else\s*\{[\s\S]*?\$\{cyan\}/)
+  })
+
+  it('banner has correct ASCII art', () => {
+    expect(cliContent).toContain('╔═══════════════════════════════════╗')
+    expect(cliContent).toContain('║       ⦓  L A T E N T - K  ⦔       ║')
+    expect(cliContent).toContain('╚═══════════════════════════════════╝')
+  })
+})
+
 describe('License admin is external', () => {
   it('cli.js does not register license generation commands', () => {
     const cliContent = readFileSync(join(srcDir, 'cli.js'), 'utf8')
