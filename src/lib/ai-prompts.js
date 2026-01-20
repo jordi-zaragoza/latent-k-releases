@@ -68,7 +68,7 @@ GOOD: if (user?.isAuthenticated && user.permissions.includes(perm)) {
 BAD: let originalValue = config.get('setting')
 GOOD: let og = config.get('setting')`
 
-export const PURE_MODE_REMINDER = `⟦PURE_MODE⟧ Dense code, no comments, short names, no explanations.`
+export const PURE_MODE_REMINDER = `⟦PURE_MODE⟧ Max density: no comments, short names, no blank lines, minimal spaces, inline/nested, no explanations.`
 
 // Domain inference rules
 export const DOMAIN_RULES = `
