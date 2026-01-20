@@ -1,6 +1,6 @@
 import Conf from 'conf'
 import { createHash, randomBytes } from 'crypto'
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs'
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { homedir, hostname, userInfo } from 'os'
 import { join, basename } from 'path'
 
@@ -57,15 +57,48 @@ export const DEBUG = process.env.LK_DEBUG === '1'
 const LOG_DIR = join(homedir(), '.lk')
 const LOG_FILE = join(LOG_DIR, 'debug.log')
 
+// Buffered logging configuration
+const LOG_BUFFER_SIZE = 50        // Flush after this many messages
+const LOG_FLUSH_INTERVAL_MS = 5000 // Or flush after this many ms
+let logBuffer = []
+let logDirCreated = false
+let flushTimer = null
+
 function timestamp() {
   return new Date().toISOString().replace('T', ' ').slice(0, 23)
 }
 
 function ensureLogDir() {
+  if (logDirCreated) return
   try {
     mkdirSync(LOG_DIR, { recursive: true })
+    logDirCreated = true
   } catch {}
 }
+
+/**
+ * Flush buffered logs to disk
+ */
+function flushLogs() {
+  if (logBuffer.length === 0) return
+
+  ensureLogDir()
+  try {
+    appendFileSync(LOG_FILE, logBuffer.join(''))
+  } catch {}
+  logBuffer = []
+
+  // Clear timer if exists
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+}
+
+// Flush on process exit
+process.on('exit', flushLogs)
+process.on('SIGINT', () => { flushLogs(); process.exit(0) })
+process.on('SIGTERM', () => { flushLogs(); process.exit(0) })
 
 export function log(category, ...args) {
   // Only log when running from source (not compiled binary)
@@ -74,28 +107,67 @@ export function log(category, ...args) {
   const project = basename(process.cwd())
   const msg = `[${timestamp()}] [${project}] [${category}] ${args.join(' ')}\n`
 
-  ensureLogDir()
-  appendFileSync(LOG_FILE, msg)
+  logBuffer.push(msg)
+
+  // Flush if buffer is full
+  if (logBuffer.length >= LOG_BUFFER_SIZE) {
+    flushLogs()
+    return
+  }
+
+  // Schedule flush if not already scheduled
+  if (!flushTimer) {
+    flushTimer = setTimeout(flushLogs, LOG_FLUSH_INTERVAL_MS)
+  }
 }
 
-const config = new Conf({
-  projectName: 'lk',
-  encryptionKey: deriveEncryptionKey('config-v1'),
-  schema: {
-    aiProvider: { type: 'string', default: '' }, // 'anthropic' | 'gemini'
-    anthropicApiKey: { type: 'string', default: '' },
-    geminiApiKey: { type: 'string', default: '' },
-    autoSync: { type: 'boolean', default: true },
-    watchPatterns: {
-      type: 'array',
-      default: ['**/*.js', '**/*.ts', '**/*.py', '**/*.go', '**/*.rs', '**/*.java', '**/*.php', '**/*.rb']
-    },
-    ignorePatterns: {
-      type: 'array',
-      default: ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/*.lock', '**/package-lock.json', '**/venv/**', '**/.venv/**', '**/__pycache__/**']
+/**
+ * Create Conf instance with auto-recovery from corrupted config
+ * If encryption key changed, the old config can't be decrypted - delete and start fresh
+ */
+function createConfig() {
+  const confOptions = {
+    projectName: 'lk',
+    encryptionKey: deriveEncryptionKey('config-v1'),
+    schema: {
+      aiProvider: { type: 'string', default: '' }, // 'anthropic' | 'gemini'
+      anthropicApiKey: { type: 'string', default: '' },
+      geminiApiKey: { type: 'string', default: '' },
+      autoSync: { type: 'boolean', default: true },
+      watchPatterns: {
+        type: 'array',
+        default: ['**/*.js', '**/*.ts', '**/*.py', '**/*.go', '**/*.rs', '**/*.java', '**/*.php', '**/*.rb']
+      },
+      ignorePatterns: {
+        type: 'array',
+        default: ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/*.lock', '**/package-lock.json', '**/venv/**', '**/.venv/**', '**/__pycache__/**']
+      }
     }
   }
-})
+
+  try {
+    return new Conf(confOptions)
+  } catch (err) {
+    // Config file corrupted (encryption key changed) - delete and retry
+    if (err.message?.includes('JSON') || err.message?.includes('Unexpected token')) {
+      const configDir = join(homedir(), '.config', 'lk-nodejs')
+      const configFile = join(configDir, 'config.json')
+      try {
+        if (existsSync(configFile)) {
+          unlinkSync(configFile)
+          console.error('[lk] Config file corrupted (encryption key changed) - reset to defaults')
+        }
+      } catch {
+        // Ignore deletion errors
+      }
+      // Retry after deletion
+      return new Conf(confOptions)
+    }
+    throw err
+  }
+}
+
+const config = createConfig()
 
 export function getAiProvider() {
   return config.get('aiProvider')
