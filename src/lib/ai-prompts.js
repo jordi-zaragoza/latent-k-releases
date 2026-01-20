@@ -39,6 +39,24 @@ export const SYMBOL_DESCRIPTIONS = `
 // Compact symbol legend (single line, ~60% smaller than SYMBOL_DESCRIPTIONS)
 export const SYMBOLS_COMPACT = `▸(entry) ⇄(api) λ(logic) ⚙(config) ⧫(test) ⊚(ui) ⟐(schema) ◈(bg) ⤳(pipe) ⚑(state)`
 
+// Pure mode instructions - machine-to-machine programming style
+// These instructions tell the receiving LLM how to write code AND respond
+export const PURE_MODE_INSTRUCTIONS = `⟦PURE_MODE⟧
+Output: code only, minimal prose
+Response: skip explanations, show code directly
+Code style:
+- No comments (code is self-documenting)
+- Short names: cfg ctx opts fn cb err res req
+- No defensive checks for internal code
+- No verbose errors: 'E_AUTH' not 'Authentication failed, please...'
+- Inline unless reused 3+
+- No blank lines between related lines
+- No TODO/FIXME
+Example transform:
+BAD: // Check if user is authenticated and has permission
+     if (user && user.isAuthenticated && user.permissions.includes(perm)) {
+GOOD: if (user?.isAuthenticated && user.permissions.includes(perm)) {`
+
 // Domain inference rules
 export const DOMAIN_RULES = `
 - src/commands/*, src/cli/* → "cli"

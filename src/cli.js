@@ -12,12 +12,14 @@ import { enableHooks, disableHooks } from './commands/hooks.js'
 import { clean } from './commands/clean.js'
 import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
+import { pure } from './commands/pure.js'
 import { writeFileSync, existsSync } from 'fs'
 import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored, validateProjectDirectory, isHomeOrRoot } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, getLicenseKey, isLicensed, checkAccess } from './lib/license.js'
 import { parseLicense } from './lib/license-gen.js'
-import { isConfigured, getAiProvider, getIgnorePatterns } from './lib/config.js'
+import { isConfigured, getAiProvider, getIgnorePatterns, getPureMode } from './lib/config.js'
+import { PURE_MODE_INSTRUCTIONS } from './lib/ai-prompts.js'
 import { sync as runSync, syncProjectOnly } from './commands/sync.js'
 import { join } from 'path'
 import { homedir } from 'os'
@@ -116,6 +118,11 @@ program
     json: options.json,
     reset: options.reset
   }))
+
+program
+  .command('pure [action]')
+  .description('Toggle pure mode (m2m coding style)')
+  .action(pure)
 
 program
   .command('update')
@@ -353,7 +360,12 @@ program
 
     // ASCII banner (only for Claude/tty mode)
     if (!jsonMode) {
-      const banner = [
+      const isPure = getPureMode()
+      const banner = isPure ? [
+        '╔═══════════════════════════════════╗',
+        '║    ◈ P U R E   M O D E ◈  L K     ║',
+        '╚═══════════════════════════════════╝'
+      ] : [
         '╔═══════════════════════════════════╗',
         '║       ⦓  L A T E N T - K  ⦔       ║',
         '╚═══════════════════════════════════╝'
@@ -362,10 +374,22 @@ program
       if (supportsTrueColor) {
         const rows = banner.length - 1
         const cols = banner[0].length - 1
-        banner.forEach((line, row) => {
-          const coloredLine = [...line].map((char, col) => gradientChar(char, row, col, rows, cols)).join('')
-          terminalPrint(coloredLine + reset)
-        })
+        if (isPure) {
+          // Pure mode: white/silver gradient
+          banner.forEach((line, row) => {
+            const coloredLine = [...line].map((char, col) => {
+              const t = col / cols
+              const v = Math.round(180 + t * 75)
+              return `\x1b[38;2;${v};${v};${v}m${char}`
+            }).join('')
+            terminalPrint(coloredLine + reset)
+          })
+        } else {
+          banner.forEach((line, row) => {
+            const coloredLine = [...line].map((char, col) => gradientChar(char, row, col, rows, cols)).join('')
+            terminalPrint(coloredLine + reset)
+          })
+        }
       } else {
         banner.forEach(line => terminalPrint(`${cyan}${line}${reset}`))
       }
@@ -436,7 +460,8 @@ program
     }
 
     // Build info line
-    const infoParts = ['⦓ LK']
+    const isPureMode = getPureMode()
+    const infoParts = [isPureMode ? '◈ LK PURE' : '⦓ LK']
     if (syncResult.synced) {
       infoParts.push(`${provider} ready`)
     } else if (syncResult.error) {
@@ -458,12 +483,22 @@ program
       }
     }
 
-    // Show random pro tip
-    const tip = PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
+    // Show random pro tip (or pure mode message)
+    const pureActive = getPureMode()
+    const tip = pureActive
+      ? 'code only • no fluff • pure signal'
+      : PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
 
-    output(jsonMode ? infoParts.join(' | ') : `${infoParts.join(' | ').replace('⦓ LK', 'Context loaded')}`)
+    const infoLine = infoParts.join(' | ').replace('⦓ LK', 'Context loaded').replace('◈ LK PURE', '◈ Pure mode')
+    output(jsonMode ? infoParts.join(' | ') : infoLine)
     if (!jsonMode) {
-      terminalPrint(`${lilac}✦ ${tip} ✦${reset}`)
+      const tipColor = pureActive ? '\x1b[38;2;200;200;200m' : lilac
+      terminalPrint(`${tipColor}✦ ${tip} ✦${reset}`)
+    }
+
+    // Output pure mode instructions as system context (LLM will see this)
+    if (pureActive) {
+      console.log(`\n${PURE_MODE_INSTRUCTIONS}`)
     }
   })
 

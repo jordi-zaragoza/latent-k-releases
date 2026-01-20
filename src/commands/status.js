@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { getConfig, isConfigured, getAiProvider, getIgnorePatterns } from '../lib/config.js'
+import { getConfig, isConfigured, getAiProvider, getIgnorePatterns, getPureMode } from '../lib/config.js'
 import { isLicensed, validateLicense, getLicenseExpiration, getLicenseKey, isLicenseRevoked, getRevokedReason, forceCheckOnline } from '../lib/license.js'
 import { parseLicense } from '../lib/license-gen.js'
 import {
@@ -149,6 +149,7 @@ export async function status() {
   const provider = getAiProvider()
   const providerName = provider === 'anthropic' ? 'Anthropic' : 'Gemini'
   console.log(`  AI Provider: ${isConfigured() ? `${providerName} (configured)` : 'not set'}`)
+  console.log(`  Pure Mode: ${getPureMode() ? 'ON (m2m style)' : 'OFF'}`)
   console.log('')
 
   console.log('Ignore:')
