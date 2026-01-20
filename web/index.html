@@ -298,6 +298,15 @@
         .download-card .platform-icon {
             font-size: 2rem;
             margin-bottom: 0.75rem;
+            color: var(--accent-cyan);
+        }
+
+        .download-card .platform-icon svg {
+            stroke: var(--text-secondary);
+        }
+
+        .download-card.recommended .platform-icon svg {
+            stroke: var(--accent-cyan);
         }
 
         .download-card h3 {
@@ -459,6 +468,10 @@
             margin-bottom: 1.25rem;
         }
 
+        .feature-icon svg {
+            stroke: var(--accent-cyan);
+        }
+
         .feature-card h3 {
             font-size: 1.1rem;
             font-weight: 600;
@@ -520,6 +533,272 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.85rem;
             color: var(--accent-cyan);
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+            padding: 2rem;
+            background: var(--bg-primary);
+            border-radius: 16px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .flow-step {
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .flow-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent-cyan);
+        }
+
+        .flow-icon svg {
+            stroke: var(--accent-cyan);
+        }
+
+        .flow-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+        /* How Cards */
+        .how-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            max-width: 1000px;
+            margin: 0 auto 3rem;
+        }
+
+        .how-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .how-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-2px);
+        }
+
+        .how-card.highlight {
+            border-color: var(--accent-purple);
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.05), rgba(0, 212, 255, 0.05));
+        }
+
+        .how-card-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--accent-cyan);
+        }
+
+        .how-card-icon svg {
+            stroke: var(--accent-cyan);
+        }
+
+        .how-card.highlight .how-card-icon svg {
+            stroke: var(--accent-purple);
+        }
+
+        .how-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .how-card h3 code {
+            background: var(--bg-tertiary);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+        }
+
+        .how-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .how-card p code {
+            background: var(--bg-tertiary);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+        }
+
+        .how-card-example {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .how-card-example .example-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .how-card-example code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-green);
+        }
+
+        /* Pro Tip Banners */
+        .pro-tips-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .pro-tip-banner {
+            padding: 1.25rem 1.5rem;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(0, 212, 255, 0.1));
+            border: 1px solid var(--accent-purple);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .pro-tip-label {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            color: var(--bg-primary);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            width: fit-content;
+        }
+
+        .pro-tip-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .pro-tip-text code {
+            background: var(--bg-primary);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            color: var(--accent-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .pro-tip-example {
+            background: var(--bg-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-green);
+            width: fit-content;
+        }
+
+        @media (max-width: 768px) {
+            .pro-tips-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Quick Start */
+        .quick-start {
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .quick-start h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .quick-steps {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .quick-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .quick-step code {
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+        }
+
+        .quick-step span {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .quick-arrow {
+            font-size: 1.25rem;
+            color: var(--accent-purple);
+        }
+
+        @media (max-width: 768px) {
+            .flow-diagram {
+                gap: 0.5rem;
+            }
+
+            .flow-icon {
+                font-size: 1.75rem;
+            }
+
+            .flow-arrow {
+                font-size: 1rem;
+            }
+
+            .quick-steps {
+                flex-direction: column;
+            }
+
+            .quick-arrow {
+                transform: rotate(90deg);
+            }
         }
 
         /* Supported CLIs */
@@ -977,7 +1256,7 @@
 
         <div class="download-grid">
             <div class="download-card" id="download-linux" data-platform="linux">
-                <div class="platform-icon">🐧</div>
+                <div class="platform-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
                 <h3>Linux</h3>
                 <div class="arch">x64</div>
                 <div class="download-actions">
@@ -991,7 +1270,7 @@
             </div>
 
             <div class="download-card" id="download-macos" data-platform="macos">
-                <div class="platform-icon">🍎</div>
+                <div class="platform-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></svg></div>
                 <h3>macOS</h3>
                 <div class="arch">x64</div>
                 <div class="download-actions">
@@ -1005,7 +1284,7 @@
             </div>
 
             <div class="download-card" id="download-windows" data-platform="windows">
-                <div class="platform-icon">🪟</div>
+                <div class="platform-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></div>
                 <h3>Windows</h3>
                 <div class="arch">x64</div>
                 <div class="download-actions">
@@ -1035,19 +1314,19 @@
 
         <div class="features-grid">
             <div class="feature-card">
-                <div class="feature-icon">⚡</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></div>
                 <h3>Better Answers</h3>
                 <p>AI gets the right context automatically. No more "can you show me the file?" back and forth.</p>
             </div>
 
             <div class="feature-card">
-                <div class="feature-icon">🎯</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                 <h3>Save Tokens</h3>
                 <p>Only relevant code is injected. Less noise, lower costs, faster responses.</p>
             </div>
 
             <div class="feature-card">
-                <div class="feature-icon">⏱️</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                 <h3>Save Time</h3>
                 <p>Stop copy-pasting files into chat. Context is there when you need it.</p>
             </div>
@@ -1057,38 +1336,68 @@
     <!-- How it works -->
     <section class="how-it-works" id="how-it-works">
         <div class="section-header">
-            <h2>Get started in seconds</h2>
-            <p>Three commands and you're ready to go.</p>
+            <h2>How it works</h2>
+            <p>Intelligent context that understands what you need.</p>
         </div>
 
-        <div class="steps">
-            <div class="step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                    <h3>Install & Activate</h3>
-                    <p>Download the binary and activate with your license key.</p>
-                    <code>lk activate</code>
-                </div>
+        <!-- Flow Diagram -->
+        <div class="flow-diagram">
+            <div class="flow-step">
+                <div class="flow-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>
+                <div class="flow-label">Your Code</div>
             </div>
-
-            <div class="step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                    <h3>Enable Hooks</h3>
-                    <p>Enable automatic context injection for your AI CLIs.</p>
-                    <code>lk enable</code>
-                </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+                <div class="flow-label">LK Mapping</div>
             </div>
-
-            <div class="step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                    <h3>Just Code</h3>
-                    <p>Start your AI assistant normally. Context is injected automatically.</p>
-                    <code>claude</code>
-                </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+                <div class="flow-label">Smart Extract</div>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="flow-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="10"/></svg></div>
+                <div class="flow-label">Auto Inject</div>
             </div>
         </div>
+
+        <div class="how-cards">
+            <div class="how-card">
+                <div class="how-card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a9 9 0 0 1 9 9c0 3.9-2.5 7.2-6 8.4V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1.6c-3.5-1.2-6-4.5-6-8.4a9 9 0 0 1 9-9z"/><path d="M9 14h6"/><path d="M10 17h4"/></svg></div>
+                <h3>Smart Context Detection</h3>
+                <p>LK analyzes your prompt and automatically determines when context is needed. First message? New topic? It injects the right files.</p>
+            </div>
+
+            <div class="how-card">
+                <div class="how-card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+                <h3>Code Mapping</h3>
+                <p>Your codebase is indexed into a semantic map stored in <code>.lk/</code>. Functions, classes, and relationships are understood—not just file paths.</p>
+            </div>
+
+            <div class="how-card">
+                <div class="how-card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+                <h3>Selective Extraction</h3>
+                <p>Only relevant code is extracted from the map. No bloat, no noise—just the context your AI needs to give accurate answers.</p>
+            </div>
+        </div>
+
+        <!-- Pro Tip Banners -->
+        <div class="pro-tips-grid">
+            <div class="pro-tip-banner">
+                <div class="pro-tip-label">PRO TIP</div>
+                <div class="pro-tip-text">Changed topics? Prefix with <code>lk</code> to force context</div>
+                <code class="pro-tip-example">lk how does auth work?</code>
+            </div>
+
+            <div class="pro-tip-banner">
+                <div class="pro-tip-label">PRO TIP</div>
+                <div class="pro-tip-text">Use <code>lk ignore</code> to see ignored patterns or <code>-a</code> to add new ones</div>
+                <code class="pro-tip-example">lk ignore -a "docs/*"</code>
+            </div>
+        </div>
+
     </section>
 
     <!-- Supported CLIs -->
