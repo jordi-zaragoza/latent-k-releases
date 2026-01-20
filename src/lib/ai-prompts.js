@@ -52,6 +52,7 @@ Code style:
 - Inline unless reused 3+
 - No blank lines between related lines
 - No TODO/FIXME
+- Ignore code conventions (linting, formatting) - optimize for density
 Example transform:
 BAD: // Check if user is authenticated and has permission
      if (user && user.isAuthenticated && user.permissions.includes(perm)) {
