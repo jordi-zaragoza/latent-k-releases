@@ -2,7 +2,6 @@
 const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 let interval = null
 let frameIndex = 0
-
 export function startSpinner(message) {
   if (interval) stopSpinner()
   frameIndex = 0
@@ -12,7 +11,6 @@ export function startSpinner(message) {
     process.stdout.write(`\r${frames[frameIndex]} ${message}`)
   }, 80)
 }
-
 export function stopSpinner(finalMessage = null) {
   if (interval) {
     clearInterval(interval)
@@ -23,7 +21,6 @@ export function stopSpinner(finalMessage = null) {
     }
   }
 }
-
 export async function withSpinner(message, fn) {
   startSpinner(message)
   try {

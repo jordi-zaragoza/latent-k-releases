@@ -5,7 +5,6 @@ import readline from 'readline'
 import { lkPath } from '../lib/context.js'
 import { clearLicense } from '../lib/license.js'
 import { config } from '../lib/config.js'
-
 /**
  * Get platform-specific config directory for conf library
  * conf uses projectName + '-nodejs' suffix
@@ -21,7 +20,6 @@ function getConfigDir() {
       return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'lk-nodejs')
   }
 }
-
 /**
  * Get platform-specific license directory
  * conf uses projectName + '-nodejs' suffix, license uses projectName: 'lk-license'
@@ -37,18 +35,15 @@ function getLicenseDir() {
       return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'lk-license-nodejs')
   }
 }
-
 const CONFIG_DIR = getConfigDir()
 const LICENSE_DIR = getLicenseDir()
 const DEVICE_FILE = path.join(homedir(), '.lk-device')
 const LOG_DIR = path.join(homedir(), '.lk')
-
 async function confirm(message) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
   })
-
   return new Promise(resolve => {
     rl.question(`${message} (y/N): `, answer => {
       rl.close()
@@ -56,7 +51,6 @@ async function confirm(message) {
     })
   })
 }
-
 function removeDir(dir, label) {
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true })
@@ -66,7 +60,6 @@ function removeDir(dir, label) {
   console.log(`  - ${label} (not found)`)
   return false
 }
-
 function removeFile(file, label) {
   if (fs.existsSync(file)) {
     fs.unlinkSync(file)
@@ -76,10 +69,8 @@ function removeFile(file, label) {
   console.log(`  - ${label} (not found)`)
   return false
 }
-
 export async function clean(options) {
   const { context, license, cfg, device, logs, all, yes } = options
-
   // If no flags specified, show help
   if (!context && !license && !cfg && !device && !logs && !all) {
     console.log('lk clean - Remove lk data\n')
@@ -94,19 +85,15 @@ export async function clean(options) {
     console.log('  -y, --yes       Skip confirmation')
     return
   }
-
   const targets = []
-
   if (all || context) targets.push('Project context (.lk/)')
   if (all || license) targets.push('License data')
   if (all || cfg) targets.push('Configuration')
   if (all || device) targets.push('Device ID')
   if (all || logs) targets.push('Debug logs')
-
   console.log('Will remove:')
   targets.forEach(t => console.log(`  • ${t}`))
   console.log('')
-
   if (!yes) {
     const confirmed = await confirm('Continue?')
     if (!confirmed) {
@@ -115,32 +102,25 @@ export async function clean(options) {
     }
     console.log('')
   }
-
   console.log('Cleaning...')
-
   if (all || context) {
     const cwd = process.cwd()
     const lkDir = lkPath(cwd)
     removeDir(lkDir, 'project context (.lk/)')
   }
-
   if (all || license) {
     clearLicense()
     removeDir(LICENSE_DIR, 'license store')
   }
-
   if (all || cfg) {
     config.clear()
     removeDir(CONFIG_DIR, 'config store')
   }
-
   if (all || device) {
     removeFile(DEVICE_FILE, 'device ID')
   }
-
   if (all || logs) {
     removeDir(LOG_DIR, 'debug logs')
   }
-
   console.log('\nDone.')
 }

@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
-
 /**
  * Get Claude user email from ~/.claude.json
  * @returns {string|null} Email address or null if not found

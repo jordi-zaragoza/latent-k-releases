@@ -1,7 +1,6 @@
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-
 // __VERSION__ injected by esbuild at build time
 let version
 try {
@@ -14,5 +13,4 @@ try {
 } catch {
   version = '0.0.0'
 }
-
 export const VERSION = version

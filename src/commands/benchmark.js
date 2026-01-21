@@ -3,23 +3,18 @@ import path from 'path'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { getApiKey, getAiProvider } from '../lib/config.js'
 import { buildContext, getAllFiles, exists, countTokens } from '../lib/context.js'
-
 let genAI = null
 let model = null
-
 function initClient() {
   const apiKey = getApiKey()
   if (!apiKey) throw new Error('API key not configured. Run: lk setup')
-
   genAI = new GoogleGenerativeAI(apiKey)
   model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 }
-
 // Estimate tokens (rough: ~4 chars per token)
 function estimateTokens(text) {
   return Math.ceil(text.length / 4)
 }
-
 // Simulate Glob tool result
 function simulateGlob(root, pattern) {
   const files = getAllFiles(root)
@@ -28,12 +23,10 @@ function simulateGlob(root, pattern) {
   const result = `Found ${matches.length} files:\n${matches.join('\n')}`
   return { result, tokens: estimateTokens(result), matches }
 }
-
 // Simulate Grep tool result
 function simulateGrep(root, pattern, maxFiles = 5) {
   const files = getAllFiles(root)
   const matches = []
-
   for (const file of files) {
     if (matches.length >= maxFiles) break
     try {
@@ -44,13 +37,11 @@ function simulateGrep(root, pattern, maxFiles = 5) {
         .map((line, i) => ({ line, num: i + 1 }))
         .filter(({ line }) => line.toLowerCase().includes(pattern.toLowerCase()))
         .slice(0, 3)
-
       if (matchingLines.length > 0) {
         matches.push({ file, lines: matchingLines })
       }
     } catch (e) {}
   }
-
   let result = `Found matches in ${matches.length} files:\n`
   for (const m of matches) {
     result += `\n${m.file}:\n`
@@ -58,10 +49,8 @@ function simulateGrep(root, pattern, maxFiles = 5) {
       result += `  ${l.num}: ${l.line.slice(0, 100)}\n`
     }
   }
-
   return { result, tokens: estimateTokens(result), matches }
 }
-
 // Simulate Read tool result
 function simulateRead(root, file, maxLines = 100) {
   try {
@@ -74,32 +63,27 @@ function simulateRead(root, file, maxLines = 100) {
     return { result: 'File not found', tokens: 5 }
   }
 }
-
 // Extract exported functions from a file
 function extractExports(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8')
     const exports = []
-
     // ES6 exports: export function name, export const name, export { name }
     const exportMatches = content.matchAll(/export\s+(?:async\s+)?(?:function|const|let|class)\s+(\w+)/g)
     for (const match of exportMatches) {
       exports.push(match[1])
     }
-
     // Named exports: export { foo, bar }
     const namedExports = content.matchAll(/export\s*\{([^}]+)\}/g)
     for (const match of namedExports) {
       const names = match[1].split(',').map(n => n.trim().split(' ')[0])
       exports.push(...names)
     }
-
     return exports.slice(0, 5) // Max 5 exports
   } catch (e) {
     return []
   }
 }
-
 // Detect project type and key characteristics
 function analyzeProject(root) {
   const files = getAllFiles(root)
@@ -111,7 +95,6 @@ function analyzeProject(root) {
     exports: [],
     configFiles: []
   }
-
   // Detect entry points
   const entryPoints = files.filter(f =>
     f.endsWith('cli.js') ||
@@ -123,11 +106,9 @@ function analyzeProject(root) {
   if (entryPoints.length > 0) {
     project.entryPoint = entryPoints[0]
   }
-
   // Detect commands directory
   const commandFiles = files.filter(f => f.includes('/commands/') || f.includes('/cmd/'))
   project.commands = commandFiles.slice(0, 3).map(f => path.basename(f, path.extname(f)))
-
   // Detect lib/core files
   const libFiles = files.filter(f =>
     f.includes('/lib/') ||
@@ -135,14 +116,12 @@ function analyzeProject(root) {
     f.includes('/utils/')
   ).filter(f => !f.includes('/commands/') && !f.includes('test'))
   project.keyFiles = libFiles.slice(0, 5)
-
   // Detect config files
   project.configFiles = files.filter(f =>
     f.includes('config') ||
     f.endsWith('package.json') ||
     f.endsWith('.json')
   ).slice(0, 3)
-
   // Extract exports from key files
   for (const file of project.keyFiles.slice(0, 3)) {
     const fullPath = path.join(root, file)
@@ -151,7 +130,6 @@ function analyzeProject(root) {
       project.exports.push({ file, exports: fileExports })
     }
   }
-
   // Detect project type
   if (files.some(f => f.includes('cli.js') || f.includes('/commands/'))) {
     project.type = 'CLI'
@@ -162,14 +140,11 @@ function analyzeProject(root) {
   } else {
     project.type = 'Library'
   }
-
   return project
 }
-
 // Generate dynamic scenarios based on project analysis
 function generateScenarios(root, projectInfo) {
   const scenarios = []
-
   // Scenario 1: Find a function (if we have exports)
   if (projectInfo.exports.length > 0) {
     const { file, exports } = projectInfo.exports[0]
@@ -190,7 +165,6 @@ function generateScenarios(root, projectInfo) {
       }
     })
   }
-
   // Scenario 2: Understand a key file
   if (projectInfo.keyFiles.length > 0) {
     const file = projectInfo.keyFiles[0]
@@ -211,7 +185,6 @@ function generateScenarios(root, projectInfo) {
       }
     })
   }
-
   // Scenario 3: Explore a command/flow (if CLI or has commands)
   if (projectInfo.commands.length > 0) {
     const command = projectInfo.commands[0]
@@ -248,7 +221,6 @@ function generateScenarios(root, projectInfo) {
       }
     })
   }
-
   // Scenario 4: Find configuration
   if (projectInfo.configFiles.length > 0) {
     scenarios.push({
@@ -268,7 +240,6 @@ function generateScenarios(root, projectInfo) {
       }
     })
   }
-
   // Scenario 5: Understand project structure (always include)
   scenarios.push({
     name: 'Understand project structure',
@@ -280,7 +251,6 @@ function generateScenarios(root, projectInfo) {
         ...projectInfo.keyFiles.slice(0, 4),
         ...projectInfo.commands.map(c => files.find(f => f.includes(c)))
       ].filter(Boolean).slice(0, 6)
-
       const reads = keyFiles.map(f => simulateRead(root, f, 50))
       return {
         steps: [
@@ -291,23 +261,17 @@ function generateScenarios(root, projectInfo) {
       }
     }
   })
-
   return scenarios
 }
-
 // Run a single query against the API
 async function runQuery(context, question) {
   if (!model) initClient()
-
   const prompt = `You are analyzing a codebase. Answer based on the context provided.\n\nContext:\n${context}\n\nQuestion: ${question}`
   const startTime = Date.now()
-
   const result = await model.generateContent(prompt)
   const elapsed = Date.now() - startTime
-
   const response = result.response
   const usage = response?.usageMetadata || {}
-
   return {
     inputTokens: usage.promptTokenCount || 0,
     outputTokens: usage.candidatesTokenCount || 0,
@@ -315,19 +279,15 @@ async function runQuery(context, question) {
     response: response?.text?.() || ''
   }
 }
-
 export async function benchmark(question, options = {}) {
   const cwd = process.cwd()
-
   if (!exists(cwd)) {
     console.log('No LK context found. Run: lk sync')
     process.exit(1)
   }
-
   const provider = getAiProvider()
   console.log('lk benchmark\n')
   console.log(`Provider: ${provider === 'gemini' ? 'Gemini' : 'Anthropic'}`)
-
   // Analyze project and generate scenarios
   console.log('Analyzing project structure...')
   const projectInfo = analyzeProject(cwd)
@@ -336,33 +296,26 @@ export async function benchmark(question, options = {}) {
   console.log(`Key files: ${projectInfo.keyFiles.length}`)
   console.log(`Commands: ${projectInfo.commands.length > 0 ? projectInfo.commands.join(', ') : 'none'}`)
   console.log('')
-
   // Build LK context
   const lkContext = buildContext(cwd)
   const lkTokens = countTokens(lkContext).tokens
-
   // Generate dynamic scenarios
   const scenarios = generateScenarios(cwd, projectInfo)
-
   // Run scenarios or single question
   if (options.scenarios || !question) {
     const runActual = options.run
     console.log(`Running ${runActual ? 'ACTUAL' : 'estimated'} scenario benchmarks...`)
     console.log(`Generated ${scenarios.length} scenarios for this project\n`)
     console.log('='.repeat(60))
-
     let totalWithoutLK = 0
     let totalWithLK = 0
     let totalTimeWithoutLK = 0
     let totalTimeWithLK = 0
-
     for (const scenario of scenarios) {
       console.log(`\nScenario: ${scenario.name}`)
       console.log(`Question: "${scenario.question}"`)
       console.log('-'.repeat(50))
-
       const withoutLKSim = scenario.simulateWithoutLK()
-
       if (runActual) {
         // Build actual context from simulated tool calls
         let gatheredContext = ''
@@ -378,20 +331,17 @@ export async function benchmark(question, options = {}) {
             gatheredContext += `--- ${step.file} ---\n${read.result}\n\n`
           }
         }
-
         // Run actual API calls
         console.log('\nWithout LK (actual API call):')
         const resultWithout = await runQuery(gatheredContext, scenario.question)
         console.log(`  Input:  ${resultWithout.inputTokens.toLocaleString()} tokens`)
         console.log(`  Output: ${resultWithout.outputTokens.toLocaleString()} tokens`)
         console.log(`  Time:   ${resultWithout.timeMs.toLocaleString()}ms`)
-
         console.log('\nWith LK (actual API call):')
         const resultWith = await runQuery(lkContext, scenario.question)
         console.log(`  Input:  ${resultWith.inputTokens.toLocaleString()} tokens`)
         console.log(`  Output: ${resultWith.outputTokens.toLocaleString()} tokens`)
         console.log(`  Time:   ${resultWith.timeMs.toLocaleString()}ms`)
-
         // Show responses if verbose
         if (options.verbose) {
           console.log('\n  Response WITHOUT LK:')
@@ -401,21 +351,17 @@ export async function benchmark(question, options = {}) {
           console.log('  ' + resultWith.response.split('\n').slice(0, 10).join('\n  '))
           if (resultWith.response.split('\n').length > 10) console.log('  ...')
         }
-
         const saved = resultWithout.inputTokens - resultWith.inputTokens
         const pct = ((saved / resultWithout.inputTokens) * 100).toFixed(1)
-
         if (saved > 0) {
           console.log(`\n  ✓ LK saves ${saved.toLocaleString()} input tokens (${pct}% reduction)`)
         } else {
           console.log(`\n  → LK uses ${Math.abs(saved).toLocaleString()} more input tokens`)
         }
-
         totalWithoutLK += resultWithout.inputTokens
         totalWithLK += resultWith.inputTokens
         totalTimeWithoutLK += resultWithout.timeMs
         totalTimeWithLK += resultWith.timeMs
-
       } else {
         // Just estimate
         console.log('\nWithout LK (estimated tool calls):')
@@ -423,28 +369,22 @@ export async function benchmark(question, options = {}) {
           console.log(`  ${step.tool}(${step.pattern || step.file || '...'}) → ~${step.tokens} tokens`)
         }
         console.log(`  Total context: ~${withoutLKSim.totalTokens} tokens`)
-
         console.log('\nWith LK:')
         console.log(`  LK context already loaded → ~${lkTokens} tokens`)
-
         const saved = withoutLKSim.totalTokens - lkTokens
         const pct = ((saved / withoutLKSim.totalTokens) * 100).toFixed(1)
-
         if (saved > 0) {
           console.log(`\n  ✓ LK saves ~${saved} tokens (${pct}% reduction)`)
         } else {
           console.log(`\n  → LK uses ${Math.abs(saved)} more tokens (but provides full context upfront)`)
         }
-
         totalWithoutLK += withoutLKSim.totalTokens
         totalWithLK += lkTokens
       }
     }
-
     // Summary
     console.log('\n' + '='.repeat(60))
     console.log('SUMMARY (across all scenarios)\n')
-
     if (runActual) {
       console.log(`Total without LK: ${totalWithoutLK.toLocaleString()} input tokens`)
       console.log(`Total with LK:    ${totalWithLK.toLocaleString()} input tokens`)
@@ -454,75 +394,60 @@ export async function benchmark(question, options = {}) {
       console.log(`Total without LK: ~${totalWithoutLK.toLocaleString()} tokens (estimated)`)
       console.log(`Total with LK:    ~${(lkTokens * scenarios.length).toLocaleString()} tokens`)
     }
-
     const totalSaved = totalWithoutLK - (runActual ? totalWithLK : lkTokens * scenarios.length)
     const totalPct = ((totalSaved / totalWithoutLK) * 100).toFixed(1)
-
     if (totalSaved > 0) {
       console.log(`\nLK saves ${runActual ? '' : '~'}${totalSaved.toLocaleString()} tokens total (${totalPct}% reduction)`)
     }
-
     if (!runActual) {
       console.log('\nNote: These are estimates. Use --run to make actual API calls.')
     }
-
   } else {
     // Single question mode
     console.log(`Question: "${question}"\n`)
-
     const withoutLKSim = {
       steps: [],
       totalTokens: 0
     }
-
     // Generic simulation: grep + 2 file reads
     const lastWord = question.split(' ').filter(w => w.length > 3).slice(-1)[0] || 'main'
     const grep = simulateGrep(cwd, lastWord)
     const reads = grep.matches.slice(0, 2).map(m => simulateRead(cwd, m.file))
-
     withoutLKSim.steps = [
       { tool: 'Grep', pattern: lastWord, tokens: grep.tokens },
       ...reads.map((r, i) => ({ tool: 'Read', file: grep.matches[i]?.file, tokens: r.tokens }))
     ]
     withoutLKSim.totalTokens = grep.tokens + reads.reduce((sum, r) => sum + r.tokens, 0)
-
     console.log('Estimated without LK:')
     console.log(`  Tool calls: ${withoutLKSim.steps.length}`)
     console.log(`  Context tokens: ~${withoutLKSim.totalTokens}`)
     console.log('')
-
     console.log('With LK:')
     console.log(`  Context tokens: ~${lkTokens}`)
     console.log('')
-
     if (options.run) {
       let gatheredContext = ''
       gatheredContext += grep.result + '\n\n'
       for (let i = 0; i < reads.length && i < grep.matches.length; i++) {
         gatheredContext += `--- ${grep.matches[i].file} ---\n${reads[i].result}\n\n`
       }
-
       console.log('Running actual API calls...\n')
-
       const resultWithout = await runQuery(gatheredContext, question)
       console.log('Without LK:')
       console.log(`  Input:  ${resultWithout.inputTokens} tokens`)
       console.log(`  Output: ${resultWithout.outputTokens} tokens`)
       console.log(`  Time:   ${resultWithout.timeMs}ms`)
-
       const resultWith = await runQuery(lkContext, question)
       console.log('\nWith LK:')
       console.log(`  Input:  ${resultWith.inputTokens} tokens`)
       console.log(`  Output: ${resultWith.outputTokens} tokens`)
       console.log(`  Time:   ${resultWith.timeMs}ms`)
-
       if (options.verbose) {
         console.log('\nResponse WITHOUT LK:')
         console.log(resultWithout.response)
         console.log('\nResponse WITH LK:')
         console.log(resultWith.response)
       }
-
       const saved = resultWithout.inputTokens - resultWith.inputTokens
       console.log('\n' + '-'.repeat(50))
       if (saved > 0) {
