@@ -1,932 +1,417 @@
-/**
- * Latent-K Payments Worker
- * Handles Stripe Checkout, license generation, and admin operations
- * Fully serverless on Cloudflare Workers + KV
- */
-const PLAN_CONFIG = {
-  trial14: { days: 14, name: 'Trial' },
-  monthly: { days: 30, name: 'Monthly' },
-  yearly: { days: 365, name: 'Yearly' }
-};
-const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-// Rate limiting configuration
-const RATE_LIMIT = {
-  login: { maxAttempts: 5, windowSeconds: 300 },    // 5 attempts per 5 minutes
-  trial: { maxAttempts: 3, windowSeconds: 3600 },   // 3 attempts per hour
-  checkout: { maxAttempts: 10, windowSeconds: 60 }, // 10 attempts per minute
-  chat: { maxAttempts: 529, windowSeconds: 86400 },  // 529 messages per day
-  checkLicense: { maxAttempts: 30, windowSeconds: 60 }  // 30 checks per minute
-};
-// In-memory fallback for rate limiting when KV fails
-// Note: In Workers, this persists per isolate (not globally shared)
+const PLAN_CONFIG = {trial14:{days:14,name:'Trial'},monthly:{days:30,name:'Monthly'},yearly:{days:365,name:'Yearly'}};
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMIT = {login:{maxAttempts:5,windowSeconds:300},trial:{maxAttempts:3,windowSeconds:3600},checkout:{maxAttempts:10,windowSeconds:60},chat:{maxAttempts:529,windowSeconds:86400},checkLicense:{maxAttempts:30,windowSeconds:60}};
 const memoryRateLimit = new Map();
-/**
- * Clean expired entries from memory fallback (prevent memory leak)
- */
 function cleanMemoryRateLimit() {
   const now = Math.floor(Date.now() / 1000);
-  for (const [key, record] of memoryRateLimit) {
-    const action = key.split(':')[1];
-    const config = RATE_LIMIT[action];
-    if (config && now - record.windowStart >= config.windowSeconds * 2) {
-      memoryRateLimit.delete(key);
-    }
+  for (const [k, rec] of memoryRateLimit) {
+    const act = k.split(':')[1];
+    const cfg = RATE_LIMIT[act];
+    if (cfg && now - rec.windowStart >= cfg.windowSeconds * 2)memoryRateLimit.delete(k);
   }
 }
-/**
- * Check rate limit for an action
- * Returns { allowed: boolean, remaining: number, resetIn: number }
- */
-async function checkRateLimit(env, action, identifier) {
-  const config = RATE_LIMIT[action];
-  if (!config) return { allowed: true, remaining: 999, resetIn: 0 };
-  const key = `ratelimit:${action}:${identifier}`;
+async function checkRateLimit(env, act, id) {
+  const cfg = RATE_LIMIT[act];
+  if (!cfg) return {allowed:true,remaining:999,resetIn:0};
+  const k = `ratelimit:${act}:${id}`;
   const now = Math.floor(Date.now() / 1000);
-  // If KV not configured, use memory fallback
-  if (!env.LICENSES) {
-    return checkRateLimitMemory(key, config, now);
-  }
+  if (!env.LICENSES) return checkRateLimitMemory(k, cfg, now);
   try {
-    const data = await env.LICENSES.get(key);
-    let record = data ? JSON.parse(data) : { count: 0, windowStart: now };
-    // Reset window if expired
-    if (now - record.windowStart >= config.windowSeconds) {
-      record = { count: 0, windowStart: now };
-    }
-    const remaining = Math.max(0, config.maxAttempts - record.count);
-    const resetIn = config.windowSeconds - (now - record.windowStart);
-    if (record.count >= config.maxAttempts) {
-      return { allowed: false, remaining: 0, resetIn };
-    }
-    // Increment counter
-    record.count++;
-    await env.LICENSES.put(key, JSON.stringify(record), {
-      expirationTtl: config.windowSeconds
-    });
-    return { allowed: true, remaining: remaining - 1, resetIn };
-  } catch (error) {
-    console.error('Rate limit KV error, using memory fallback:', error);
-    // Fail CLOSED with memory fallback instead of fail-open
-    return checkRateLimitMemory(key, config, now);
+    const dt = await env.LICENSES.get(k);
+    let rec = dt ? JSON.parse(dt) : {count:0,windowStart:now};
+    if (now - rec.windowStart >= cfg.windowSeconds) rec = {count:0,windowStart:now};
+    const rem = Math.max(0, cfg.maxAttempts - rec.count);
+    const rstIn = cfg.windowSeconds - (now - rec.windowStart);
+    if (rec.count >= cfg.maxAttempts) return {allowed:false,remaining:0,resetIn:rstIn};
+    rec.count++;
+    await env.LICENSES.put(k, JSON.stringify(rec), {expirationTtl:cfg.windowSeconds});
+    return {allowed:true,remaining:rem - 1,resetIn:rstIn};
+  } catch (err) {
+    console.error('Rate limit KV error, using memory fallback:', err);
+    return checkRateLimitMemory(k, cfg, now);
   }
 }
-/**
- * Memory-based rate limiting fallback
- * Less accurate than KV (per-isolate) but secure
- */
-function checkRateLimitMemory(key, config, now) {
-  // Periodically clean old entries
-  if (memoryRateLimit.size > 100) {
-    cleanMemoryRateLimit();
-  }
-  let record = memoryRateLimit.get(key) || { count: 0, windowStart: now };
-  // Reset window if expired
-  if (now - record.windowStart >= config.windowSeconds) {
-    record = { count: 0, windowStart: now };
-  }
-  const remaining = Math.max(0, config.maxAttempts - record.count);
-  const resetIn = config.windowSeconds - (now - record.windowStart);
-  if (record.count >= config.maxAttempts) {
-    return { allowed: false, remaining: 0, resetIn };
-  }
-  // Increment counter
-  record.count++;
-  memoryRateLimit.set(key, record);
-  return { allowed: true, remaining: remaining - 1, resetIn };
+function checkRateLimitMemory(k, cfg, now) {
+  if (memoryRateLimit.size > 100) cleanMemoryRateLimit();
+  let rec = memoryRateLimit.get(k) || {count:0,windowStart:now};
+  if (now - rec.windowStart >= cfg.windowSeconds) rec = {count:0,windowStart:now};
+  const rem = Math.max(0, cfg.maxAttempts - rec.count);
+  const rstIn = cfg.windowSeconds - (now - rec.windowStart);
+  if (rec.count >= cfg.maxAttempts) return {allowed:false,remaining:0,resetIn:rstIn};
+  rec.count++;
+  memoryRateLimit.set(k, rec);
+  return {allowed:true,remaining:rem - 1,resetIn:rstIn};
 }
-/**
- * Timing-safe string comparison to prevent timing attacks
- */
 function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  if (a.length !== b.length) {
-    // Compare against self to maintain constant time even on length mismatch
-    b = a;
-  }
-  let result = a.length === arguments[1].length ? 0 : 1;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
+  if (a.length !== b.length) b = a;
+  let res = a.length === arguments[1].length ? 0 : 1;
+  for (let i = 0; i < a.length; i++) res |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return res === 0;
 }
-/**
- * Import RSA private key from PEM format
- */
 async function importPrivateKey(pem) {
-  const pemContents = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\s/g, '');
-  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-  return crypto.subtle.importKey(
-    'pkcs8',
-    binaryKey,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
+  const pemCts = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '');
+  const binK = Uint8Array.from(atob(pemCts), c => c.charCodeAt(0));
+  return crypto.subtle.importKey('pkcs8', binK, {name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'}, false, ['sign']);
 }
-/**
- * Generate random hex string
- */
 function randomHex(bytes) {
   const arr = new Uint8Array(bytes);
   crypto.getRandomValues(arr);
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-/**
- * Base64url encode
- */
-function base64urlEncode(data) {
-  const str = typeof data === 'string' ? data : JSON.stringify(data);
-  const base64 = btoa(String.fromCharCode(...new TextEncoder().encode(str)));
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function base64urlEncode(dt) {
+  const str = typeof dt === 'string' ? dt : JSON.stringify(dt);
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-/**
- * Base64url decode
- */
 function base64urlDecode(str) {
-  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = base64.length % 4;
-  const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
-  return JSON.parse(atob(padded));
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4;
+  const pd = pad ? b64 + '='.repeat(4 - pad) : b64;
+  return JSON.parse(atob(pd));
 }
-/**
- * Generate a license key using RSA signature
- */
-async function generateLicense(env, options) {
-  if (!options.email) {
-    throw new Error('Email is required');
-  }
-  const privateKey = await importPrivateKey(env.LICENSE_PRIVATE_KEY);
-  let expires = options.expires || null;
-  if (options.durationDays && !expires) {
-    expires = Date.now() + options.durationDays * 24 * 60 * 60 * 1000;
-  }
-  const data = {
-    id: randomHex(8),
-    type: options.type || 'standard',
-    email: options.email.toLowerCase().trim(),
-    created: Date.now(),
-    expires
-  };
-  const payload = base64urlEncode(data);
-  const signatureBuffer = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    privateKey,
-    new TextEncoder().encode(payload)
-  );
-  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return `LK-${payload}.${signature}`;
+async function generateLicense(env, opts) {
+  if (!opts.email) throw new Error('E_EML_REQ');
+  const privK = await importPrivateKey(env.LICENSE_PRIVATE_KEY);
+  let exp = opts.expires || null;
+  if (opts.durationDays && !exp) exp = Date.now() + opts.durationDays * 24 * 60 * 60 * 1000;
+  const dt = {id:randomHex(8),type:opts.type || 'standard',email:opts.email.toLowerCase().trim(),created:Date.now(),expires:exp};
+  const pl = base64urlEncode(dt);
+  const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privK, new TextEncoder().encode(pl));
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `LK-${pl}.${sig}`;
 }
-/**
- * Parse license data without validation
- */
-function parseLicense(key) {
+function parseLicense(k) {
   try {
-    if (!key || !key.startsWith('LK-')) return null;
-    const payload = key.slice(3).split('.')[0];
-    return base64urlDecode(payload);
+    if (!k || !k.startsWith('LK-')) return null;
+    const pl = k.slice(3).split('.')[0];
+    return base64urlDecode(pl);
   } catch {
     return null;
   }
 }
-/**
- * Validate admin session
- */
-async function isSessionValid(env, token) {
-  if (!token || !env.LICENSES) return false;
-  const data = await env.LICENSES.get(`session:${token}`);
-  if (!data) return false;
-  const { createdAt } = JSON.parse(data);
-  if (Date.now() - createdAt > SESSION_MAX_AGE_MS) {
-    await env.LICENSES.delete(`session:${token}`);
+async function isSessionValid(env, tkn) {
+  if (!tkn || !env.LICENSES) return false;
+  const dt = await env.LICENSES.get(`session:${tkn}`);
+  if (!dt) return false;
+  const {createdAt:crtAt} = JSON.parse(dt);
+  if (Date.now() - crtAt > SESSION_MAX_AGE_MS) {
+    await env.LICENSES.delete(`session:${tkn}`);
     return false;
   }
   return true;
 }
-/**
- * Check authentication (session or worker token)
- */
-async function checkAuth(request, env) {
-  const auth = request.headers.get('Authorization');
-  if (!auth || !auth.startsWith('Bearer ')) return { authenticated: false };
-  const token = auth.slice(7);
-  // Check worker token first (timing-safe comparison)
-  if (env.NODE_SERVER_TOKEN && timingSafeEqual(token, env.NODE_SERVER_TOKEN)) {
-    return { authenticated: true, source: 'worker' };
-  }
-  // Check session
-  if (await isSessionValid(env, token)) {
-    return { authenticated: true, source: 'admin' };
-  }
-  return { authenticated: false };
+async function checkAuth(req, env) {
+  const auth = req.headers.get('Authorization');
+  if (!auth || !auth.startsWith('Bearer ')) return {authenticated:false};
+  const tkn = auth.slice(7);
+  if (env.NODE_SERVER_TOKEN && timingSafeEqual(tkn, env.NODE_SERVER_TOKEN)) return {authenticated:true,source:'worker'};
+  if (await isSessionValid(env, tkn)) return {authenticated:true,source:'admin'};
+  return {authenticated:false};
 }
-// Allowed origins for CORS
-const ALLOWED_ORIGINS = [
-  'https://latent-k.dev',
-  'https://www.latent-k.dev',
-  'https://latent-k.pages.dev',
-  'http://localhost:3000' // For local development
-];
-// Check if origin matches allowed patterns (including *.latent-k.pages.dev)
-function isOriginAllowed(origin) {
-  if (!origin) return false;
-  if (ALLOWED_ORIGINS.includes(origin)) return true;
-  // Allow Cloudflare Pages preview deployments
-  if (/^https:\/\/[a-z0-9]+\.latent-k\.pages\.dev$/.test(origin)) return true;
+const ALLOWED_ORIGINS = ['https://latent-k.dev','https://www.latent-k.dev','https://latent-k.pages.dev','http://localhost:3000'];
+function isOriginAllowed(o) {
+  if (!o) return false;
+  if (ALLOWED_ORIGINS.includes(o)) return true;
+  if (/^https:\/\/[a-z0-9]+\.latent-k\.pages\.dev$/.test(o)) return true;
   return false;
 }
-/**
- * CORS headers for responses - restricted to allowed origins
- */
-function corsHeaders(origin) {
-  const allowedOrigin = origin && isOriginAllowed(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true',
-  };
+function corsHeaders(o) {
+  const alo = o && isOriginAllowed(o) ? o : ALLOWED_ORIGINS[0];
+  return {'Access-Control-Allow-Origin':alo,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Credentials':'true',};
 }
-/**
- * JSON response helper
- */
-function jsonResponse(data, status = 200, origin) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...corsHeaders(origin),
-    },
-  });
+function jsonResponse(dt, sts = 200, o) {
+  return new Response(JSON.stringify(dt), {status:sts,headers:{'Content-Type':'application/json',...corsHeaders(o)}});
 }
-/**
- * Create Stripe Checkout Session
- * POST /api/checkout
- * Body: { email, name, plan: 'monthly' | 'yearly' }
- */
-async function handleCheckout(request, env) {
-  const origin = request.headers.get('Origin');
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  // Rate limiting
-  const rateLimit = await checkRateLimit(env, 'checkout', clientIP);
-  if (!rateLimit.allowed) {
-    return jsonResponse({
-      error: 'Too many requests. Please try again later.',
-      retryAfter: rateLimit.resetIn
-    }, 429, origin);
-  }
+async function handleCheckout(req, env) {
+  const o = req.headers.get('Origin');
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const rl = await checkRateLimit(env, 'checkout', ip);
+  if (!rl.allowed) return jsonResponse({error:'E_MANY_REQ',retryAfter:rl.resetIn}, 429, o);
   try {
-    const { email, name, plan } = await request.json();
-    if (!email || !plan) {
-      return jsonResponse({ error: 'Email and plan are required' }, 400, origin);
-    }
-    if (!['monthly', 'yearly'].includes(plan)) {
-      return jsonResponse({ error: 'Invalid plan. Must be monthly or yearly' }, 400, origin);
-    }
-    const priceId = plan === 'monthly' ? env.STRIPE_PRICE_MONTHLY : env.STRIPE_PRICE_YEARLY;
-    // Create Stripe Checkout Session
-    const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        'mode': 'payment',
-        'line_items[0][price]': priceId,
-        'line_items[0][quantity]': '1',
-        'customer_email': email,
-        'success_url': `${env.CORS_ORIGIN}/activation.html?success=true&session_id={CHECKOUT_SESSION_ID}`,
-        'cancel_url': `${env.CORS_ORIGIN}/activation.html?canceled=true`,
-        'metadata[email]': email,
-        'metadata[name]': name || '',
-        'metadata[plan]': plan,
-      }),
+    const {email:eml,name:nm,plan:pln} = await req.json();
+    if (!eml || !pln) return jsonResponse({error:'E_REQ_EML_PLAN'}, 400, o);
+    if (!['monthly','yearly'].includes(pln)) return jsonResponse({error:'E_INV_PLAN'}, 400, o);
+    const priceId = pln === 'monthly' ? env.STRIPE_PRICE_MONTHLY : env.STRIPE_PRICE_YEARLY;
+    const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method:'POST',headers:{'Authorization':`Bearer ${env.STRIPE_SECRET_KEY}`,'Content-Type':'application/x-www-form-urlencoded',},
+      body:new URLSearchParams({'mode':'payment','line_items[0][price]':priceId,'line_items[0][quantity]':'1','customer_email':eml,'success_url':`${env.CORS_ORIGIN}/activation.html?success=true&session_id={CHECKOUT_SESSION_ID}`,'cancel_url':`${env.CORS_ORIGIN}/activation.html?canceled=true`,'metadata[email]':eml,'metadata[name]':nm || '','metadata[plan]':pln}),
     });
-    const session = await response.json();
-    if (session.error) {
-      console.error('Stripe error:', session.error);
-      return jsonResponse({ error: 'Failed to create checkout session' }, 500, origin);
-    }
-    return jsonResponse({ url: session.url, sessionId: session.id }, 200, origin);
-  } catch (error) {
-    console.error('Checkout error:', error);
-    return jsonResponse({ error: 'Internal server error' }, 500, origin);
-  }
+    const sess = await res.json();
+    if (sess.error) {console.error('Stripe error:', sess.error);return jsonResponse({error:'E_STRIPE'}, 500, o);}
+    return jsonResponse({url:sess.url,sessionId:sess.id}, 200, o);
+  } catch (err) {console.error('Checkout error:', err);return jsonResponse({error:'E_INT'}, 500, o);}
 }
-/**
- * Handle Stripe Webhook
- * POST /api/webhook
- * Receives checkout.session.completed events
- */
-async function handleWebhook(request, env) {
-  const signature = request.headers.get('stripe-signature');
-  if (!signature) {
-    return new Response('Missing signature', { status: 400 });
-  }
+async function handleWebhook(req, env) {
+  const sig = req.headers.get('stripe-signature');
+  if (!sig) return new Response('E_MISS_SIG', {status:400});
   try {
-    const body = await request.text();
-    // Verify webhook signature
-    const event = await verifyStripeWebhook(body, signature, env.STRIPE_WEBHOOK_SECRET);
-    if (!event) {
-      return new Response('Invalid signature', { status: 400 });
-    }
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const { email, name, plan } = session.metadata;
-      const isTestMode = env.STRIPE_SECRET_KEY?.startsWith('sk_test_');
-      console.log(`Processing completed checkout for ${email}, plan: ${plan}${isTestMode ? ' (TEST MODE)' : ''}`);
-      // In test mode, return a fake key without storing
-      if (isTestMode) {
-        const fakeKey = `LK-TEST-${Date.now()}-${plan}`;
-        await env.LICENSES.put(
-          `checkout:${session.id}`,
-          JSON.stringify({
-            key: fakeKey,
-            email: email.toLowerCase().trim(),
-            plan,
-            expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            created: new Date().toISOString(),
-            test: true
-          }),
-          { expirationTtl: 86400 }
-        );
-        console.log(`[TEST] Fake license generated for ${email}: ${fakeKey}`);
-        return new Response('OK', { status: 200 });
+    const body = await req.text();
+    const evt = await verifyStripeWebhook(body, sig, env.STRIPE_WEBHOOK_SECRET);
+    if (!evt) return new Response('E_INV_SIG', {status:400});
+    if (evt.type === 'checkout.session.completed') {
+      const sess = evt.data.object;
+      const {email:eml,name:nm,plan:pln} = sess.metadata;
+      const isTest = env.STRIPE_SECRET_KEY?.startsWith('sk_test_');
+      console.log(`Processing completed checkout for ${eml}, plan: ${pln}${isTest ? ' (TEST MODE)' : ''}`);
+      if (isTest) {
+        const fakeK = `LK-TEST-${Date.now()}-${pln}`;
+        await env.LICENSES.put(`checkout:${sess.id}`,JSON.stringify({key:fakeK,email:eml.toLowerCase().trim(),plan:pln,expires:new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),created:new Date().toISOString(),test:true}),{expirationTtl:86400});
+        console.log(`[TEST] Fake license generated for ${eml}: ${fakeK}`);
+        return new Response('OK', {status:200});
       }
-      // Generate real license for production
-      const normalizedEmail = email.toLowerCase().trim();
-      const durationDays = PLAN_CONFIG[plan]?.days || 365;
-      const durationMs = durationDays * 24 * 60 * 60 * 1000;
+      const normEml = eml.toLowerCase().trim();
+      const durDays = PLAN_CONFIG[pln]?.days || 365;
+      const durMs = durDays * 24 * 60 * 60 * 1000;
       const now = Date.now();
-      // Check for existing active license to extend
-      const existingData = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
-      let existingLicense = existingData ? JSON.parse(existingData) : null;
-      let expires;
-      if (existingLicense && existingLicense.expires && new Date(existingLicense.expires).getTime() > now) {
-        expires = new Date(existingLicense.expires).getTime() + durationMs;
-        console.log(`[LICENSE] Extending license for ${normalizedEmail}`);
-      } else {
-        expires = now + durationMs;
-      }
-      const key = await generateLicense(env, { email: normalizedEmail, expires });
-      const data = parseLicense(key);
-      const licenseRecord = {
-        id: data.id,
-        key,
-        email: normalizedEmail,
-        name: name || '',
-        plan: plan || 'yearly',
-        created: new Date().toISOString(),
-        expires: data.expires ? new Date(data.expires).toISOString() : null
-      };
-      // Store persistently in KV
-      await env.LICENSES.put(`license:paid:${normalizedEmail}`, JSON.stringify(licenseRecord));
-      await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseRecord));
-      // Store for checkout session retrieval (TTL 24 hours)
-      await env.LICENSES.put(
-        `checkout:${session.id}`,
-        JSON.stringify({
-          key,
-          email: normalizedEmail,
-          plan,
-          expires: licenseRecord.expires,
-          created: licenseRecord.created,
-        }),
-        { expirationTtl: 86400 }
-      );
-      console.log(`License generated for ${email}: ${key.substring(0, 20)}...`);
-      return new Response('OK', { status: 200 });
+      const existingDt = await env.LICENSES.get(`license:paid:${normEml}`);
+      let existingLic = existingDt ? JSON.parse(existingDt) : null;
+      let exp;
+      if (existingLic && existingLic.expires && new Date(existingLic.expires).getTime() > now) {
+        exp = new Date(existingLic.expires).getTime() + durMs;
+        console.log(`[LICENSE] Extending license for ${normEml}`);
+      } else exp = now + durMs;
+      const k = await generateLicense(env, {email:normEml,expires:exp});
+      const dt = parseLicense(k);
+      const licRec = {id:dt.id,key:k,email:normEml,name:nm || '',plan:pln || 'yearly',created:new Date().toISOString(),expires:dt.expires ? new Date(dt.expires).toISOString() : null};
+      await env.LICENSES.put(`license:paid:${normEml}`, JSON.stringify(licRec));
+      await env.LICENSES.put(`license:id:${dt.id}`, JSON.stringify(licRec));
+      await env.LICENSES.put(`checkout:${sess.id}`,JSON.stringify({key:k,email:normEml,plan:pln,expires:licRec.expires,created:licRec.created}),{expirationTtl:86400});
+      console.log(`License generated for ${eml}: ${k.substring(0, 20)}...`);
+      return new Response('OK', {status:200});
     }
-    // Acknowledge other event types
-    return new Response('OK', { status: 200 });
-  } catch (error) {
-    console.error('Webhook error:', error);
-    return new Response('Webhook processing failed', { status: 500 });
-  }
+    return new Response('OK', {status:200});
+  } catch (err) {console.error('Webhook error:', err);return new Response('E_WEBHOOK', {status:500});}
 }
-/**
- * Verify Stripe webhook signature
- * Uses Web Crypto API available in Cloudflare Workers
- */
-async function verifyStripeWebhook(payload, signature, secret) {
+async function verifyStripeWebhook(pl, sig, sec) {
   try {
-    const parts = signature.split(',').reduce((acc, part) => {
-      const [key, value] = part.split('=');
-      acc[key] = value;
+    const pts = sig.split(',').reduce((acc, pt) => {
+      const [k, v] = pt.split('=');
+      acc[k] = v;
       return acc;
     }, {});
-    const timestamp = parts.t;
-    const sig = parts.v1;
-    if (!timestamp || !sig) {
-      return null;
-    }
-    // Check timestamp (allow 5 minute tolerance)
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (Math.abs(currentTime - parseInt(timestamp)) > 300) {
-      console.error('Webhook timestamp too old');
-      return null;
-    }
-    // Compute expected signature
-    const signedPayload = `${timestamp}.${payload}`;
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    const signatureBuffer = await crypto.subtle.sign(
-      'HMAC',
-      key,
-      new TextEncoder().encode(signedPayload)
-    );
-    const expectedSig = Array.from(new Uint8Array(signatureBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    // Constant-time comparison
-    if (expectedSig.length !== sig.length) {
-      return null;
-    }
-    let result = 0;
-    for (let i = 0; i < expectedSig.length; i++) {
-      result |= expectedSig.charCodeAt(i) ^ sig.charCodeAt(i);
-    }
-    if (result !== 0) {
-      return null;
-    }
-    return JSON.parse(payload);
-  } catch (error) {
-    console.error('Signature verification error:', error);
-    return null;
-  }
+    const t = pts.t;
+    const s = pts.v1;
+    if (!t || !s) return null;
+    const curT = Math.floor(Date.now() / 1000);
+    if (Math.abs(curT - parseInt(t)) > 300) {console.error('Webhook timestamp too old');return null;}
+    const sPl = `${t}.${pl}`;
+    const k = await crypto.subtle.importKey('raw',new TextEncoder().encode(sec),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+    const sigBuf = await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(sPl));
+    const expSig = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (expSig.length !== s.length) return null;
+    let res = 0;
+    for (let i = 0; i < expSig.length; i++) res |= expSig.charCodeAt(i) ^ s.charCodeAt(i);
+    if (res !== 0) return null;
+    return JSON.parse(pl);
+  } catch (err) {console.error('Signature verification error:', err);return null;}
 }
-/**
- * Handle admin login
- * POST /api/login
- */
-async function handleLogin(request, env) {
-  const origin = request.headers.get('Origin');
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  // Rate limiting
-  const rateLimit = await checkRateLimit(env, 'login', clientIP);
-  if (!rateLimit.allowed) {
-    return jsonResponse({
-      error: 'Too many login attempts. Please try again later.',
-      retryAfter: rateLimit.resetIn
-    }, 429, origin);
-  }
+async function handleLogin(req, env) {
+  const o = req.headers.get('Origin');
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const rl = await checkRateLimit(env, 'login', ip);
+  if (!rl.allowed) return jsonResponse({error:'E_MANY_ATTEMPTS',retryAfter:rl.resetIn}, 429, o);
   try {
-    const { username, password } = await request.json();
-    if (timingSafeEqual(username, env.ADMIN_USER) && timingSafeEqual(password, env.ADMIN_PASS)) {
-      const token = randomHex(32);
-      await env.LICENSES.put(
-        `session:${token}`,
-        JSON.stringify({ createdAt: Date.now() }),
-        { expirationTtl: 86400 }
-      );
+    const {username:usr,password:pass} = await req.json();
+    if (timingSafeEqual(usr, env.ADMIN_USER) && timingSafeEqual(pass, env.ADMIN_PASS)) {
+      const tkn = randomHex(32);
+      await env.LICENSES.put(`session:${tkn}`,JSON.stringify({createdAt:Date.now()}),{expirationTtl:86400});
       console.log('[AUTH] Admin logged in');
-      return jsonResponse({ token }, 200, origin);
+      return jsonResponse({token:tkn}, 200, o);
     }
-    return jsonResponse({ error: 'Invalid credentials' }, 401, origin);
-  } catch (error) {
-    console.error('Login error:', error);
-    return jsonResponse({ error: 'Invalid request' }, 400, origin);
-  }
+    return jsonResponse({error:'E_INV_CREDS'}, 401, o);
+  } catch (err) {console.error('Login error:', err);return jsonResponse({error:'E_INV_REQ'}, 400, o);}
 }
-/**
- * Handle admin logout
- * POST /api/logout
- */
-async function handleLogout(request, env) {
-  const origin = request.headers.get('Origin');
-  const auth = request.headers.get('Authorization');
-  if (auth && auth.startsWith('Bearer ')) {
-    await env.LICENSES.delete(`session:${auth.slice(7)}`);
-  }
-  return jsonResponse({ success: true }, 200, origin);
+async function handleLogout(req, env) {
+  const o = req.headers.get('Origin');
+  const auth = req.headers.get('Authorization');
+  if (auth && auth.startsWith('Bearer ')) await env.LICENSES.delete(`session:${auth.slice(7)}`);
+  return jsonResponse({success:true}, 200, o);
 }
-/**
- * Handle trial license request
- * POST /api/trial
- */
-async function handleTrial(request, env) {
-  const origin = request.headers.get('Origin');
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  // Rate limiting
-  const rateLimit = await checkRateLimit(env, 'trial', clientIP);
-  if (!rateLimit.allowed) {
-    return jsonResponse({
-      error: 'Too many trial requests. Please try again later.',
-      retryAfter: rateLimit.resetIn
-    }, 429, origin);
-  }
+async function handleTrial(req, env) {
+  const o = req.headers.get('Origin');
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const rl = await checkRateLimit(env, 'trial', ip);
+  if (!rl.allowed) return jsonResponse({error:'E_MANY_REQ',retryAfter:rl.resetIn}, 429, o);
   try {
-    const { email, name } = await request.json();
-    if (!email) {
-      return jsonResponse({ error: 'Email is required' }, 400, origin);
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    // Check if this IP already generated a trial (prevent abuse with multiple emails)
-    const existingTrialIP = await env.LICENSES.get(`trial:ip:${clientIP}`);
-    if (existingTrialIP) {
-      return jsonResponse({
-        error: 'Trial already claimed from this network.'
-      }, 409, origin);
-    }
-    // Check if email already has a paid license
-    const existingPaid = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
+    const {email:eml,name:nm} = await req.json();
+    if (!eml) return jsonResponse({error:'E_EML_REQ'}, 400, o);
+    const normEml = eml.toLowerCase().trim();
+    const existingTrialIP = await env.LICENSES.get(`trial:ip:${ip}`);
+    if (existingTrialIP) return jsonResponse({error:'E_TRIAL_CLAIMED'}, 409, o);
+    const existingPaid = await env.LICENSES.get(`license:paid:${normEml}`);
     if (existingPaid) {
-      const license = JSON.parse(existingPaid);
-      const isActive = license.expires && new Date(license.expires).getTime() > Date.now();
-      if (isActive) {
-        return jsonResponse({
-          error: 'You already have an active license for this email.'
-        }, 409, origin);
-      } else {
-        return jsonResponse({
-          error: 'Trial not available for existing customers. Renew at: https://latent-k.dev'
-        }, 409, origin);
-      }
+      const lic = JSON.parse(existingPaid);
+      const isActive = lic.expires && new Date(lic.expires).getTime() > Date.now();
+      if (isActive) return jsonResponse({error:'E_LIC_EXISTS'}, 409, o);
+      else return jsonResponse({error:'E_TRIAL_NA'}, 409, o);
     }
-    // Check if email already has a trial
-    const existingTrial = await env.LICENSES.get(`license:trial:${normalizedEmail}`);
-    if (existingTrial) {
-      return jsonResponse({
-        error: 'Trial already used for this email.'
-      }, 409, origin);
-    }
-    // Generate trial license
-    const durationDays = PLAN_CONFIG.trial14.days;
-    const key = await generateLicense(env, {
-      email: normalizedEmail,
-      durationDays,
-      type: 'trial'
-    });
-    const data = parseLicense(key);
-    const licenseData = {
-      id: data.id,
-      key,
-      email: normalizedEmail,
-      name: name || '',
-      plan: 'trial14',
-      created: new Date().toISOString(),
-      expires: data.expires ? new Date(data.expires).toISOString() : null
-    };
-    // Store in KV
-    await env.LICENSES.put(`license:trial:${normalizedEmail}`, JSON.stringify(licenseData));
-    await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseData));
-    // Mark IP as used for trial (no expiration - permanent)
-    await env.LICENSES.put(`trial:ip:${clientIP}`, JSON.stringify({
-      email: normalizedEmail,
-      created: new Date().toISOString()
-    }));
-    console.log(`[TRIAL] Generated 14-day trial for ${normalizedEmail} from IP ${clientIP}`);
-    return jsonResponse({
-      key,
-      email: normalizedEmail,
-      expires: licenseData.expires,
-      daysLeft: durationDays
-    }, 200, origin);
-  } catch (error) {
-    console.error('Trial error:', error);
-    return jsonResponse({ error: error.message || 'Failed to process trial request' }, 500, origin);
-  }
+    const existingTrial = await env.LICENSES.get(`license:trial:${normEml}`);
+    if (existingTrial) return jsonResponse({error:'E_TRIAL_USED'}, 409, o);
+    const durDays = PLAN_CONFIG.trial14.days;
+    const k = await generateLicense(env, {email:normEml,durationDays:durDays,type:'trial'});
+    const dt = parseLicense(k);
+    const licDt = {id:dt.id,key:k,email:normEml,name:nm || '',plan:'trial14',created:new Date().toISOString(),expires:dt.expires ? new Date(dt.expires).toISOString() : null};
+    await env.LICENSES.put(`license:trial:${normEml}`, JSON.stringify(licDt));
+    await env.LICENSES.put(`license:id:${dt.id}`, JSON.stringify(licDt));
+    await env.LICENSES.put(`trial:ip:${ip}`, JSON.stringify({email:normEml,created:new Date().toISOString()}));
+    console.log(`[TRIAL] Generated 14-day trial for ${normEml} from IP ${ip}`);
+    return jsonResponse({key:k,email:normEml,expires:licDt.expires,daysLeft:durDays}, 200, o);
+  } catch (err) {console.error('Trial error:', err);return jsonResponse({error:err.message || 'E_FAILED_TRIAL'}, 500, o);}
 }
-/**
- * Handle license generation (protected)
- * POST /api/generate
- */
-async function handleGenerate(request, env) {
-  const origin = request.headers.get('Origin');
-  const auth = await checkAuth(request, env);
-  if (!auth.authenticated) {
-    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
-  }
+async function handleGenerate(req, env) {
+  const o = req.headers.get('Origin');
+  const auth = await checkAuth(req, env);
+  if (!auth.authenticated) return jsonResponse({error:'E_UNAUTH'}, 401, o);
   try {
-    const { email, name, plan } = await request.json();
-    if (!email) {
-      return jsonResponse({ error: 'Email is required' }, 400, origin);
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    const durationDays = PLAN_CONFIG[plan]?.days || 365;
-    const durationMs = durationDays * 24 * 60 * 60 * 1000;
+    const {email:eml,name:nm,plan:pln} = await req.json();
+    if (!eml) return jsonResponse({error:'E_EML_REQ'}, 400, o);
+    const normEml = eml.toLowerCase().trim();
+    const durDays = PLAN_CONFIG[pln]?.days || 365;
+    const durMs = durDays * 24 * 60 * 60 * 1000;
     const now = Date.now();
-    // Check for existing active paid license
-    const existingData = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
-    let existingLicense = existingData ? JSON.parse(existingData) : null;
-    let extended = false;
-    // Calculate expiration
-    let expires;
-    if (existingLicense && existingLicense.expires && new Date(existingLicense.expires).getTime() > now) {
-      expires = new Date(existingLicense.expires).getTime() + durationMs;
-      extended = true;
-      console.log(`[LICENSE] Extending license for ${normalizedEmail} from ${existingLicense.expires}`);
-    } else {
-      expires = now + durationMs;
-    }
-    const key = await generateLicense(env, { email: normalizedEmail, expires });
-    const data = parseLicense(key);
-    const licenseData = {
-      id: data.id,
-      key,
-      email: normalizedEmail,
-      name: name || '',
-      plan: plan || 'yearly',
-      created: new Date().toISOString(),
-      expires: data.expires ? new Date(data.expires).toISOString() : null,
-      extended
-    };
-    // Store in KV
-    await env.LICENSES.put(`license:paid:${normalizedEmail}`, JSON.stringify(licenseData));
-    await env.LICENSES.put(`license:id:${data.id}`, JSON.stringify(licenseData));
-    console.log(`[LICENSE] Generated license for ${normalizedEmail} (${plan || 'yearly'}) via ${auth.source}, expires ${new Date(expires).toISOString()}`);
-    return jsonResponse({
-      key,
-      data,
-      extended,
-      previousExpiry: extended ? existingLicense.expires : null
-    }, 200, origin);
-  } catch (error) {
-    console.error('Generate error:', error);
-    return jsonResponse({ error: error.message || 'Failed to generate license' }, 500, origin);
-  }
+    const existingDt = await env.LICENSES.get(`license:paid:${normEml}`);
+    let existingLic = existingDt ? JSON.parse(existingDt) : null;
+    let ext = false;
+    let exp;
+    if (existingLic && existingLic.expires && new Date(existingLic.expires).getTime() > now) {
+      exp = new Date(existingLic.expires).getTime() + durMs;
+      ext = true;
+      console.log(`[LICENSE] Extending license for ${normEml} from ${existingLic.expires}`);
+    } else exp = now + durMs;
+    const k = await generateLicense(env, {email:normEml,expires:exp});
+    const dt = parseLicense(k);
+    const licDt = {id:dt.id,key:k,email:normEml,name:nm || '',plan:pln || 'yearly',created:new Date().toISOString(),expires:dt.expires ? new Date(dt.expires).toISOString() : null,extended:ext};
+    await env.LICENSES.put(`license:paid:${normEml}`, JSON.stringify(licDt));
+    await env.LICENSES.put(`license:id:${dt.id}`, JSON.stringify(licDt));
+    console.log(`[LICENSE] Generated license for ${normEml} (${pln || 'yearly'}) via ${auth.source}, expires ${new Date(exp).toISOString()}`);
+    return jsonResponse({key:k,data:dt,extended:ext,previousExpiry:ext ? existingLic.expires : null}, 200, o);
+  } catch (err) {console.error('Generate error:', err);return jsonResponse({error:err.message || 'E_GEN_FAIL'}, 500, o);}
 }
-/**
- * Handle license deletion (protected)
- * POST /api/delete
- */
-async function handleDelete(request, env) {
-  const origin = request.headers.get('Origin');
-  const auth = await checkAuth(request, env);
-  if (!auth.authenticated || auth.source !== 'admin') {
-    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
-  }
+async function handleDelete(req, env) {
+  const o = req.headers.get('Origin');
+  const auth = await checkAuth(req, env);
+  if (!auth.authenticated || auth.source !== 'admin') return jsonResponse({error:'E_UNAUTH'}, 401, o);
   try {
-    const { key } = await request.json();
-    const parsed = parseLicense(key);
-    if (!parsed || !parsed.id) {
-      return jsonResponse({ error: 'Invalid license key' }, 400, origin);
-    }
-    const licenseData = await env.LICENSES.get(`license:id:${parsed.id}`);
-    if (!licenseData) {
-      return jsonResponse({ error: 'License not found' }, 404, origin);
-    }
-    const license = JSON.parse(licenseData);
-    const email = license.email;
-    // Delete all related keys
+    const {key:k} = await req.json();
+    const parsed = parseLicense(k);
+    if (!parsed || !parsed.id) return jsonResponse({error:'E_INV_KEY'}, 400, o);
+    const licDt = await env.LICENSES.get(`license:id:${parsed.id}`);
+    if (!licDt) return jsonResponse({error:'E_LIC_NF'}, 404, o);
+    const lic = JSON.parse(licDt);
+    const eml = lic.email;
     await env.LICENSES.delete(`license:id:${parsed.id}`);
-    if (license.plan === 'trial14') {
-      await env.LICENSES.delete(`license:trial:${email}`);
-    } else {
-      await env.LICENSES.delete(`license:paid:${email}`);
-    }
-    console.log(`[LICENSE] Deleted license for ${email}`);
-    return jsonResponse({ success: true, email }, 200, origin);
-  } catch (error) {
-    console.error('Delete error:', error);
-    return jsonResponse({ error: error.message }, 500, origin);
-  }
+    if (lic.plan === 'trial14') await env.LICENSES.delete(`license:trial:${eml}`);
+    else await env.LICENSES.delete(`license:paid:${eml}`);
+    console.log(`[LICENSE] Deleted license for ${eml}`);
+    return jsonResponse({success:true,email:eml}, 200, o);
+  } catch (err) {console.error('Delete error:', err);return jsonResponse({error:err.message}, 500, o);}
 }
-/**
- * List all licenses (protected)
- * GET /api/licenses
- */
-async function handleListLicenses(request, env) {
-  const origin = request.headers.get('Origin');
-  const auth = await checkAuth(request, env);
-  if (!auth.authenticated || auth.source !== 'admin') {
-    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
-  }
+async function handleListLicenses(req, env) {
+  const o = req.headers.get('Origin');
+  const auth = await checkAuth(req, env);
+  if (!auth.authenticated || auth.source !== 'admin') return jsonResponse({error:'E_UNAUTH'}, 401, o);
   try {
-    const licenses = [];
-    const list = await env.LICENSES.list({ prefix: 'license:id:' });
-    for (const key of list.keys) {
-      const data = await env.LICENSES.get(key.name);
-      if (data) {
-        licenses.push(JSON.parse(data));
-      }
+    const lics = [];
+    const lst = await env.LICENSES.list({prefix:'license:id:'});
+    for (const k of lst.keys) {
+      const dt = await env.LICENSES.get(k.name);
+      if (dt) lics.push(JSON.parse(dt));
     }
-    // Sort by created date descending
-    licenses.sort((a, b) => new Date(b.created) - new Date(a.created));
-    return jsonResponse(licenses, 200, origin);
-  } catch (error) {
-    console.error('List error:', error);
-    return jsonResponse({ error: error.message }, 500, origin);
-  }
+    lics.sort((a, b) => new Date(b.created) - new Date(a.created));
+    return jsonResponse(lics, 200, o);
+  } catch (err) {console.error('List error:', err);return jsonResponse({error:err.message}, 500, o);}
 }
-/**
- * Check license status (for online validation)
- * GET /api/check-license?email=xxx
- */
-async function handleCheckLicense(request, env) {
-  const origin = request.headers.get('Origin');
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  // Rate limiting
-  const rateLimit = await checkRateLimit(env, 'checkLicense', clientIP);
-  if (!rateLimit.allowed) {
-    return jsonResponse({
-      error: 'Too many requests. Please try again later.',
-      retryAfter: rateLimit.resetIn
-    }, 429, origin);
-  }
-  const url = new URL(request.url);
-  const email = url.searchParams.get('email');
-  if (!email) {
-    return jsonResponse({ error: 'email is required' }, 400, origin);
-  }
-  const normalizedEmail = email.toLowerCase().trim();
+async function handleCheckLicense(req, env) {
+  const o = req.headers.get('Origin');
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const rl = await checkRateLimit(env, 'checkLicense', ip);
+  if (!rl.allowed) return jsonResponse({error:'E_MANY_REQ',retryAfter:rl.resetIn}, 429, o);
+  const uri = new URL(req.url);
+  const eml = uri.searchParams.get('email');
+  if (!eml) return jsonResponse({error:'E_EML_REQ'}, 400, o);
+  const normEml = eml.toLowerCase().trim();
   try {
-    // Check paid license first
-    let licenseData = await env.LICENSES.get(`license:paid:${normalizedEmail}`);
-    // Fall back to trial
-    if (!licenseData) {
-      licenseData = await env.LICENSES.get(`license:trial:${normalizedEmail}`);
-    }
-    if (!licenseData) {
-      return jsonResponse({
-        valid: false,
-        error: 'License not found'
-      }, 404, origin);
-    }
-    const license = JSON.parse(licenseData);
+    let licDt = await env.LICENSES.get(`license:paid:${normEml}`);
+    if (!licDt) licDt = await env.LICENSES.get(`license:trial:${normEml}`);
+    if (!licDt) return jsonResponse({valid:false,error:'E_LIC_NF'}, 404, o);
+    const lic = JSON.parse(licDt);
     const now = Date.now();
-    const expires = license.expires ? new Date(license.expires).getTime() : null;
-    const expired = expires ? now > expires : false;
-    const daysLeft = expires ? Math.ceil((expires - now) / (24 * 60 * 60 * 1000)) : null;
-    return jsonResponse({
-      valid: !license.revoked && !expired,
-      revoked: !!license.revoked,
-      revokedAt: license.revokedAt || null,
-      revokeReason: license.revokeReason || null,
-      expired,
-      expires: license.expires,
-      daysLeft,
-      plan: license.plan
-    }, 200, origin);
-  } catch (error) {
-    console.error('Check license error:', error);
-    return jsonResponse({ error: 'Failed to check license' }, 500, origin);
-  }
+    const exp = lic.expires ? new Date(lic.expires).getTime() : null;
+    const expired = exp ? now > exp : false;
+    const daysL = exp ? Math.ceil((exp - now) / (24 * 60 * 60 * 1000)) : null;
+    return jsonResponse({valid:!lic.revoked && !expired,revoked:!!lic.revoked,revokedAt:lic.revokedAt || null,revokeReason:lic.revokeReason || null,expired:expired,expires:lic.expires,daysLeft:daysL,plan:lic.plan}, 200, o);
+  } catch (err) {console.error('Check license error:', err);return jsonResponse({error:'E_CHK_FAIL'}, 500, o);}
 }
-/**
- * Revoke a license (keeps record but marks as invalid)
- * POST /api/revoke
- * Body: { email, reason? }
- */
-async function handleRevoke(request, env) {
-  const origin = request.headers.get('Origin');
-  const auth = await checkAuth(request, env);
-  if (!auth.authenticated || auth.source !== 'admin') {
-    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
-  }
+async function handleRevoke(req, env) {
+  const o = req.headers.get('Origin');
+  const auth = await checkAuth(req, env);
+  if (!auth.authenticated || auth.source !== 'admin') return jsonResponse({error:'E_UNAUTH'}, 401, o);
   try {
-    const { email, reason } = await request.json();
-    if (!email) {
-      return jsonResponse({ error: 'Email is required' }, 400, origin);
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    // Check paid license first
-    let licenseKey = `license:paid:${normalizedEmail}`;
-    let licenseData = await env.LICENSES.get(licenseKey);
-    // Fall back to trial
-    if (!licenseData) {
-      licenseKey = `license:trial:${normalizedEmail}`;
-      licenseData = await env.LICENSES.get(licenseKey);
-    }
-    if (!licenseData) {
-      return jsonResponse({ error: 'License not found' }, 404, origin);
-    }
-    const license = JSON.parse(licenseData);
-    if (license.revoked) {
-      return jsonResponse({ error: 'License already revoked' }, 409, origin);
-    }
-    // Mark as revoked (keep all data for audit)
-    license.revoked = true;
-    license.revokedAt = new Date().toISOString();
-    license.revokeReason = reason || 'Revoked by admin';
-    // Update in KV
-    await env.LICENSES.put(licenseKey, JSON.stringify(license));
-    // Also update by ID if exists
-    if (license.id) {
-      await env.LICENSES.put(`license:id:${license.id}`, JSON.stringify(license));
-    }
-    console.log(`[LICENSE] Revoked license for ${normalizedEmail}: ${reason || 'No reason'}`);
-    return jsonResponse({
-      success: true,
-      email: normalizedEmail,
-      revokedAt: license.revokedAt
-    }, 200, origin);
-  } catch (error) {
-    console.error('Revoke error:', error);
-    return jsonResponse({ error: error.message || 'Failed to revoke license' }, 500, origin);
-  }
+    const {email:eml,reason:rsn} = await req.json();
+    if (!eml) return jsonResponse({error:'E_EML_REQ'}, 400, o);
+    const normEml = eml.toLowerCase().trim();
+    let licK = `license:paid:${normEml}`;
+    let licDt = await env.LICENSES.get(licK);
+    if (!licDt) {licK = `license:trial:${normEml}`;licDt = await env.LICENSES.get(licK);}
+    if (!licDt) return jsonResponse({error:'E_LIC_NF'}, 404, o);
+    const lic = JSON.parse(licDt);
+    if (lic.revoked) return jsonResponse({error:'E_LIC_REVOKED'}, 409, o);
+    lic.revoked = true;
+    lic.revokedAt = new Date().toISOString();
+    lic.revokeReason = rsn || 'Revoked by admin';
+    await env.LICENSES.put(licK, JSON.stringify(lic));
+    if (lic.id) await env.LICENSES.put(`license:id:${lic.id}`, JSON.stringify(lic));
+    console.log(`[LICENSE] Revoked license for ${normEml}: ${rsn || 'No reason'}`);
+    return jsonResponse({success:true,email:normEml,revokedAt:lic.revokedAt}, 200, o);
+  } catch (err) {console.error('Revoke error:', err);return jsonResponse({error:err.message || 'E_REVOKE_FAIL'}, 500, o);}
 }
-/**
- * Unrevoke a license (restore access)
- * POST /api/unrevoke
- * Body: { email }
- */
-async function handleUnrevoke(request, env) {
-  const origin = request.headers.get('Origin');
-  const auth = await checkAuth(request, env);
-  if (!auth.authenticated || auth.source !== 'admin') {
-    return jsonResponse({ error: 'Unauthorized' }, 401, origin);
-  }
+async function handleUnrevoke(req, env) {
+  const o = req.headers.get('Origin');
+  const auth = await checkAuth(req, env);
+  if (!auth.authenticated || auth.source !== 'admin') return jsonResponse({error:'E_UNAUTH'}, 401, o);
   try {
-    const { email } = await request.json();
-    if (!email) {
-      return jsonResponse({ error: 'Email is required' }, 400, origin);
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    // Check paid license first
-    let licenseKey = `license:paid:${normalizedEmail}`;
-    let licenseData = await env.LICENSES.get(licenseKey);
-    // Fall back to trial
-    if (!licenseData) {
-      licenseKey = `license:trial:${normalizedEmail}`;
-      licenseData = await env.LICENSES.get(licenseKey);
-    }
-    if (!licenseData) {
-      return jsonResponse({ error: 'License not found' }, 404, origin);
-    }
-    const license = JSON.parse(licenseData);
-    if (!license.revoked) {
-      return jsonResponse({ error: 'License is not revoked' }, 409, origin);
-    }
-    // Remove revocation
-    delete license.revoked;
-    delete license.revokedAt;
-    delete license.revokeReason;
-    // Update in KV
-    await env.LICENSES.put(licenseKey, JSON.stringify(license));
-    // Also update by ID if exists
-    if (license.id) {
-      await env.LICENSES.put(`license:id:${license.id}`, JSON.stringify(license));
-    }
-    console.log(`[LICENSE] Unrevoked license for ${normalizedEmail}`);
-    return jsonResponse({
-      success: true,
-      email: normalizedEmail
-    }, 200, origin);
-  } catch (error) {
-    console.error('Unrevoke error:', error);
-    return jsonResponse({ error: error.message || 'Failed to unrevoke license' }, 500, origin);
-  }
+    const {email:eml} = await req.json();
+    if (!eml) return jsonResponse({error:'E_EML_REQ'}, 400, o);
+    const normEml = eml.toLowerCase().trim();
+    let licK = `license:paid:${normEml}`;
+    let licDt = await env.LICENSES.get(licK);
+    if (!licDt) {licK = `license:trial:${normEml}`;licDt = await env.LICENSES.get(licK);}
+    if (!licDt) return jsonResponse({error:'E_LIC_NF'}, 404, o);
+    const lic = JSON.parse(licDt);
+    if (!lic.revoked) return jsonResponse({error:'E_LIC_NOT_REVOKED'}, 409, o);
+    delete lic.revoked;
+    delete lic.revokedAt;
+    delete lic.revokeReason;
+    await env.LICENSES.put(licK, JSON.stringify(lic));
+    if (lic.id) await env.LICENSES.put(`license:id:${lic.id}`, JSON.stringify(lic));
+    console.log(`[LICENSE] Unrevoked license for ${normEml}`);
+    return jsonResponse({success:true,email:normEml}, 200, o);
+  } catch (err) {console.error('Unrevoke error:', err);return jsonResponse({error:err.message || 'E_UNREVOKE_FAIL'}, 500, o);}
 }
-/**
- * Get license by session ID
- * GET /api/license?session_id=xxx
- */
-async function handleGetLicense(request, env) {
-  const origin = request.headers.get('Origin');
-  const url = new URL(request.url);
-  const sessionId = url.searchParams.get('session_id');
-  if (!sessionId) {
-    return jsonResponse({ error: 'session_id is required' }, 400, origin);
-  }
-  if (!env.LICENSES) {
-    return jsonResponse({ error: 'License storage not configured' }, 500, origin);
-  }
+async function handleGetLicense(req, env) {
+  const o = req.headers.get('Origin');
+  const uri = new URL(req.url);
+  const sessId = uri.searchParams.get('session_id');
+  if (!sessId) return jsonResponse({error:'E_SESS_ID_REQ'}, 400, o);
+  if (!env.LICENSES) return jsonResponse({error:'E_LIC_STORAGE_CFG'}, 500, o);
   try {
-    const data = await env.LICENSES.get(`checkout:${sessionId}`);
-    if (!data) {
-      return jsonResponse({ error: 'License not found. Payment may still be processing.' }, 404, origin);
-    }
-    const license = JSON.parse(data);
-    return jsonResponse(license, 200, origin);
-  } catch (error) {
-    console.error('Get license error:', error);
-    return jsonResponse({ error: 'Failed to retrieve license' }, 500, origin);
-  }
+    const dt = await env.LICENSES.get(`checkout:${sessId}`);
+    if (!dt) return jsonResponse({error:'E_LIC_NF'}, 404, o);
+    const lic = JSON.parse(dt);
+    return jsonResponse(lic, 200, o);
+  } catch (err) {console.error('Get license error:', err);return jsonResponse({error:'E_GET_LIC_FAIL'}, 500, o);}
 }
-/**
- * Handle chatbot messages
- * POST /api/chat
- */
-async function handleChat(request, env) {
-  const origin = request.headers.get('Origin');
-  const clientIP = request.headers.get('CF-Connecting-IP') || 'unknown';
-  // Rate limiting
-  const rateLimit = await checkRateLimit(env, 'chat', clientIP);
-  if (!rateLimit.allowed) {
-    return jsonResponse({
-      error: 'Daily chat limit reached. Please try again tomorrow.',
-      retryAfter: rateLimit.resetIn
-    }, 429, origin);
-  }
+async function handleChat(req, env) {
+  const o = req.headers.get('Origin');
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const rl = await checkRateLimit(env, 'chat', ip);
+  if (!rl.allowed) return jsonResponse({error:'E_CHAT_LIMIT',retryAfter:rl.resetIn}, 429, o);
   try {
-    const { message } = await request.json();
-    if (!message || typeof message !== 'string') {
-      return jsonResponse({ error: 'Message is required' }, 400, origin);
-    }
-    if (!env.GEMINI_API_KEY) {
-      return jsonResponse({ error: 'Chatbot not configured' }, 500, origin);
-    }
-    const systemPrompt = `You are the LATENT-K assistant, a helpful chatbot on the LATENT-K website.
+    const {message:msg} = await req.json();
+    if (!msg || typeof msg !== 'string') return jsonResponse({error:'E_MSG_REQ'}, 400, o);
+    if (!env.GEMINI_API_KEY) return jsonResponse({error:'E_CHAT_NOT_CFG'}, 500, o);
+    const sysP = `You are the LATENT-K assistant, a helpful chatbot on the LATENT-K website.
 ## WHAT IS LATENT-K
 LATENT-K is a CLI tool that automatically injects relevant code context into AI coding assistants like Claude Code and Gemini CLI. It analyzes your prompt and injects only the relevant code, provides instant answers to simple questions, and auto-syncs at session start and end.
 ## BENCHMARK RESULTS
@@ -978,94 +463,33 @@ Be concise and friendly. Answer questions about LATENT-K features, commands, pri
 If asked something unrelated, politely redirect to LATENT-K topics.
 Keep responses short (2-3 sentences) unless more detail is requested.
 Use bullet points for lists. Never invent features that don't exist.`;
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ parts: [{ text: message }] }],
-          generationConfig: {
-            maxOutputTokens: 512,
-            temperature: 0.7
-          }
-        })
-      }
-    );
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error('[CHAT] Gemini API error:', errText);
-      return jsonResponse({ error: 'AI service error' }, 500, origin);
-    }
-    const geminiData = await geminiRes.json();
-    const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
-    return jsonResponse({ reply }, 200, origin);
-  } catch (error) {
-    console.error('Chat error:', error);
-    return jsonResponse({ error: 'Internal error' }, 500, origin);
-  }
+    const gemRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:sysP}]},contents:[{parts:[{text:msg}]}],generationConfig:{maxOutputTokens:512,temperature:0.7}})});
+    if (!gemRes.ok) {const et = await gemRes.text();console.error('[CHAT] Gemini API error:', et);return jsonResponse({error:'E_AI_SRVC'}, 500, o);}
+    const gemDt = await gemRes.json();
+    const rpl = gemDt.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+    return jsonResponse({reply:rpl}, 200, o);
+  } catch (err) {console.error('Chat error:', err);return jsonResponse({error:'E_INT'}, 500, o);}
 }
-/**
- * Main request handler
- */
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    const method = request.method;
-    // Handle CORS preflight
-    if (method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders(request.headers.get('Origin')),
-      });
-    }
-    // Route requests
-    if (path === '/api/checkout' && method === 'POST') {
-      return handleCheckout(request, env);
-    }
-    if (path === '/api/webhook' && method === 'POST') {
-      return handleWebhook(request, env);
-    }
-    if (path === '/api/license' && method === 'GET') {
-      return handleGetLicense(request, env);
-    }
-    if (path === '/api/check-license' && method === 'GET') {
-      return handleCheckLicense(request, env);
-    }
-    if (path === '/api/revoke' && method === 'POST') {
-      return handleRevoke(request, env);
-    }
-    if (path === '/api/unrevoke' && method === 'POST') {
-      return handleUnrevoke(request, env);
-    }
-    if (path === '/api/trial' && method === 'POST') {
-      return handleTrial(request, env);
-    }
-    if (path === '/api/chat' && method === 'POST') {
-      return handleChat(request, env);
-    }
-    // Admin endpoints
-    if (path === '/api/login' && method === 'POST') {
-      return handleLogin(request, env);
-    }
-    if (path === '/api/logout' && method === 'POST') {
-      return handleLogout(request, env);
-    }
-    if (path === '/api/generate' && method === 'POST') {
-      return handleGenerate(request, env);
-    }
-    if (path === '/api/delete' && method === 'POST') {
-      return handleDelete(request, env);
-    }
-    if (path === '/api/licenses' && method === 'GET') {
-      return handleListLicenses(request, env);
-    }
-    // Health check
-    if (path === '/health' || path === '/') {
-      return jsonResponse({ status: 'ok', service: 'latent-k-payments' });
-    }
-    return jsonResponse({ error: 'Not found' }, 404);
+  async fetch(req, env) {
+    const uri = new URL(req.url);
+    const p = uri.pathname;
+    const m = req.method;
+    if (m === 'OPTIONS') return new Response(null, {status:204,headers:corsHeaders(req.headers.get('Origin'))});
+    if (p === '/api/checkout' && m === 'POST') return handleCheckout(req, env);
+    if (p === '/api/webhook' && m === 'POST') return handleWebhook(req, env);
+    if (p === '/api/license' && m === 'GET') return handleGetLicense(req, env);
+    if (p === '/api/check-license' && m === 'GET') return handleCheckLicense(req, env);
+    if (p === '/api/revoke' && m === 'POST') return handleRevoke(req, env);
+    if (p === '/api/unrevoke' && m === 'POST') return handleUnrevoke(req, env);
+    if (p === '/api/trial' && m === 'POST') return handleTrial(req, env);
+    if (p === '/api/chat' && m === 'POST') return handleChat(req, env);
+    if (p === '/api/login' && m === 'POST') return handleLogin(req, env);
+    if (p === '/api/logout' && m === 'POST') return handleLogout(req, env);
+    if (p === '/api/generate' && m === 'POST') return handleGenerate(req, env);
+    if (p === '/api/delete' && m === 'POST') return handleDelete(req, env);
+    if (p === '/api/licenses' && m === 'GET') return handleListLicenses(req, env);
+    if (p === '/health' || p === '/') return jsonResponse({status:'ok',service:'latent-k-payments'});
+    return jsonResponse({error:'E_NF'}, 404);
   },
 };

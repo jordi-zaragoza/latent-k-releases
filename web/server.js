@@ -1,496 +1,354 @@
 #!/usr/bin/env node
-/**
- * Local License Server
- * Serves the activation page and generates real licenses
- */
 import { createServer } from 'http'
 import { readFileSync, writeFileSync, existsSync, realpathSync } from 'fs'
 import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { randomBytes } from 'crypto'
 import { generateLicense, parseLicense } from '../scripts/license-admin.js'
-const __dirname = dirname(fileURLToPath(import.meta.url))
-/**
- * Timing-safe string comparison to prevent timing attacks
- */
+const __dirname = dirname(fileURLToPath(import.meta.url));
 function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const lenA = a.length
-  const lenB = b.length
-  // Compare against self to maintain constant time on length mismatch
-  const compareB = lenA === lenB ? b : a
-  let result = lenA === lenB ? 0 : 1
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ compareB.charCodeAt(i)
-  }
-  return result === 0
+  const la = a.length; const lb = b.length;
+  const cb = la === lb ? b : a;
+  let r = la === lb ? 0 : 1;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ cb.charCodeAt(i);
+  return r === 0
 }
-const PORT = process.env.PORT || 3000
-const LICENSES_FILE = join(__dirname, 'licenses.json')
-const PLAN_DAYS = {
-  trial1: 1,
-  trial7: 7,
-  trial14: 14,
-  monthly: 30,
-  yearly: 365
-}
-// Admin credentials - MUST be set via environment variables
-const ADMIN_USER = process.env.ADMIN_USER
-const ADMIN_PASS = process.env.ADMIN_PASS
-// Worker token for programmatic access from Cloudflare Worker (optional)
-const WORKER_TOKEN = process.env.WORKER_TOKEN
-// Load Gemini API key from lk_viewer/.env if not set
+const PORT = process.env.PORT || 3000;
+const LICENSES_FILE = join(__dirname, 'licenses.json');
+const PLAN_DAYS = { trial1: 1, trial7: 7, trial14: 14, monthly: 30, yearly: 365 };
+const ADMIN_USER = process.env.ADMIN_USER;
+const ADMIN_PASS = process.env.ADMIN_PASS;
+const WORKER_TOKEN = process.env.WORKER_TOKEN;
 function loadGeminiKey() {
-  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY
-  const envPath = join(__dirname, '..', 'lk_viewer', '.env')
-  if (existsSync(envPath)) {
-    const content = readFileSync(envPath, 'utf8')
-    const match = content.match(/GEMINI_API_KEY=(.+)/)
-    if (match) return match[1].trim()
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  const ep = join(__dirname, '..', 'lk_viewer', '.env');
+  if (existsSync(ep)) {
+    const c = readFileSync(ep, 'utf8');
+    const m = c.match(/GEMINI_API_KEY=(.+)/);
+    if (m) return m[1].trim();
   }
   return null
 }
-const GEMINI_API_KEY = loadGeminiKey()
+const GEMINI_API_KEY = loadGeminiKey();
 if (!ADMIN_USER || !ADMIN_PASS) {
-  console.error('ERROR: ADMIN_USER and ADMIN_PASS environment variables are required')
-  console.error('Example: ADMIN_USER=admin ADMIN_PASS=your-secure-password node web/server.js')
+  console.error('ERROR: ADMIN_USER and ADMIN_PASS environment variables are required');
+  console.error('Example: ADMIN_USER=admin ADMIN_PASS=your-secure-password node web/server.js');
   process.exit(1)
 }
-// Session tokens (persisted to file) with expiration
-const SESSIONS_FILE = join(__dirname, '.sessions.json')
-const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
-// Rate limiting configuration
-const RATE_LIMIT = {
-  login: { maxAttempts: 5, windowSeconds: 300 },    // 5 attempts per 5 minutes
-  trial: { maxAttempts: 3, windowSeconds: 3600 }    // 3 attempts per hour
-}
-// In-memory rate limiting store
-const rateLimitStore = new Map()
-/**
- * Check rate limit for an action
- * @param {string} action - 'login' or 'trial'
- * @param {string} identifier - IP address or other identifier
- * @returns {{ allowed: boolean, remaining: number, resetIn: number }}
- */
+const SESSIONS_FILE = join(__dirname, '.sessions.json');
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMIT = { login: { maxAttempts: 5, windowSeconds: 300 }, trial: { maxAttempts: 3, windowSeconds: 3600 } };
+const rateLimitStore = new Map();
 function checkRateLimit(action, identifier) {
-  const config = RATE_LIMIT[action]
-  if (!config) return { allowed: true, remaining: 999, resetIn: 0 }
-  const key = `${action}:${identifier}`
-  const now = Math.floor(Date.now() / 1000)
-  let record = rateLimitStore.get(key) || { count: 0, windowStart: now }
-  // Reset window if expired
-  if (now - record.windowStart >= config.windowSeconds) {
-    record = { count: 0, windowStart: now }
-  }
-  const remaining = Math.max(0, config.maxAttempts - record.count)
-  const resetIn = config.windowSeconds - (now - record.windowStart)
-  if (record.count >= config.maxAttempts) {
-    return { allowed: false, remaining: 0, resetIn }
-  }
-  // Increment counter
-  record.count++
-  rateLimitStore.set(key, record)
-  // Clean old entries periodically (every 100 entries)
+  const cfg = RATE_LIMIT[action];
+  if (!cfg) return { allowed: true, remaining: 999, resetIn: 0 };
+  const k = `${action}:${identifier}`;
+  const now = Math.floor(Date.now() / 1000);
+  let rec = rateLimitStore.get(k) || { count: 0, windowStart: now };
+  if (now - rec.windowStart >= cfg.windowSeconds) rec = { count: 0, windowStart: now };
+  const rem = Math.max(0, cfg.maxAttempts - rec.count);
+  const ri = cfg.windowSeconds - (now - rec.windowStart);
+  if (rec.count >= cfg.maxAttempts) return { allowed: false, remaining: 0, resetIn: ri };
+  rec.count++;
+  rateLimitStore.set(k, rec);
   if (rateLimitStore.size > 100) {
-    for (const [k, v] of rateLimitStore) {
-      const a = k.split(':')[0]
-      const c = RATE_LIMIT[a]
-      if (c && now - v.windowStart >= c.windowSeconds * 2) {
-        rateLimitStore.delete(k)
-      }
+    for (const [rk, rv] of rateLimitStore) {
+      const a = rk.split(':')[0];
+      const c = RATE_LIMIT[a];
+      if (c && now - rv.windowStart >= c.windowSeconds * 2) rateLimitStore.delete(rk)
     }
   }
-  return { allowed: true, remaining: remaining - 1, resetIn }
+  return { allowed: true, remaining: rem - 1, resetIn: ri }
 }
-/**
- * Get client IP from request
- */
 function getClientIP(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-         req.socket?.remoteAddress ||
-         'unknown'
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
 }
 function loadSessions() {
   if (existsSync(SESSIONS_FILE)) {
     try {
-      const data = JSON.parse(readFileSync(SESSIONS_FILE, 'utf8'))
-      // Handle both old format (array of tokens) and new format (object with expiry)
-      if (Array.isArray(data)) {
-        // Migrate old format: convert to new format with current timestamp
-        const now = Date.now()
-        const migrated = new Map(data.map(token => [token, now]))
-        return migrated
+      const d = JSON.parse(readFileSync(SESSIONS_FILE, 'utf8'));
+      if (Array.isArray(d)) {
+        const now = Date.now();
+        const m = new Map(d.map(t => [t, now]));
+        return m
       }
-      return new Map(Object.entries(data))
-    } catch {
-      return new Map()
-    }
+      return new Map(Object.entries(d))
+    } catch { return new Map() }
   }
   return new Map()
 }
-function saveSessions(sessions) {
-  writeFileSync(SESSIONS_FILE, JSON.stringify(Object.fromEntries(sessions)))
-}
-function cleanExpiredSessions(sessions) {
-  const now = Date.now()
-  let cleaned = false
-  for (const [token, createdAt] of sessions) {
-    if (now - createdAt > SESSION_MAX_AGE_MS) {
-      sessions.delete(token)
-      cleaned = true
+function saveSessions(s) { writeFileSync(SESSIONS_FILE, JSON.stringify(Object.fromEntries(s))) }
+function cleanExpiredSessions(s) {
+  const now = Date.now();
+  let c = false;
+  for (const [t, ca] of s) {
+    if (now - ca > SESSION_MAX_AGE_MS) {
+      s.delete(t);
+      c = true
     }
   }
-  if (cleaned) {
-    saveSessions(sessions)
-  }
+  if (c) saveSessions(s)
 }
-function isSessionValid(sessions, token) {
-  if (!sessions.has(token)) return false
-  const createdAt = sessions.get(token)
-  if (Date.now() - createdAt > SESSION_MAX_AGE_MS) {
-    sessions.delete(token)
-    saveSessions(sessions)
+function isSessionValid(s, t) {
+  if (!s.has(t)) return false;
+  const ca = s.get(t);
+  if (Date.now() - ca > SESSION_MAX_AGE_MS) {
+    s.delete(t);
+    saveSessions(s);
     return false
   }
   return true
 }
-const sessions = loadSessions()
-// Clean expired sessions on startup
-cleanExpiredSessions(sessions)
-// Load existing licenses or create empty array
+const sessions = loadSessions();
+cleanExpiredSessions(sessions);
 function loadLicenses() {
-  if (existsSync(LICENSES_FILE)) {
-    return JSON.parse(readFileSync(LICENSES_FILE, 'utf8'))
-  }
+  if (existsSync(LICENSES_FILE)) return JSON.parse(readFileSync(LICENSES_FILE, 'utf8'));
   return []
 }
-// Save licenses to file
-function saveLicenses(licenses) {
-  writeFileSync(LICENSES_FILE, JSON.stringify(licenses, null, 2))
-}
-// Maximum request body size (16KB - sufficient for license operations)
-const MAX_BODY_SIZE = 16 * 1024
-/**
- * Read request body with size limit
- * @returns {Promise<string>} Body content
- * @throws {Error} If body exceeds MAX_BODY_SIZE
- */
+function saveLicenses(ls) { writeFileSync(LICENSES_FILE, JSON.stringify(ls, null, 2)) }
+const MAX_BODY_SIZE = 16 * 1024;
 function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = ''
-    let size = 0
-    req.on('data', chunk => {
-      size += chunk.length
-      if (size > MAX_BODY_SIZE) {
-        req.destroy()
-        reject(new Error('BODY_TOO_LARGE'))
-        return
-      }
-      body += chunk
-    })
-    req.on('end', () => resolve(body))
-    req.on('error', reject)
+  return new Promise((res, rej) => {
+    let b = ''; let s = 0;
+    req.on('data', c => {
+      s += c.length;
+      if (s > MAX_BODY_SIZE) { req.destroy(); rej(new Error('BODY_TOO_LARGE')); return }
+      b += c
+    });
+    req.on('end', () => res(b));
+    req.on('error', rej)
   })
 }
-// Allowed origins for CORS
 const ALLOWED_ORIGINS = [
   'https://latent-k.dev',
   'https://www.latent-k.dev',
   'https://latent-k.pages.dev',
-  'http://localhost:3000' // For local development
-]
+  'http://localhost:3000'
+];
 const server = createServer(async (req, res) => {
-  // CORS headers - restrict to allowed origins
-  const origin = req.headers.origin
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin)
+  const og = req.headers.origin;
+  if (og && ALLOWED_ORIGINS.includes(og)) {
+    res.setHeader('Access-Control-Allow-Origin', og);
     res.setHeader('Access-Control-Allow-Credentials', 'true')
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204)
-    res.end()
-    return
-  }
-  // Helper to check auth
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
   function isAuthenticated() {
-    const auth = req.headers.authorization
-    if (!auth || !auth.startsWith('Bearer ')) return false
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return false;
     return isSessionValid(sessions, auth.slice(7))
   }
-  // API: Login
   if (req.method === 'POST' && req.url === '/api/login') {
-    const clientIP = getClientIP(req)
-    const rateLimit = checkRateLimit('login', clientIP)
-    if (!rateLimit.allowed) {
-      res.writeHead(429, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
-        error: 'Too many login attempts. Please try again later.',
-        retryAfter: rateLimit.resetIn
-      }))
+    const ip = getClientIP(req);
+    const rl = checkRateLimit('login', ip);
+    if (!rl.allowed) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'E_LOGIN_RATE_LIMIT', retryAfter: rl.resetIn }));
       return
     }
     try {
-      const body = await readBody(req)
-      const { username, password } = JSON.parse(body)
-      if (timingSafeEqual(username, ADMIN_USER) && timingSafeEqual(password, ADMIN_PASS)) {
-        const token = randomBytes(32).toString('hex')
-        sessions.set(token, Date.now())
-        saveSessions(sessions)
-        console.log(`[AUTH] Admin logged in`)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ token }))
+      const b = await readBody(req);
+      const { username: u, password: p } = JSON.parse(b);
+      if (timingSafeEqual(u, ADMIN_USER) && timingSafeEqual(p, ADMIN_PASS)) {
+        const t = randomBytes(32).toString('hex');
+        sessions.set(t, Date.now());
+        saveSessions(sessions);
+        console.log(`[AUTH] Admin logged in`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ token: t }))
       } else {
-        res.writeHead(401, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Invalid credentials' }))
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_AUTH_INVALID' }))
       }
-    } catch (err) {
-      if (err.message === 'BODY_TOO_LARGE') {
-        res.writeHead(413, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Request body too large' }))
+    } catch (e) {
+      if (e.message === 'BODY_TOO_LARGE') {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_BODY_TOO_LARGE' }))
       } else {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Invalid request' }))
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_BAD_REQUEST' }))
       }
     }
     return
   }
-  // API: Logout
   if (req.method === 'POST' && req.url === '/api/logout') {
-    const auth = req.headers.authorization
+    const auth = req.headers.authorization;
     if (auth && auth.startsWith('Bearer ')) {
-      sessions.delete(auth.slice(7))
+      sessions.delete(auth.slice(7));
       saveSessions(sessions)
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ success: true }))
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
     return
   }
-  // API: Request trial (public - one per email)
   if (req.method === 'POST' && req.url === '/api/trial') {
-    const clientIP = getClientIP(req)
-    const rateLimit = checkRateLimit('trial', clientIP)
-    if (!rateLimit.allowed) {
-      res.writeHead(429, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
-        error: 'Too many trial requests. Please try again later.',
-        retryAfter: rateLimit.resetIn
-      }))
+    const ip = getClientIP(req);
+    const rl = checkRateLimit('trial', ip);
+    if (!rl.allowed) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'E_TRIAL_RATE_LIMIT', retryAfter: rl.resetIn }));
       return
     }
     try {
-      const body = await readBody(req)
-      const { email, name } = JSON.parse(body)
-      if (!email) {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Email is required' }))
+      const b = await readBody(req);
+      const { email: em, name: n } = JSON.parse(b);
+      if (!em) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_EMAIL_REQUIRED' }));
         return
       }
-      const normalizedEmail = email.toLowerCase().trim()
-      const licenses = loadLicenses()
-      // Check if this email already has a paid license
-      const now = Date.now()
-      const existingPaid = licenses.find(l =>
-        l.email.toLowerCase().trim() === normalizedEmail &&
-        (l.plan === 'monthly' || l.plan === 'yearly')
-      )
-      if (existingPaid) {
-        const isActive = existingPaid.expires && new Date(existingPaid.expires).getTime() > now
-        if (isActive) {
-          res.writeHead(409, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({
-            error: 'You already have an active license for this email.'
-          }))
+      const nem = em.toLowerCase().trim();
+      const ls = loadLicenses();
+      const now = Date.now();
+      const ep = ls.find(l => l.email.toLowerCase().trim() === nem && (l.plan === 'monthly' || l.plan === 'yearly'));
+      if (ep) {
+        const ia = ep.expires && new Date(ep.expires).getTime() > now;
+        if (ia) {
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'E_ACTIVE_PAID_LICENSE' }))
         } else {
-          res.writeHead(409, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({
-            error: 'Trial not available for existing customers. Renew at: https://latent-k.dev'
-          }))
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'E_EXPIRED_PAID_LICENSE' }))
         }
         return
       }
-      // Check if this email already has a trial
-      const existingTrial = licenses.find(l =>
-        l.email.toLowerCase().trim() === normalizedEmail &&
-        l.plan === 'trial14'
-      )
-      if (existingTrial) {
-        res.writeHead(409, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({
-          error: 'Trial already used for this email.'
-        }))
+      const et = ls.find(l => l.email.toLowerCase().trim() === nem && l.plan === 'trial14');
+      if (et) {
+        res.writeHead(409, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_TRIAL_ALREADY_USED' }));
         return
       }
-      const durationDays = PLAN_DAYS.trial14
-      const key = generateLicense({ email: normalizedEmail, durationDays, type: 'trial' })
-      const data = parseLicense(key)
-      licenses.push({
-        key,
-        email: normalizedEmail,
-        name: name || '',
-        plan: 'trial14',
-        created: new Date().toISOString(),
-        expires: data.expires ? new Date(data.expires).toISOString() : null
-      })
-      saveLicenses(licenses)
-      console.log(`[TRIAL] Generated 14-day trial for ${normalizedEmail}`)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
-        key,
-        email: normalizedEmail,
-        expires: data.expires ? new Date(data.expires).toISOString() : null,
-        daysLeft: durationDays
-      }))
-    } catch (err) {
-      if (err.message === 'BODY_TOO_LARGE') {
-        res.writeHead(413, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Request body too large' }))
+      const dd = PLAN_DAYS.trial14;
+      const k = generateLicense({ email: nem, durationDays: dd, type: 'trial' });
+      const d = parseLicense(k);
+      ls.push({ key: k, email: nem, name: n || '', plan: 'trial14', created: new Date().toISOString(), expires: d.expires ? new Date(d.expires).toISOString() : null });
+      saveLicenses(ls);
+      console.log(`[TRIAL] Generated 14-day trial for ${nem}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ key: k, email: nem, expires: d.expires ? new Date(d.expires).toISOString() : null, daysLeft: dd }))
+    } catch (e) {
+      if (e.message === 'BODY_TOO_LARGE') {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_BODY_TOO_LARGE' }))
       } else {
-        console.error('[TRIAL] Error:', err.message)
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: err.message }))
+        console.error('[TRIAL] Error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_SERVER_ERROR' }))
       }
     }
     return
   }
-  // API: Generate license (protected - admin or worker token)
   if (req.method === 'POST' && req.url === '/api/generate') {
-    // Check for worker token OR session authentication
-    const auth = req.headers.authorization
-    const bearerToken = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-    // Use timing-safe comparison for worker token
-    const isWorkerAuth = WORKER_TOKEN && bearerToken && timingSafeEqual(bearerToken, WORKER_TOKEN)
-    const isSessionAuth = isAuthenticated()
-    if (!isWorkerAuth && !isSessionAuth) {
-      res.writeHead(401, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Unauthorized' }))
+    const auth = req.headers.authorization;
+    const bt = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+    const iwa = WORKER_TOKEN && bt && timingSafeEqual(bt, WORKER_TOKEN);
+    const isa = isAuthenticated();
+    if (!iwa && !isa) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'E_UNAUTHORIZED' }));
       return
     }
     try {
-      const body = await readBody(req)
-      const { email, name, plan } = JSON.parse(body)
-      if (!email) {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Email is required' }))
+      const b = await readBody(req);
+      const { email: em, name: n, plan: p } = JSON.parse(b);
+      if (!em) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_EMAIL_REQUIRED' }));
         return
       }
-      const normalizedEmail = email.toLowerCase().trim()
-      const licenses = loadLicenses()
-      const durationDays = PLAN_DAYS[plan] || 365
-      const durationMs = durationDays * 24 * 60 * 60 * 1000
-      // Find existing active license for this email (non-trial, not expired)
-      const now = Date.now()
-      const existingLicense = licenses.find(l =>
-        l.email.toLowerCase().trim() === normalizedEmail &&
-        !l.plan.startsWith('trial') &&
-        l.expires &&
-        new Date(l.expires).getTime() > now
-      )
-      // Calculate expiration: extend from current expiry or start from now
-      let expires
-      if (existingLicense) {
-        const currentExpiry = new Date(existingLicense.expires).getTime()
-        expires = currentExpiry + durationMs
-        console.log(`[LICENSE] Extending license for ${normalizedEmail} from ${existingLicense.expires}`)
+      const nem = em.toLowerCase().trim();
+      const ls = loadLicenses();
+      const dd = PLAN_DAYS[p] || 365;
+      const dm = dd * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const el = ls.find(l => l.email.toLowerCase().trim() === nem && !l.plan.startsWith('trial') && l.expires && new Date(l.expires).getTime() > now);
+      let exp;
+      if (el) {
+        const ce = new Date(el.expires).getTime();
+        exp = ce + dm;
+        console.log(`[LICENSE] Extending license for ${nem} from ${el.expires}`)
+      } else { exp = now + dm }
+      const k = generateLicense({ email: nem, expires: exp });
+      const d = parseLicense(k);
+      ls.push({ key: k, email: nem, name: n || '', plan: p || 'yearly', created: new Date().toISOString(), expires: d.expires ? new Date(d.expires).toISOString() : null, extended: !!el });
+      saveLicenses(ls);
+      const src = iwa ? 'worker' : 'admin';
+      console.log(`[LICENSE] Generated license for ${nem} (${p || 'yearly'}) via ${src}, expires ${new Date(exp).toISOString()}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ key: k, data: d, extended: !!el, previousExpiry: el ? el.expires : null }))
+    } catch (e) {
+      if (e.message === 'BODY_TOO_LARGE') {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_BODY_TOO_LARGE' }))
       } else {
-        expires = now + durationMs
-      }
-      const key = generateLicense({ email: normalizedEmail, expires })
-      const data = parseLicense(key)
-      licenses.push({
-        key,
-        email: normalizedEmail,
-        name: name || '',
-        plan: plan || 'yearly',
-        created: new Date().toISOString(),
-        expires: data.expires ? new Date(data.expires).toISOString() : null,
-        extended: !!existingLicense
-      })
-      saveLicenses(licenses)
-      const source = isWorkerAuth ? 'worker' : 'admin'
-      console.log(`[LICENSE] Generated license for ${normalizedEmail} (${plan || 'yearly'}) via ${source}, expires ${new Date(expires).toISOString()}`)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
-        key,
-        data,
-        extended: existingLicense ? true : false,
-        previousExpiry: existingLicense ? existingLicense.expires : null
-      }))
-    } catch (err) {
-      if (err.message === 'BODY_TOO_LARGE') {
-        res.writeHead(413, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Request body too large' }))
-      } else {
-        console.error('[LICENSE] Error:', err.message)
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: err.message }))
+        console.error('[LICENSE] Error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_SERVER_ERROR' }))
       }
     }
     return
   }
-  // API: Delete license (protected)
   if (req.method === 'POST' && req.url === '/api/delete') {
     if (!isAuthenticated()) {
-      res.writeHead(401, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Unauthorized' }))
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'E_UNAUTHORIZED' }));
       return
     }
     try {
-      const body = await readBody(req)
-      const { key } = JSON.parse(body)
-      const licenses = loadLicenses()
-      const index = licenses.findIndex(l => l.key === key)
-      if (index === -1) {
-        res.writeHead(404, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'License not found' }))
+      const b = await readBody(req);
+      const { key: k } = JSON.parse(b);
+      const ls = loadLicenses();
+      const idx = ls.findIndex(l => l.key === k);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_LICENSE_NOT_FOUND' }));
         return
       }
-      const license = licenses[index]
-      licenses.splice(index, 1)
-      saveLicenses(licenses)
-      console.log(`[LICENSE] Deleted license for ${license.email}`)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ success: true, email: license.email }))
-    } catch (err) {
-      if (err.message === 'BODY_TOO_LARGE') {
-        res.writeHead(413, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Request body too large' }))
+      const l = ls[idx];
+      ls.splice(idx, 1);
+      saveLicenses(ls);
+      console.log(`[LICENSE] Deleted license for ${l.email}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, email: l.email }))
+    } catch (e) {
+      if (e.message === 'BODY_TOO_LARGE') {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_BODY_TOO_LARGE' }))
       } else {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: err.message }))
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_SERVER_ERROR' }))
       }
     }
     return
   }
-  // API: List all licenses (protected)
   if (req.method === 'GET' && req.url === '/api/licenses') {
     if (!isAuthenticated()) {
-      res.writeHead(401, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Unauthorized' }))
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'E_UNAUTHORIZED' }));
       return
     }
-    const licenses = loadLicenses()
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(licenses))
+    const ls = loadLicenses();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(ls));
     return
   }
-  // API: Chatbot (public - uses Gemini API)
   if (req.method === 'POST' && req.url === '/api/chat') {
     try {
-      const body = await readBody(req)
-      const { message } = JSON.parse(body)
-      if (!message || typeof message !== 'string') {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Message is required' }))
+      const b = await readBody(req);
+      const { message: msg } = JSON.parse(b);
+      if (!msg || typeof msg !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_MESSAGE_REQUIRED' }));
         return
       }
       if (!GEMINI_API_KEY) {
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Chatbot not configured' }))
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_CHATBOT_CONFIG_MISSING' }));
         return
       }
-      const systemPrompt = `You are the LATENT-K assistant, a helpful chatbot on the LATENT-K website.
+      const sp = `You are the LATENT-K assistant, a helpful chatbot on the LATENT-K website.
 ## WHAT IS LATENT-K
 LATENT-K is a CLI tool that automatically injects relevant code context into AI coding assistants like Claude Code and Gemini CLI. It analyzes your prompt and injects only the relevant code, provides instant answers to simple questions, and auto-syncs at session start and end.
 ## BENCHMARK RESULTS
@@ -541,72 +399,46 @@ Then just run "claude" or "gemini" normally - context is injected automatically!
 Be concise and friendly. Answer questions about LATENT-K features, commands, pricing, and setup.
 If asked something unrelated, politely redirect to LATENT-K topics.
 Keep responses short (2-3 sentences) unless more detail is requested.
-Use bullet points for lists. Never invent features that don't exist.`
-      const geminiRes = await fetch(
+Use bullet points for lists. Never invent features that don't exist.`;
+      const gr = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ parts: [{ text: message }] }],
-            generationConfig: {
-              maxOutputTokens: 512,
-              temperature: 0.7
-            }
-          })
-        }
-      )
-      if (!geminiRes.ok) {
-        const errText = await geminiRes.text()
-        console.error('[CHAT] Gemini API error:', errText)
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'AI service error' }))
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ system_instruction: { parts: [{ text: sp }] }, contents: [{ parts: [{ text: msg }] }], generationConfig: { maxOutputTokens: 512, temperature: 0.7 } }) }
+      );
+      if (!gr.ok) {
+        const et = await gr.text();
+        console.error('[CHAT] Gemini API error:', et);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_AI_SERVICE_ERROR' }));
         return
       }
-      const geminiData = await geminiRes.json()
-      const reply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.'
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ reply }))
-    } catch (err) {
-      if (err.message === 'BODY_TOO_LARGE') {
-        res.writeHead(413, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Message too large' }))
+      const gd = await gr.json();
+      const rp = gd.candidates?.[0]?.content?.parts?.[0]?.text || 'E_CHAT_NO_RESPONSE';
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ reply: rp }))
+    } catch (e) {
+      if (e.message === 'BODY_TOO_LARGE') {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_BODY_TOO_LARGE' }))
       } else {
-        console.error('[CHAT] Error:', err.message)
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Internal error' }))
+        console.error('[CHAT] Error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'E_SERVER_ERROR' }))
       }
     }
     return
   }
-  // Serve static files
-  let filePath = req.url === '/' ? '/index.html' : req.url
-  // Remove query strings and decode URI
-  filePath = decodeURIComponent(filePath.split('?')[0])
-  // Resolve to absolute path and verify it's within __dirname (prevent path traversal)
-  const fullPath = resolve(__dirname, '.' + filePath)
-  if (!fullPath.startsWith(__dirname)) {
-    res.writeHead(403, { 'Content-Type': 'text/plain' })
-    res.end('Forbidden')
-    return
-  }
+  let fp = req.url === '/' ? '/index.html' : req.url;
+  fp = decodeURIComponent(fp.split('?')[0]);
+  const p = resolve(__dirname, '.' + fp);
+  if (!p.startsWith(__dirname)) { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('Forbidden'); return }
   try {
-    const content = readFileSync(fullPath)
-    const ext = filePath.split('.').pop()
-    const contentTypes = {
-      html: 'text/html',
-      css: 'text/css',
-      js: 'application/javascript',
-      json: 'application/json'
-    }
-    res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' })
-    res.end(content)
-  } catch {
-    res.writeHead(404, { 'Content-Type': 'text/plain' })
-    res.end('Not Found')
-  }
-})
+    const c = readFileSync(p);
+    const e = fp.split('.').pop();
+    const cts = { html: 'text/html', css: 'text/css', js: 'application/javascript', json: 'application/json' };
+    res.writeHead(200, { 'Content-Type': cts[e] || 'text/plain' });
+    res.end(c)
+  } catch { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not Found') }
+});
 server.listen(PORT, () => {
   console.log(`
 ⦓ LATENT-K ⦔ License Server
@@ -614,4 +446,4 @@ server.listen(PORT, () => {
   API:     http://localhost:${PORT}/api/generate
   Press Ctrl+C to stop
 `)
-})
+});
