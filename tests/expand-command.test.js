@@ -6,8 +6,7 @@ import os from 'os'
 // Mock dependencies before importing
 vi.mock('../src/lib/config.js', () => ({
   log: vi.fn(),
-  isConfigured: vi.fn(),
-  getPureMode: vi.fn(() => false)
+  isConfigured: vi.fn()
 }))
 
 vi.mock('../src/lib/license.js', () => ({
@@ -19,7 +18,8 @@ vi.mock('../src/lib/expand.js', () => ({
 }))
 
 vi.mock('../src/lib/context.js', () => ({
-  exists: vi.fn()
+  exists: vi.fn(),
+  getProjectPureMode: vi.fn(() => false)
 }))
 
 import { isConfigured } from '../src/lib/config.js'

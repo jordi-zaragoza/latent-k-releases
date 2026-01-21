@@ -15,11 +15,11 @@ import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { pure } from './commands/pure.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, buildContext, minifyContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored, validateProjectDirectory, isHomeOrRoot } from './lib/context.js'
+import { buildVerboseContext, buildContext, minifyContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored, validateProjectDirectory, isHomeOrRoot, getProjectPureMode } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, getLicenseKey, isLicensed, checkAccess } from './lib/license.js'
 import { parseLicense } from './lib/license-gen.js'
-import { isConfigured, getAiProvider, getIgnorePatterns, getPureMode } from './lib/config.js'
+import { isConfigured, getAiProvider, getIgnorePatterns } from './lib/config.js'
 import { PURE_MODE_INSTRUCTIONS } from './lib/ai-prompts.js'
 import { sync as runSync, syncProjectOnly } from './commands/sync.js'
 import { join } from 'path'
@@ -301,7 +301,7 @@ program
       return `\x1b[38;2;${R};${G};${B}m${ch}`
     }
     if (!jM) {
-      const iP = getPureMode()
+      const iP = getProjectPureMode(process.cwd())
       const b = iP ? [
         '╔═══════════════════════════════════╗',
         '║    ◈ P U R E   M O D E ◈  L K     ║',
@@ -382,7 +382,7 @@ program
     } else {
       sR = await syncProjectOnly()
     }
-    const iPM = getPureMode()
+    const iPM = getProjectPureMode(process.cwd())
     const iPs = [iPM ? '◈ LK PURE' : '⦓ LK']
     if (sR.synced) {
       iPs.push(`${pr} ready`)
@@ -402,11 +402,11 @@ program
         }
       }
     }
-    const pA = getPureMode()
+    const cwd = process.cwd()
+    const pA = getProjectPureMode(cwd)
     let t = pA ? 'code only • no fluff • pure signal' : PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
     if (!pA && Math.random() < 0.25) {
       try {
-        const cwd = process.cwd()
         if (existsSync(statsPath(cwd))) {
           const st = loadStats(cwd)
           const ops = st.byOperationType || {}

@@ -1,11 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import { getConfig, isConfigured, getAiProvider, getIgnorePatterns, getPureMode } from '../lib/config.js'
+import { getConfig, isConfigured, getAiProvider, getIgnorePatterns } from '../lib/config.js'
 import { isLicensed, validateLicense, getLicenseExpiration, getLicenseKey, isLicenseRevoked, getRevokedReason, forceCheckOnline } from '../lib/license.js'
 import { parseLicense } from '../lib/license-gen.js'
 import {
   exists, getUnsyncedFiles, getDeletedFiles, getAllEntries, loadIgnore, ignoreExists, isIgnored,
-  getAllFiles, validateProjectDirectory, isHomeOrRoot
+  getAllFiles, validateProjectDirectory, isHomeOrRoot, getProjectPureMode
 } from '../lib/context.js'
 export async function status() {
   const c = process.cwd()
@@ -137,7 +137,7 @@ export async function status() {
   const p = getAiProvider()
   const Q = p === 'anthropic' ? 'Anthropic' : 'Gemini'
   console.log(`  AI Provider: ${isConfigured() ? `${Q} (configured)` : 'not set'}`)
-  console.log(`  Pure Mode: ${getPureMode() ? 'ON (m2m style)' : 'OFF'}`)
+  console.log(`  Pure Mode: ${getProjectPureMode(c) ? 'ON (project)' : 'OFF'}`)
   console.log('')
   console.log('Ignore:')
   console.log(`  Patterns: ${G.length} global, ${P.length} project`)
