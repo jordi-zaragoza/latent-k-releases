@@ -615,6 +615,23 @@ export function markCompacted(root, filePath) {
   return false
 }
 
+export function unmarkCompacted(root, filePath) {
+  const allDomains = listDomains(root)
+  for (const d of allDomains) {
+    const dom = loadDomain(root, d)
+    if (!dom) continue
+    for (const [g, items] of Object.entries(dom.groups)) {
+      const entry = items.find(e => e.path === filePath)
+      if (entry && entry.compacted) {
+        entry.compacted = false
+        saveDomain(root, d, buildDomain(dom.id, dom.domain, dom.vibe, dom.groups, dom.invariants))
+        return true
+      }
+    }
+  }
+  return false
+}
+
 // Remove entry from all domains
 export function removeEntry(root, filePath) {
   const allDomains = listDomains(root)
