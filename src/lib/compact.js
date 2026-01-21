@@ -237,6 +237,7 @@ export async function compactProject(root,opts={}){
       if(JS_EXTS.includes(ext)&&!validateJS(final)){
         if(verbose)console.log(`ERR ${f}: syntax invalid after compact`)
         results.errors.push({file:f,error:'syntax invalid'})
+        results.aiPending.push(f)
         continue
       }
       results.ogBytes+=og.length
