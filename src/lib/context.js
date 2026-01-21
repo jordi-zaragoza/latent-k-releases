@@ -524,6 +524,16 @@ export function isCompacted(root, filePath) {
   }
   return false
 }
+export function isInDomain(root, filePath) {
+  for (const d of listDomains(root)) {
+    const dom = loadDomain(root, d)
+    if (!dom) continue
+    for (const items of Object.values(dom.groups)) {
+      if (items.find(x => x.path === filePath)) return true
+    }
+  }
+  return false
+}
 // Mark file as compacted (add -c flag), optionally update hash
 export function markCompacted(root, filePath, newHash = null) {
   const allDomains = listDomains(root)
