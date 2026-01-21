@@ -16,7 +16,8 @@ import {
   buildContext, buildVerboseContext, buildContextForFiles, countTokens,
   getProjectSummary, getProjectFlows, getDomainIndex,
   inferGroup, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS,
-  getFileExtension, isCodeFile, getAllFiles, CODE_EXTENSIONS
+  getFileExtension, isCodeFile, getAllFiles, CODE_EXTENSIONS,
+  loadState, saveState, getProjectPureMode, setProjectPureMode
 } from '../src/lib/context.js'
 
 let tmpDir
@@ -962,5 +963,59 @@ describe('buildContextForFiles', () => {
     // Should still include syntax and project
     expect(context).toContain('LK-SYNTAX')
     expect(context).toContain('PROJECT')
+  })
+})
+
+describe('Project state and pureMode', () => {
+  beforeEach(() => init(tmpDir))
+
+  it('loadState returns defaults for new project', () => {
+    const s = loadState(tmpDir)
+    expect(s.syncCount).toBe(0)
+    expect(s.pendingRegen).toBe(false)
+    expect(s.pendingChanges).toBe(0)
+    expect(s.pureMode).toBe(false)
+  })
+
+  it('saveState persists state', () => {
+    saveState(tmpDir, { syncCount: 5, pendingRegen: true, pendingChanges: 3, pureMode: true })
+    const s = loadState(tmpDir)
+    expect(s.syncCount).toBe(5)
+    expect(s.pendingRegen).toBe(true)
+    expect(s.pureMode).toBe(true)
+  })
+
+  it('getProjectPureMode returns false by default', () => {
+    expect(getProjectPureMode(tmpDir)).toBe(false)
+  })
+
+  it('setProjectPureMode enables pure mode', () => {
+    setProjectPureMode(tmpDir, true)
+    expect(getProjectPureMode(tmpDir)).toBe(true)
+  })
+
+  it('setProjectPureMode disables pure mode', () => {
+    setProjectPureMode(tmpDir, true)
+    setProjectPureMode(tmpDir, false)
+    expect(getProjectPureMode(tmpDir)).toBe(false)
+  })
+
+  it('setProjectPureMode preserves other state fields', () => {
+    saveState(tmpDir, { syncCount: 10, pendingRegen: false, pendingChanges: 2, pureMode: false })
+    setProjectPureMode(tmpDir, true)
+    const s = loadState(tmpDir)
+    expect(s.syncCount).toBe(10)
+    expect(s.pendingChanges).toBe(2)
+    expect(s.pureMode).toBe(true)
+  })
+
+  it('pureMode is isolated per project', () => {
+    const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lk-ctx-test2-'))
+    init(tmp2)
+    setProjectPureMode(tmpDir, true)
+    setProjectPureMode(tmp2, false)
+    expect(getProjectPureMode(tmpDir)).toBe(true)
+    expect(getProjectPureMode(tmp2)).toBe(false)
+    fs.rmSync(tmp2, { recursive: true, force: true })
   })
 })

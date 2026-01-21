@@ -3,7 +3,8 @@ import crypto from 'crypto'
 import readline from 'readline'
 import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
-import { isConfigured, log, getPureMode } from '../lib/config.js'
+import { isConfigured, log } from '../lib/config.js'
+import { getProjectPureMode } from '../lib/context.js'
 import { PURE_MODE_REMINDER } from '../lib/ai-prompts.js'
 import { checkAccess } from '../lib/license.js'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
@@ -239,7 +240,7 @@ export async function expandCommand(p, o = {}) {
     log('HOOK', 'Already expanded this session, skipping further expansions')
     if (d) console.error('[lk expand] Already expanded this session, skipping')
     console.error('💡 Tip: Start your prompt with "lk" to inject fresh context')
-    if (getPureMode()) {
+    if (getProjectPureMode(rt)) {
       console.log(`<system-reminder>\n${PURE_MODE_REMINDER}\n</system-reminder>`)
     }
     return
@@ -280,14 +281,14 @@ export async function expandCommand(p, o = {}) {
       log('EXPAND', `Output to LLM (${lO.length} chars):\n${lO}`)
       console.log(lO)
       markAsExpanded(tP)
-    } else if (getPureMode()) {
+    } else if (getProjectPureMode(rt)) {
       console.log(`<system-reminder>\n${PURE_MODE_REMINDER}\n</system-reminder>`)
     }
   } catch (e) {
     if (d) {
       console.error(`[lk expand] Error: ${e.message}`)
     }
-    if (getPureMode()) {
+    if (getProjectPureMode(rt)) {
       console.log(`<system-reminder>\n${PURE_MODE_REMINDER}\n</system-reminder>`)
     }
   }

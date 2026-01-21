@@ -139,13 +139,22 @@ export function loadState(root) {
   try {
     const p = statePath(root)
     const raw = fs.readFileSync(p, 'utf8')
-    if (!raw.trim()) return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
+    if (!raw.trim()) return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false }
     const content = safeDecrypt(raw, p)
-    if (content === null) return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
+    if (content === null) return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false }
     return JSON.parse(content)
   } catch {
-    return { syncCount: 0, pendingRegen: false, pendingChanges: 0 }
+    return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false }
   }
+}
+export function getProjectPureMode(root) {
+  return loadState(root).pureMode || false
+}
+export function setProjectPureMode(root, enabled) {
+  if(!exists(root))init(root)
+  const s = loadState(root)
+  s.pureMode = !!enabled
+  saveState(root, s)
 }
 export function saveState(root, state) {
   fs.writeFileSync(statePath(root), encrypt(JSON.stringify(state, null, 2)))

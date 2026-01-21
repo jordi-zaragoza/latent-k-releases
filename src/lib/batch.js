@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import { log, getPureMode } from './config.js'
-import { addEntry, inferGroup, loadIgnore, saveIgnore, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS } from './context.js'
+import { log } from './config.js'
+import { addEntry, inferGroup, loadIgnore, saveIgnore, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS, getProjectPureMode } from './context.js'
 import { extractExports } from './parser.js'
 import { analyzeFiles } from './ai.js'
 import { withSpinner } from './spinner.js'
@@ -171,7 +171,7 @@ export function processBatchResults(cwd, analyzedFiles, results, print, printErr
         file,
         analysis.description || '',
         exports,
-        getPureMode()
+        getProjectPureMode(cwd)
       )
       affectedDomains.add(domain)
       synced++
@@ -206,7 +206,7 @@ export function processDeferredFiles(cwd, deferredNew, print, printErr) {
       const domain = (inferDomainFromPath(file) || 'core').toLowerCase()
       const symbol = inferSymbolFromPath(file) || 'λ'
       // Placeholder hash so it reappears as "modified" for AI analysis next sync
-      addEntry(cwd, domain, group, symbol, '0000000', file, '', exports, getPureMode())
+      addEntry(cwd, domain, group, symbol, '0000000', file, '', exports, getProjectPureMode(cwd))
       affectedDomains.add(domain)
       print(`◇ ${file} → ${domain} (deferred)`)
       log('BATCH', `◇ Deferred new: ${file}`)
