@@ -70,13 +70,21 @@ export async function stats(options = {}) {
   const k = Object.keys(d.byModel)
   if (k.length > 0) {
     console.log('\nBy Model:')
+    let liteSaved = 0
     for (const l of k) {
       const m = d.byModel[l]
+      const tIn = m.tokensSentEstimate, tOut = m.tokensReceivedEstimate
+      const cost = m.costUsd || 0
+      let cmp = ''
+      if (l === 'gemini-2.5-flash-lite') {
+        const flashCost = calcCost(tIn, tOut, MODEL_PRICING['gemini-2.5-flash'])
+        liteSaved = flashCost - cost
+        cmp = ` (saved ${fC(liteSaved)} vs flash)`
+      }
       console.log(`  ${l}:`)
-      console.log(`    Calls: ${m.calls}`)
-      console.log(`    Tokens: ${fN(m.tokensSentEstimate + m.tokensReceivedEstimate)}`)
-      console.log(`    Cost: ${fC(m.costUsd || 0)}`)
-      console.log(`    Avg duration: ${Math.round(m.totalDurationMs / m.calls)}ms`)
+      console.log(`    Calls: ${m.calls}, Tokens: ${fN(tIn + tOut)}`)
+      console.log(`    Cost: $${fC(cost)}${cmp}`)
+      console.log(`    Avg: ${Math.round(m.totalDurationMs / m.calls)}ms`)
     }
   }
   const sav = calcSavings(a, d)
