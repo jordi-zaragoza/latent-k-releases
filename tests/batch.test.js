@@ -21,7 +21,8 @@ vi.mock('../src/lib/spinner.js', () => ({
 }))
 
 vi.mock('../src/lib/config.js', () => ({
-  log: vi.fn()
+  log: vi.fn(),
+  getPureMode: vi.fn(() => false)
 }))
 
 describe('batch module constants', () => {
