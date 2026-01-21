@@ -67,8 +67,8 @@ export async function pure(action,opts={}){
       }
       return
     }
-    const aiLimit=opts.all?Infinity:5
-    console.log(`Compacting project...${opts.all?'':' (AI limit: 5)'}\n`)
+    const aiLimit=opts.all?Infinity:1
+    console.log(`Compacting project...${opts.all?'':' (AI limit: 1)'}\n`)
     const r=await compactProject(process.cwd(),{dryRun:opts.dryRun,verbose:true,aiLimit})
     console.log(`\n${r.compacted}/${r.total} files compacted`)
     console.log(`${r.savedTokens.toLocaleString()}tk saved (${r.pct}%) | ${r.ogTokens.toLocaleString()}tk → ${r.finalTokens.toLocaleString()}tk`)

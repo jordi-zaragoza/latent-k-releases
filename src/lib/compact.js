@@ -164,6 +164,9 @@ const COMPACT_PROMPT=`${PURE_MODE_INSTRUCTIONS}
 Compact this code. Output ONLY the compacted code. No markdown, no explanations.
 
 %CODE%`
+function validateJS(code){
+  try{new Function(code);return true}catch{return false}
+}
 async function aiCompact(code,ext){
   if(!model)initModel()
   const prompt=COMPACT_PROMPT.replace('%CODE%',code)
@@ -173,6 +176,10 @@ async function aiCompact(code,ext){
     let t=r.response?.text?.()?.trim()||code
     t=t.replace(/^```\w*\n?/,'').replace(/\n?```$/,'')
     logLlmResponse(tracking,t)
+    if(JS_EXTS.includes(ext)&&!validateJS(t)){
+      recordError({provider:'GEMINI',operation:'compact',operationType:'compact',error:'AI returned invalid JS'})
+      return code
+    }
     return t
   }catch(e){
     recordError({provider:'GEMINI',operation:'compact',operationType:'compact',error:e.message})
