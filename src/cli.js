@@ -457,7 +457,7 @@ program
 if (!IS_BINARY) {
   program
     .command('dev [action]')
-    .description('[DEV] Toggle between source and binary mode (status|toggle|source|binary)')
+    .description('[DEV] Dev tools (status|toggle|source|binary|clean)')
     .action(dev)
   // License generation: use scripts/license-admin.js directly (external to binary)
 }

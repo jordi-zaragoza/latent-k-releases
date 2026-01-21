@@ -20,10 +20,12 @@ const MODEL = 'gemini-2.5-flash'
 let genAI = null
 let model = null
 let jsonModel = null
+let curKey = null
 function initClient() {
-  log('GEMINI', 'Initializing client...')
   const apiKey = getApiKey()
   if (!apiKey) throw new Error('Gemini API key not configured. Run: lk setup')
+  if (model && curKey === apiKey) return
+  log('GEMINI', 'Initializing client...')
   genAI = new GoogleGenerativeAI(apiKey)
   model = genAI.getGenerativeModel({ model: MODEL })
   jsonModel = genAI.getGenerativeModel({
@@ -32,6 +34,7 @@ function initClient() {
       responseMimeType: 'application/json'
     }
   })
+  curKey = apiKey
   log('GEMINI', `Client ready (model: ${MODEL})`)
 }
 /**

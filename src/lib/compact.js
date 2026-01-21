@@ -2,18 +2,20 @@ import fs from 'fs'
 import path from 'path'
 import {execSync} from 'child_process'
 import os from 'os'
-import {getAllFiles,getFileExtension,markCompacted} from './context.js'
+import {getAllFiles,getFileExtension,markCompacted,isCompacted,hashContent} from './context.js'
 import {getApiKey} from './config.js'
 import {GoogleGenerativeAI} from '@google/generative-ai'
 import {PURE_MODE_INSTRUCTIONS,logLlmCall,logLlmResponse,recordError} from './ai-prompts.js'
 const MODEL='gemini-2.5-flash'
 const MAX_AI_TOKENS=100000
 const MAX_AI_CHARS=MAX_AI_TOKENS*3.5
-let model=null
+let model=null,curKey=null
 function initModel(){
   const k=getApiKey('gemini')
   if(!k)throw new Error('Gemini API key required for compact')
+  if(model&&curKey===k)return
   model=new GoogleGenerativeAI(k).getGenerativeModel({model:MODEL})
+  curKey=k
 }
 const JS_EXTS=['js','mjs','cjs','ts','tsx','jsx']
 const PY_EXTS=['py']
@@ -208,6 +210,11 @@ export async function compactProject(root,opts={}){
       if(verbose)console.log(`skip ${f}`)
       continue
     }
+    if(isCompacted(root,f)){
+      results.skipped++
+      if(verbose)console.log(`  • ${f} (compacted)`)
+      continue
+    }
     try{
       const og=fs.readFileSync(fp,'utf8')
       const{code,needsAI}=programmaticCompact(og,ext)
@@ -236,11 +243,10 @@ export async function compactProject(root,opts={}){
         if(verbose)console.log(`${flag} ${f} -${tkSaved}tk (${pct}%)`)
         if(!dryRun){
           fs.writeFileSync(fp,final)
-          if(!skipAI)markCompacted(root,f)
+          if(!skipAI)markCompacted(root,f,hashContent(final))
         }
-      }else{
-        if(verbose)console.log(`   ${f} (no change)`)
-        if(!dryRun)markCompacted(root,f)
+      }else if(verbose){
+        console.log(`   ${f} (no change)`)
       }
     }catch(e){
       results.errors.push({file:f,error:e.message})

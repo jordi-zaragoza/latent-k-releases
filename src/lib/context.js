@@ -512,8 +512,20 @@ export function addEntry(root, domainName, group, symbol, hash, filePath, desc, 
   saveDomain(root, domainName, buildDomain(domain.id, domain.domain, domain.vibe, domain.groups, domain.invariants))
   log('CONTEXT', `Added ${symbol} ${filePath} to ${domainName}/${targetGroup}`)
 }
-// Mark file as compacted (add -c flag)
-export function markCompacted(root, filePath) {
+// Check if file is already compacted
+export function isCompacted(root, filePath) {
+  for (const d of listDomains(root)) {
+    const dom = loadDomain(root, d)
+    if (!dom) continue
+    for (const items of Object.values(dom.groups)) {
+      const e = items.find(x => x.path === filePath)
+      if (e) return !!e.compacted
+    }
+  }
+  return false
+}
+// Mark file as compacted (add -c flag), optionally update hash
+export function markCompacted(root, filePath, newHash = null) {
   const allDomains = listDomains(root)
   for (const d of allDomains) {
     const dom = loadDomain(root, d)
@@ -521,9 +533,10 @@ export function markCompacted(root, filePath) {
     for (const [g, items] of Object.entries(dom.groups)) {
       const entry = items.find(e => e.path === filePath)
       if (entry) {
+        if (newHash) entry.hash = newHash
         entry.compacted = true
         saveDomain(root, d, buildDomain(dom.id, dom.domain, dom.vibe, dom.groups, dom.invariants))
-        log('CONTEXT', `Marked ${filePath} as compacted`)
+        log('CONTEXT', `Marked ${filePath} as compacted${newHash ? ' (hash updated)' : ''}`)
         return true
       }
     }
@@ -545,6 +558,26 @@ export function unmarkCompacted(root, filePath) {
     }
   }
   return false
+}
+export function clearAllCompacted(root) {
+  const allDomains = listDomains(root)
+  let count = 0
+  for (const d of allDomains) {
+    const dom = loadDomain(root, d)
+    if (!dom) continue
+    let modified = false
+    for (const [g, items] of Object.entries(dom.groups)) {
+      for (const entry of items) {
+        if (entry.compacted) {
+          entry.compacted = false
+          modified = true
+          count++
+        }
+      }
+    }
+    if (modified) saveDomain(root, d, buildDomain(dom.id, dom.domain, dom.vibe, dom.groups, dom.invariants))
+  }
+  return count
 }
 // Remove entry from all domains
 export function removeEntry(root, filePath) {
