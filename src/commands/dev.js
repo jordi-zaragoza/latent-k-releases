@@ -3,7 +3,6 @@ import { existsSync, createWriteStream, unlinkSync } from 'fs'
 import { homedir, platform } from 'os'
 import { join, dirname } from 'path'
 import https from 'https'
-import { clearAllCompacted, lkPath } from '../lib/context.js'
 const MODE_FILE = '.lk-mode'
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
@@ -303,15 +302,5 @@ export async function dev(action) {
     if (geminiUpdated) console.log('✓ Gemini hooks updated')
     return
   }
-  if (action === 'clean') {
-    const root = process.cwd()
-    if (!existsSync(lkPath(root))) {
-      console.log('No .lk folder found')
-      return
-    }
-    const count = clearAllCompacted(root)
-    console.log(count ? `✓ Cleared compact state from ${count} files` : 'No compacted files found')
-    return
-  }
-  console.log('Usage: lk dev [status|toggle|source|binary|clean]')
+  console.log('Usage: lk dev [status|toggle|source|binary]')
 }
