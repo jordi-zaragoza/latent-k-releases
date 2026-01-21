@@ -71,7 +71,7 @@ export async function pure(action,opts={}){
     console.log(`Compacting project...${opts.all?'':' (AI limit: 5)'}\n`)
     const r=await compactProject(process.cwd(),{dryRun:opts.dryRun,verbose:true,aiLimit})
     console.log(`\n${r.compacted}/${r.total} files compacted`)
-    console.log(`${r.skipped} skipped, ${Math.round(r.saved/1024)}KB saved`)
+    console.log(`${r.savedTokens.toLocaleString()}tk saved (${r.pct}%) | ${r.ogTokens.toLocaleString()}tk → ${r.finalTokens.toLocaleString()}tk`)
     if(r.aiPending.length)console.log(`${r.aiPending.length} pending (need AI)`)
     if(r.errors.length)console.log(`${r.errors.length} errors`)
     if(opts.dryRun)console.log('\n(dry run - no files modified)')
