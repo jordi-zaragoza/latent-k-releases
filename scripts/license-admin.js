@@ -1,177 +1,148 @@
 #!/usr/bin/env node
-/**
- * License Administration Tool
- *
- * This script is for generating licenses and should NEVER be included in the distributed binary.
- * Keep it on your local machine or secure server only.
- *
- * Usage:
- *   node scripts/license-admin.js generate [--email user@example.com] [--type pro] [--days 365]
- *   node scripts/license-admin.js batch <count> [--email user@example.com] [--type pro] [--days 365]
- *   node scripts/license-admin.js keys (generate new key pair)
- *   node scripts/license-admin.js verify <license-key>
- */
 import { createSign, createVerify, generateKeyPairSync, randomBytes } from 'crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
-const KEYS_DIR = join(homedir(), '.lk-keys')
-const PRIVATE_KEY_PATH = join(KEYS_DIR, 'private.pem')
-const PUBLIC_KEY_PATH = join(KEYS_DIR, 'public.pem')
-// Generate RSA key pair
-export function generateKeyPair() {
-  if (!existsSync(KEYS_DIR)) {
-    mkdirSync(KEYS_DIR, { recursive: true, mode: 0o700 })
+const kD=join(homedir(),'.lk-keys')
+const pKP=join(kD,'private.pem')
+const puKP=join(kD,'public.pem')
+export function generateKeyPair(){
+  if(!existsSync(kD)){
+    mkdirSync(kD,{recursive:true,mode:0o700})
   }
-  if (existsSync(PRIVATE_KEY_PATH)) {
-    console.log('Keys already exist at:', KEYS_DIR)
-    return {
-      privateKey: readFileSync(PRIVATE_KEY_PATH, 'utf8'),
-      publicKey: readFileSync(PUBLIC_KEY_PATH, 'utf8')
-    }
+  if(existsSync(pKP)){
+    console.log('Keys already exist at:',kD)
+    return {privateKey:readFileSync(pKP,'utf8'),publicKey:readFileSync(puKP,'utf8')}
   }
-  const { privateKey, publicKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-  })
-  writeFileSync(PRIVATE_KEY_PATH, privateKey, { mode: 0o600 })
-  writeFileSync(PUBLIC_KEY_PATH, publicKey, { mode: 0o644 })
-  console.log('Generated new key pair at:', KEYS_DIR)
+  const {privateKey,publicKey}=generateKeyPairSync('rsa',{modulusLength:2048,publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}})
+  writeFileSync(pKP,privateKey,{mode:0o600})
+  writeFileSync(puKP,publicKey,{mode:0o644})
+  console.log('Generated new key pair at:',kD)
   console.log('\nIMPORTANT: Keep private.pem safe! Never share it.')
   console.log('Copy public.pem content to src/lib/license-gen.js EMBEDDED_PUBLIC_KEY\n')
-  return { privateKey, publicKey }
+  return {privateKey,publicKey}
 }
-// Get private key (required for generation)
-function getPrivateKey() {
-  if (!existsSync(PRIVATE_KEY_PATH)) {
+function getPrivateKey(){
+  if(!existsSync(pKP)){
     throw new Error('No private key found. Run: node scripts/license-admin.js keys')
   }
-  return readFileSync(PRIVATE_KEY_PATH, 'utf8')
+  return readFileSync(pKP,'utf8')
 }
-// Get public key (for verification)
-function getPublicKey() {
-  if (!existsSync(PUBLIC_KEY_PATH)) {
+function getPublicKey(){
+  if(!existsSync(puKP)){
     throw new Error('No public key found. Run: node scripts/license-admin.js keys')
   }
-  return readFileSync(PUBLIC_KEY_PATH, 'utf8')
+  return readFileSync(puKP,'utf8')
 }
-// Generate a license key
-export function generateLicense(options = {}) {
-  if (!options.email) {
+export function generateLicense(o={}){
+  if(!o.email){
     throw new Error('Email is required for license generation')
   }
-  const privateKey = getPrivateKey()
-  let expires = options.expires || null
-  if (options.durationDays && !expires) {
-    expires = Date.now() + options.durationDays * 24 * 60 * 60 * 1000
+  const pK=getPrivateKey()
+  let e=o.expires||null
+  if(o.durationDays&&!e){
+    e=Date.now()+o.durationDays*24*60*60*1000
   }
-  const data = {
-    id: randomBytes(8).toString('hex'),
-    type: options.type || 'standard',
-    email: options.email.toLowerCase().trim(),
-    created: Date.now(),
-    expires
+  const d={
+    id:randomBytes(8).toString('hex'),
+    type:o.type||'standard',
+    email:o.email.toLowerCase().trim(),
+    created:Date.now(),
+    expires:e
   }
-  const payload = Buffer.from(JSON.stringify(data)).toString('base64url')
-  const sign = createSign('SHA256')
-  sign.update(payload)
-  const signature = sign.sign(privateKey, 'base64url')
-  return `LK-${payload}.${signature}`
+  const p=Buffer.from(JSON.stringify(d)).toString('base64url')
+  const s=createSign('SHA256')
+  s.update(p)
+  const sig=s.sign(pK,'base64url')
+  return `LK-${p}.${sig}`
 }
-// Validate a license key
-export function validateLicenseOffline(key) {
-  try {
-    if (!key || !key.startsWith('LK-')) {
-      return { valid: false, error: 'Invalid format' }
+export function validateLicenseOffline(k){
+  try{
+    if(!k||!k.startsWith('LK-')){
+      return {valid:false,error:'Invalid format'}
     }
-    const parts = key.slice(3).split('.')
-    if (parts.length !== 2) {
-      return { valid: false, error: 'Invalid format' }
+    const pt=k.slice(3).split('.')
+    if(pt.length!==2){
+      return {valid:false,error:'Invalid format'}
     }
-    const [payload, signature] = parts
-    const publicKey = getPublicKey()
-    const verify = createVerify('SHA256')
-    verify.update(payload)
-    if (!verify.verify(publicKey, signature, 'base64url')) {
-      return { valid: false, error: 'Invalid signature' }
+    const [p,sig]=pt
+    const puK=getPublicKey()
+    const v=createVerify('SHA256')
+    v.update(p)
+    if(!v.verify(puK,sig,'base64url')){
+      return {valid:false,error:'Invalid signature'}
     }
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString())
-    if (data.expires && Date.now() > data.expires) {
-      return { valid: false, error: 'License expired', data }
+    const d=JSON.parse(Buffer.from(p,'base64url').toString())
+    if(d.expires&&Date.now()>d.expires){
+      return {valid:false,error:'License expired',data:d}
     }
-    return { valid: true, data }
-  } catch (err) {
-    return { valid: false, error: err.message }
+    return {valid:true,data:d}
+  }catch(er){
+    return {valid:false,error:er.message}
   }
 }
-// Parse license data without validation
-export function parseLicense(key) {
-  try {
-    if (!key || !key.startsWith('LK-')) return null
-    const payload = key.slice(3).split('.')[0]
-    return JSON.parse(Buffer.from(payload, 'base64url').toString())
-  } catch {
+export function parseLicense(k){
+  try{
+    if(!k||!k.startsWith('LK-'))return null
+    const p=k.slice(3).split('.')[0]
+    return JSON.parse(Buffer.from(p,'base64url').toString())
+  }catch{
     return null
   }
 }
-// Generate multiple licenses
-export function generateBatch(count, options = {}) {
-  const licenses = []
-  for (let i = 0; i < count; i++) {
-    licenses.push(generateLicense({
-      email: options.email,
-      type: options.type,
-      durationDays: options.durationDays,
-      expires: options.expires
+export function generateBatch(c,o={}){
+  const ls=[]
+  for(let i=0;i<c;i++){
+    ls.push(generateLicense({
+      email:o.email,
+      type:o.type,
+      durationDays:o.durationDays,
+      expires:o.expires
     }))
   }
-  return licenses
+  return ls
 }
-// CLI
-function parseArgs(args) {
-  const opts = {}
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--email' && args[i + 1]) opts.email = args[++i]
-    else if (args[i] === '--type' && args[i + 1]) opts.type = args[++i]
-    else if (args[i] === '--days' && args[i + 1]) opts.durationDays = parseInt(args[++i], 10)
+function parseArgs(a){
+  const o={}
+  for(let i=0;i<a.length;i++){
+    if(a[i]==='--email'&&a[i+1])o.email=a[++i]
+    else if(a[i]==='--type'&&a[i+1])o.type=a[++i]
+    else if(a[i]==='--days'&&a[i+1])o.durationDays=parseInt(a[++i],10)
   }
-  return opts
+  return o
 }
-function cli() {
-  const [,, command, ...args] = process.argv
-  switch (command) {
-    case 'keys':
-      generateKeyPair()
-      break
-    case 'generate': {
-      const opts = parseArgs(args)
-      const license = generateLicense(opts)
+function cli(){
+  const [,,cmd,...a]=process.argv
+  switch(cmd){
+    case 'keys':generateKeyPair();break
+    case 'generate':{
+      const o=parseArgs(a)
+      const l=generateLicense(o)
       console.log('\nGenerated license:')
-      console.log(license)
+      console.log(l)
       console.log('\nLicense data:')
-      console.log(parseLicense(license))
+      console.log(parseLicense(l))
       break
     }
-    case 'batch': {
-      const count = parseInt(args[0], 10) || 1
-      const opts = parseArgs(args.slice(1))
-      const licenses = generateBatch(count, opts)
-      console.log(`\nGenerated ${count} licenses:\n`)
-      licenses.forEach((l, i) => {
-        console.log(`${i + 1}. ${l}`)
+    case 'batch':{
+      const c=parseInt(a[0],10)||1
+      const o=parseArgs(a.slice(1))
+      const ls=generateBatch(c,o)
+      console.log(`\nGenerated ${c} licenses:\n`)
+      ls.forEach((l,i)=>{
+        console.log(`${i+1}. ${l}`)
       })
       break
     }
-    case 'verify': {
-      const key = args[0]
-      if (!key) {
+    case 'verify':{
+      const k=a[0]
+      if(!k){
         console.error('Usage: license-admin.js verify <license-key>')
         process.exit(1)
       }
-      const result = validateLicenseOffline(key)
+      const r=validateLicenseOffline(k)
       console.log('\nValidation result:')
-      console.log(result)
+      console.log(r)
       break
     }
     default:
@@ -189,7 +160,6 @@ Options:
 `)
   }
 }
-// Run CLI if executed directly
-if (process.argv[1]?.includes('license-admin')) {
+if(process.argv[1]?.includes('license-admin')){
   cli()
 }
