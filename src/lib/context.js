@@ -386,29 +386,32 @@ function buildProjectHeader(content) {
   return result.join('\n')
 }
 
-// Parse entry: symbol filename [⦗hash⦘ "desc"? {exports}?]
+// Parse entry: symbol filename [⦗hash⦘ •? "desc"? {exports}?]
 export function parseEntry(line, groupPath = '') {
   const m = line.match(/^\s*([▸⇄λ⚙⧫⊚⟐◈⤳⚑◇])\s+(.+?)\s*\[⦗([a-f0-9]+)⦘\s*(.*)?\]/)
   if (!m) return null
   const file = m[2]
   const fullPath = groupPath ? path.join(groupPath, file) : file
-  const extra = (m[4] || '').trim()
+  let extra = (m[4] || '').trim()
+  const compacted = extra.startsWith('•')||extra.startsWith('-c')
+  if (compacted) extra = extra.replace(/^(•|-c)\s*/,'').trim()
   const descMatch = extra.match(/^"([^"]*)"/)
   const desc = descMatch ? descMatch[1] : ''
   const rest = descMatch ? extra.slice(descMatch[0].length).trim() : extra
   const exportsMatch = rest.match(/^\{([^}]*)\}/)
   if (exportsMatch) {
     const exports = exportsMatch[1] ? exportsMatch[1].split(/,\s*/) : []
-    return { symbol: m[1], file, hash: m[3], path: fullPath, desc, exports }
+    return { symbol: m[1], file, hash: m[3], path: fullPath, desc, exports, compacted }
   }
-  return { symbol: m[1], file, hash: m[3], path: fullPath, desc: desc || rest, exports: [] }
+  return { symbol: m[1], file, hash: m[3], path: fullPath, desc: desc || rest, exports: [], compacted }
 }
 
-// Build entry line
-export function buildEntry(symbol, file, hash, desc, exports = []) {
+// Build entry line: • = compacted
+export function buildEntry(symbol, file, hash, desc, exports = [], compacted = false) {
+  const c = compacted ? '•' : ''
   const d = desc?.trim() ? `"${desc.trim()}"` : ''
-  const e = exports.length ? `{${exports.join(', ')}}` : ''
-  const extra = [d, e].filter(Boolean).join(' ')
+  const e = exports.length ? `{${exports.join(',')}}` : ''
+  const extra = [c, d, e].filter(Boolean).join(' ').trim()
   return extra ? `  ${symbol} ${file} [⦗${hash}⦘ ${extra}]` : `  ${symbol} ${file} [⦗${hash}⦘]`
 }
 
@@ -479,7 +482,7 @@ export function buildDomain(id, domain, vibe, groups, invariants = []) {
         out += `  @${item.dir}/\n`
       } else {
         const file = path.basename(item.e.path)
-        out += buildEntry(item.e.symbol, file, item.e.hash, item.e.desc, item.e.exports || [])
+        out += buildEntry(item.e.symbol, file, item.e.hash, item.e.desc, item.e.exports || [], item.e.compacted === true)
         const isLast = i === allEntries.length - 1 || allEntries.slice(i + 1).every(x => x.type === 'path')
         if (!isLast) out += ','
         out += '\n'
@@ -535,7 +538,7 @@ export function getAllEntries(root) {
 }
 
 // Add/update entry in domain
-export function addEntry(root, domainName, group, symbol, hash, filePath, desc, exports = []) {
+export function addEntry(root, domainName, group, symbol, hash, filePath, desc, exports = [], compacted = false) {
   init(root)
 
   // Remove from any other domain first
@@ -582,7 +585,7 @@ export function addEntry(root, domainName, group, symbol, hash, filePath, desc, 
   if (!domain.groups[targetGroup]) domain.groups[targetGroup] = []
   const existing = domain.groups[targetGroup].findIndex(e => e.path === filePath)
   const file = path.basename(filePath)
-  const entry = { symbol, file, hash, path: filePath, desc, exports }
+  const entry = { symbol, file, hash, path: filePath, desc, exports, compacted }
   if (existing >= 0) {
     domain.groups[targetGroup][existing] = entry
   } else {
@@ -591,6 +594,25 @@ export function addEntry(root, domainName, group, symbol, hash, filePath, desc, 
 
   saveDomain(root, domainName, buildDomain(domain.id, domain.domain, domain.vibe, domain.groups, domain.invariants))
   log('CONTEXT', `Added ${symbol} ${filePath} to ${domainName}/${targetGroup}`)
+}
+
+// Mark file as compacted (add -c flag)
+export function markCompacted(root, filePath) {
+  const allDomains = listDomains(root)
+  for (const d of allDomains) {
+    const dom = loadDomain(root, d)
+    if (!dom) continue
+    for (const [g, items] of Object.entries(dom.groups)) {
+      const entry = items.find(e => e.path === filePath)
+      if (entry) {
+        entry.compacted = true
+        saveDomain(root, d, buildDomain(dom.id, dom.domain, dom.vibe, dom.groups, dom.invariants))
+        log('CONTEXT', `Marked ${filePath} as compacted`)
+        return true
+      }
+    }
+  }
+  return false
 }
 
 // Remove entry from all domains
@@ -719,38 +741,29 @@ export function countTokens(text) {
   return { tokens, chars, lines }
 }
 
+// Minify LK context string
+export function minifyContext(text) {
+  if (!text) return ''
+  return text
+    .split('\n').map(l => l.trim()).filter(l => l).join('')
+    .replace(/⦓ID: DOMAIN-/g, '⦓').replace(/⦓ID: /g, '⦓')
+    .replace(/⟦Δ: Domain ⫸ /g, '⟦').replace(/⟦Δ: /g, '⟦')
+    .replace(/∑ /g, '∑')
+    .replace(/\[\s+/g, '[').replace(/\s+\]/g, ']').replace(/,\s+/g, ',')
+    .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[').replace(/\s+\[\]/g, '')
+    .replace(/ → /g, '→').replace(/→ /g, '→')
+    .replace(/⟧ ⟦/g, '⟧⟦').replace(/⟫ ⟪/g, '⟫⟪').replace(/⦔ ⟪/g, '⦔⟪').replace(/⫸ /g, '⫸')
+    .replace(/VIBE: /g, 'VIBE:').replace(/NAME: /g, 'NAME:').replace(/VERSION: /g, 'VERSION:')
+    .replace(/([▸⇄λ⚙⧫⊚⟐◈⤳⚑◇]) /g, '$1').replace(/@([^/]+)\/ /g, '@$1/')
+    .replace(/ \[/g, '[').replace(/\[ /g, '[').replace(/• /g, '•').replace(/ \{/g, '{').replace(/ ⫸/g, '⫸').replace(/ \(/g, '(')
+}
+
 // Build context (default, minified)
 export function buildContext(root) {
   const full = buildVerboseContext(root)
   if (!full) return ''
   if (full.startsWith('[License required')) return full
-
-  let result = full
-
-  return result
-    // Trim lines and remove empty ones
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l)
-    .join(' ')
-    // Compress multiple spaces to one
-    .replace(/  +/g, ' ')
-    // Shorten IDs: ⦓ID: DOMAIN-CLI⦔ → ⦓CLI⦔
-    .replace(/⦓ID: DOMAIN-/g, '⦓')
-    .replace(/⦓ID: /g, '⦓')
-    // Shorten section headers: ⟦Δ: Domain ⫸ Cli⟧ → ⟦Cli⟧
-    .replace(/⟦Δ: Domain ⫸ /g, '⟦')
-    .replace(/⟦Δ: /g, '⟦')
-    // Remove space after ∑
-    .replace(/∑ /g, '∑')
-    // Compress inside brackets
-    .replace(/\[\s+/g, '[')
-    .replace(/\s+\]/g, ']')
-    .replace(/,\s+/g, ',')
-    // Remove hashes
-    .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[')
-    // Clean empty brackets
-    .replace(/\s+\[\]/g, '')
+  return minifyContext(full)
 }
 
 // Infer domain from file path (e.g., src/api/* → 'api', tests/* → 'test')
@@ -973,6 +986,12 @@ export function buildContextForFiles(root, files) {
     .replace(/,\s+/g, ',')
     .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[')
     .replace(/\s+\[\]/g, '')
+    // Remove spaces around arrows and between delimiters
+    .replace(/ → /g, '→')
+    .replace(/⟧ ⟦/g, '⟧⟦')
+    .replace(/⟫ ⟪/g, '⟫⟪')
+    .replace(/⦔ ⟪/g, '⦔⟪')
+    .replace(/⫸ /g, '⫸')
 }
 
 export { VALID_SYMBOLS }

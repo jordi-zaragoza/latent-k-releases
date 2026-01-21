@@ -14,7 +14,7 @@ import { benchmark } from './commands/benchmark.js'
 import { expandCommand } from './commands/expand.js'
 import { pure } from './commands/pure.js'
 import { writeFileSync, existsSync } from 'fs'
-import { buildVerboseContext, buildContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored, validateProjectDirectory, isHomeOrRoot } from './lib/context.js'
+import { buildVerboseContext, buildContext, minifyContext, countTokens, exists, loadIgnore, saveIgnore, ignoreExists, getProject, getProjectHeader, getSyntax, loadDomain, listDomains, buildDomain, getAllFiles, isIgnored, validateProjectDirectory, isHomeOrRoot } from './lib/context.js'
 import { VERSION } from './lib/version.js'
 import { getLicenseExpiration, getLicenseKey, isLicensed, checkAccess } from './lib/license.js'
 import { parseLicense } from './lib/license-gen.js'
@@ -120,9 +120,11 @@ program
   }))
 
 program
-  .command('pure [action]')
+  .command('pure [action] [file]')
   .description('Toggle pure mode (m2m coding style)')
-  .action(pure)
+  .option('-n, --dry-run','Preview changes without modifying')
+  .option('-l, --list','List all files in status')
+  .action((action,file,opts)=>pure(action,{dryRun:opts.dryRun,file,list:opts.list}))
 
 program
   .command('update')
@@ -263,18 +265,14 @@ if (!IS_BINARY) {
 
       let context = ''
 
-      // Get raw content
+      // Get content
       if (options.syntax) {
-        // -s: Only syntax.lk
         context = getSyntax(cwd)
       } else if (options.project) {
-        // -p: Only project.lk
         context = getProject(cwd)
       } else if (options.header) {
-        // -H: Only project_h.lk (project summary)
         context = getProjectHeader(cwd)
       } else if (options.domain) {
-        // -d: Filter by domain
         const domain = loadDomain(cwd, options.domain)
         if (!domain) {
           console.log(`Domain not found: ${options.domain}`)
@@ -283,20 +281,11 @@ if (!IS_BINARY) {
         }
         context = buildDomain(domain.id, domain.domain, domain.vibe, domain.groups, domain.invariants)
       } else {
-        // Full context
-        context = buildVerboseContext(cwd)
+        context = options.verbose ? buildVerboseContext(cwd) : buildContext(cwd)
       }
-
-      // Minify unless verbose
-      if (!options.verbose) {
-        context = context
-          .split('\n').map(l => l.trim()).filter(l => l).join(' ')
-          .replace(/  +/g, ' ')
-          .replace(/⦓ID: DOMAIN-/g, '⦓').replace(/⦓ID: /g, '⦓')
-          .replace(/⟦Δ: Domain ⫸ /g, '⟦').replace(/⟦Δ: /g, '⟦')
-          .replace(/∑ /g, '∑')
-          .replace(/\[\s+/g, '[').replace(/\s+\]/g, ']').replace(/,\s+/g, ',')
-          .replace(/\[⦗[a-f0-9]+⦘\s*/g, '[').replace(/\s+\[\]/g, '')
+      // Minify unless verbose or already minified (full context case)
+      if (!options.verbose && (options.syntax || options.project || options.header || options.domain)) {
+        context = minifyContext(context)
       }
 
       if (options.tokens) {
