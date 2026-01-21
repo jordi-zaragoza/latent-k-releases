@@ -26,7 +26,7 @@ const JAVA_EXTS=['java','kt','kts','scala']
 const C_EXTS=['c','cpp','h','hpp','cc','cxx']
 const SWIFT_EXTS=['swift']
 const SQL_EXTS=['sql']
-function programmaticCompact(code,ext){
+export function programmaticCompact(code,ext){
   if(JS_EXTS.includes(ext))return compactJS(code)
   if(PY_EXTS.includes(ext))return compactPY(code)
   if(GO_EXTS.includes(ext))return compactGO(code)
@@ -47,25 +47,17 @@ function programmaticCompact(code,ext){
 function compactJS(code){
   let c=code
   c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
+  c=c.replace(/(^|[^:])\/\/.*$/gm,'$1')
   c=c.replace(/^\s*['"]use strict['"];?\s*$/gm,'')
-  const lines=c.split('\n').map(l=>l.trim()).filter(l=>l)
-  const joined=[]
-  for(let i=0;i<lines.length;i++){
-    const line=lines[i]
-    const next=lines[i+1]
-    joined.push(line)
-    if(next&&!/[{}\[\]();,:]$/.test(line)&&/^(const|let|var|function|class|if|for|while|return|throw|async|export|import)/.test(next)){
-      joined.push(';')
-    }
-  }
-  c=joined.join('\n')
-  c=c.replace(/\s*([=+\-*/%<>&|!?:,;{}()\[\]])\s*/g,'$1')
-  c=c.replace(/\{\s+/g,'{').replace(/\s+\}/g,'}')
-  c=c.replace(/\(\s+/g,'(').replace(/\s+\)/g,')')
-  c=c.replace(/\[\s+/g,'[').replace(/\s+\]/g,']')
-  c=c.replace(/(const|let|var|function|return|if|else|for|while|import|export|from|async|await|class|extends|new|throw|try|catch|finally|typeof|instanceof|of|in)([^\s\w])/g,'$1 $2')
-  c=c.replace(/([^\s\w])(const|let|var|function|return|if|else|for|while|import|export|from|async|await|class|extends|new|throw|try|catch|finally|typeof|instanceof|of|in)/g,'$1 $2')
+  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
+  c=c.replace(/ *([=+\-*/%<>&|!?:,;{}()\[\]]) */g,'$1')
+  c=c.replace(/\{ +/g,'{').replace(/ +\}/g,'}')
+  c=c.replace(/\( +/g,'(').replace(/ +\)/g,')')
+  c=c.replace(/\[ +/g,'[').replace(/ +\]/g,']')
+  c=c.replace(/\b(const|let|var|function|return|if|else|for|while|export|from|async|await|class|extends|new|throw|try|catch|finally|typeof|instanceof|of|in)\b(?=[^\s\w])/g,'$1 ')
+  c=c.replace(/\bimport\b(?!\.meta)(?=[^\s\w])/g,'import ')
+  c=c.replace(/([^\s\w])(?=\b(const|let|var|function|return|if|else|for|while|export|from|async|await|class|extends|new|throw|try|catch|finally|typeof|instanceof|of|in)\b)/g,'$1 ')
+  c=c.replace(/\( import\.meta/g,'(import.meta')
   return{code:c,needsAI:true}
 }
 function compactPY(code){
