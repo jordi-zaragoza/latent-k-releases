@@ -49,12 +49,24 @@ export async function status() {
   const deleted = hasContext ? getDeletedFiles(cwd) : []
   const newFiles = unsynced.filter(f => f.status === 'new')
   const modified = unsynced.filter(f => f.status === 'modified')
+  let totalBytes=0,totalChars=0
+  for(const f of Object.keys(entries)){
+    try{
+      const fp=path.join(cwd,f)
+      const st=fs.statSync(fp)
+      totalBytes+=st.size
+      totalChars+=fs.readFileSync(fp,'utf8').length
+    }catch{}
+  }
+  const totalTokens=Math.ceil(totalChars/3.5)
+  const sizeStr=totalBytes>1024*1024?`${(totalBytes/1024/1024).toFixed(1)}MB`:`${(totalBytes/1024).toFixed(1)}KB`
   console.log('Files:')
   console.log(`  Tracked: ${Object.keys(entries).length}`)
   console.log(`  New: ${newFiles.length}`)
   console.log(`  Modified: ${modified.length}`)
   console.log(`  Deleted: ${deleted.length}`)
   console.log(`  Ignored: ${ignoredFiles.length}`)
+  console.log(`  Size: ${sizeStr} | ${totalChars.toLocaleString()} chars | ~${totalTokens.toLocaleString()} tokens`)
   console.log('')
   if (newFiles.length > 0 || modified.length > 0 || deleted.length > 0) {
     if (newFiles.length > 0) {
