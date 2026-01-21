@@ -1,6 +1,6 @@
 import {getPureMode,setPureMode} from '../lib/config.js'
 import {compactProject,compactFile} from '../lib/compact.js'
-import {markCompacted,listDomains,loadDomain} from '../lib/context.js'
+import {markCompacted,listDomains,loadDomain,clearAllCompacted} from '../lib/context.js'
 import {writeFileSync} from 'fs'
 import path from 'path'
 const IS_BINARY=!!process.pkg
@@ -41,6 +41,11 @@ export async function pure(action,opts={}){
     }else if(pending.length>10){
       console.log(`\nUse -l to list all files`)
     }
+    return
+  }
+  if(action==='clean'){
+    const n=clearAllCompacted(process.cwd())
+    console.log(n?`✓ Cleared compact state from ${n} files`:'No compacted files found')
     return
   }
   if(action==='compact'){
@@ -89,6 +94,7 @@ export async function pure(action,opts={}){
     console.log('  lk pure compact -a      - Compact all (unlimited AI)')
     console.log('  lk pure compact <file>  - Compact single file')
     console.log('  lk pure compact -n      - Dry run (preview)')
+    console.log('  lk pure clean           - Clear all compact state')
     return
   }
   const enable=action==='on'||action==='1'||action==='true'
