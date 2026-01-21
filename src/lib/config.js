@@ -1,42 +1,9 @@
 import Conf from 'conf'
-import { createHash, randomBytes } from 'crypto'
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
+import { createHash } from 'crypto'
+import { appendFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
 import { homedir, hostname, userInfo } from 'os'
 import { join, basename } from 'path'
-// Cache installation salt
-let cachedInstallationSalt = null
-/**
- * Get or create a unique installation salt
- * Shared with crypto.js for consistent encryption
- */
-function getInstallationSalt() {
-  if (cachedInstallationSalt) {
-    return cachedInstallationSalt
-  }
-  const lkDir = join(homedir(), '.lk')
-  const saltPath = join(lkDir, '.salt')
-  if (existsSync(saltPath)) {
-    try {
-      const salt = readFileSync(saltPath, 'utf8').trim()
-      if (salt.length >= 64) {
-        cachedInstallationSalt = salt
-        return salt
-      }
-    } catch {
-      // Fall through to generate new salt
-    }
-  }
-  // Generate new salt (64 bytes = 128 hex chars)
-  const newSalt = randomBytes(64).toString('hex')
-  try {
-    mkdirSync(lkDir, { recursive: true, mode: 0o700 })
-    writeFileSync(saltPath, newSalt, { mode: 0o600 })
-  } catch {
-    // If we can't write, use ephemeral salt
-  }
-  cachedInstallationSalt = newSalt
-  return newSalt
-}
+import { getInstallationSalt } from './crypto.js'
 function deriveEncryptionKey(salt) {
   const h = hostname()
   const u = userInfo().username
