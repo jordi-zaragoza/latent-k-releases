@@ -5,7 +5,6 @@ import { expand } from '../lib/expand.js'
 import { exists } from '../lib/context.js'
 import { isConfigured, log, getPureMode } from '../lib/config.js'
 import { PURE_MODE_REMINDER } from '../lib/ai-prompts.js'
-import { loadStats, statsPath } from '../lib/stats.js'
 import { checkAccess } from '../lib/license.js'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
 const PMC = 3
@@ -162,21 +161,6 @@ function formatPreviousMessages(ms) {
   }
   return f.join('\n')
 }
-function getTimeReduction() {
-  const r = process.cwd()
-  if (!fs.existsSync(statsPath(r))) return null
-  const s = loadStats(r)
-  const ops = s.byOperationType || {}
-  const expKeys = Object.keys(ops).filter(k => k.toLowerCase().includes('expand'))
-  if (expKeys.length === 0) return null
-  let tUsed = 0
-  for (const k of expKeys) tUsed += ops[k].totalDurationMs || 0
-  if (tUsed < 60000) return null
-  const eff = 1.4
-  const tSaved = tUsed * (eff - 1)
-  const mins = Math.round(tSaved / 60000)
-  return mins > 0 ? `${mins}min` : null
-}
 function formatForLLM(r) {
   if (!r.context) return ''
   const { type, context } = r
@@ -201,11 +185,7 @@ function formatForLLM(r) {
     const p = ['<system-reminder>']
     p.push('⚠️ INSTRUCTION: Use this code to respond. DO NOT call Read, Glob, or Grep unless explicitly needed.')
     p.push('')
-    const tR = getTimeReduction()
-    if (tR && Math.random() < 0.5) {
-      p.push(`TIME REDUCTION: ${tR} saved with LK context`)
-      p.push('')
-    } else if (context.navigation_guide) {
+    if (context.navigation_guide) {
       p.push('NAVIGATION GUIDE:')
       p.push(context.navigation_guide)
       p.push('')
