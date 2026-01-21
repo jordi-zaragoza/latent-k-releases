@@ -219,6 +219,11 @@ export async function compactProject(root,opts={}){
         results.aiUsed++
       }
       if(skipAI)results.aiPending.push(f)
+      if(JS_EXTS.includes(ext)&&!validateJS(final)){
+        if(verbose)console.log(`ERR ${f}: syntax invalid after compact`)
+        results.errors.push({file:f,error:'syntax invalid'})
+        continue
+      }
       results.ogBytes+=og.length
       results.finalBytes+=final.length
       const savedBytes=og.length-final.length
