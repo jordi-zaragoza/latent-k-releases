@@ -320,21 +320,12 @@ describe('Domain file management', () => {
   })
 
   it('saveDomain and listDomains', () => {
-    const content = buildDomain('DOMAIN-CORE', 'Core', '', { Lib: [{ symbol: 'λ', path: 'test.js', hash: 'abc', desc: 'test' }] }, [])
-    saveDomain(tmpDir, 'core', content)
+    saveDomain(tmpDir, 'core', 'test content')
     expect(listDomains(tmpDir)).toEqual(['core'])
-  })
-  it('saveDomain deletes empty domain', () => {
-    const content = buildDomain('DOMAIN-CORE', 'Core', '', { Lib: [{ symbol: 'λ', path: 'test.js', hash: 'abc', desc: 'test' }] }, [])
-    saveDomain(tmpDir, 'core', content)
-    expect(listDomains(tmpDir)).toEqual(['core'])
-    const empty = buildDomain('DOMAIN-CORE', 'Core', '', {}, [])
-    saveDomain(tmpDir, 'core', empty)
-    expect(listDomains(tmpDir)).toEqual([])
   })
 
   it('saveDomain and loadDomain', () => {
-    const content = buildDomain('DOMAIN-CORE', 'Core', '', { Lib: [{ symbol: 'λ', path: 'test.js', hash: 'abc', desc: 'test' }] }, [])
+    const content = buildDomain('DOMAIN-CORE', 'Core', '', {}, [])
     saveDomain(tmpDir, 'core', content)
     const loaded = loadDomain(tmpDir, 'core')
     expect(loaded.id).toBe('DOMAIN-CORE')
@@ -370,17 +361,19 @@ describe('Entry management', () => {
   it('addEntry moves file from other domain', () => {
     addEntry(tmpDir, 'old', 'Files', 'λ', 'abc', 'test.js', 'test', [])
     addEntry(tmpDir, 'new', 'Files', 'λ', 'abc', 'test.js', 'test', [])
+
     const oldDomain = loadDomain(tmpDir, 'old')
     const newDomain = loadDomain(tmpDir, 'new')
-    expect(oldDomain).toBeNull()
+    expect(oldDomain.groups.Files || []).toHaveLength(0)
     expect(newDomain.groups.Files).toHaveLength(1)
   })
 
   it('removeEntry removes from all domains', () => {
     addEntry(tmpDir, 'core', 'Lib', 'λ', 'abc', 'test.js', 'test', [])
     removeEntry(tmpDir, 'test.js')
+
     const domain = loadDomain(tmpDir, 'core')
-    expect(domain).toBeNull()
+    expect(domain.groups.Lib || []).toHaveLength(0)
   })
 
   it('getAllEntries returns all entries', () => {
@@ -888,7 +881,7 @@ describe('getDomainIndex', () => {
     init(tmpDir)
     addEntry(tmpDir, 'core', 'Lib', 'λ', 'abc1234', 'src/lib/parser.js', 'parsing utilities', [])
     addEntry(tmpDir, 'core', 'Lib', '⇄', 'def5678', 'src/lib/api.js', 'api interface', [])
-    addEntry(tmpDir, 'cli', 'Commands', '⇄', 'cafe012', 'src/commands/sync.js', 'sync command', [])
+    addEntry(tmpDir, 'cli', 'Commands', '⇄', 'ghi9012', 'src/commands/sync.js', 'sync command', [])
   })
 
   it('returns empty string for empty domain list', () => {
@@ -924,7 +917,7 @@ describe('buildContextForFiles', () => {
     init(tmpDir)
     addEntry(tmpDir, 'core', 'Lib', 'λ', 'abc1234', 'src/lib/parser.js', 'parsing', [])
     addEntry(tmpDir, 'cli', 'Commands', '⇄', 'def5678', 'src/commands/sync.js', 'sync', [])
-    addEntry(tmpDir, 'api', 'Routes', '⇄', 'cafe012', 'src/api/routes.js', 'routes', [])
+    addEntry(tmpDir, 'api', 'Routes', '⇄', 'ghi9012', 'src/api/routes.js', 'routes', [])
   })
 
   it('includes syntax and project for any files', () => {

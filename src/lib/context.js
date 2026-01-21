@@ -438,18 +438,11 @@ export function loadDomain(root, name) {
   if (content === null) return null
   return parseDomain(content)
 }
-// Save domain (deletes if empty)
+// Save domain
 export function saveDomain(root, name, content) {
   const dir = domainsPath(root)
-  const p = domainPath(root, name)
-  const parsed = parseDomain(content)
-  const hasEntries = Object.values(parsed.groups).some(g => g.length > 0)
-  if (!hasEntries) {
-    if (fs.existsSync(p)) fs.unlinkSync(p)
-    return
-  }
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(p, encrypt(content))
+  fs.writeFileSync(domainPath(root, name), encrypt(content))
 }
 // Get all entries from all domains
 export function getAllEntries(root) {
@@ -527,16 +520,6 @@ export function isCompacted(root, filePath) {
     for (const items of Object.values(dom.groups)) {
       const e = items.find(x => x.path === filePath)
       if (e) return !!e.compacted
-    }
-  }
-  return false
-}
-export function isInDomain(root, filePath) {
-  for (const d of listDomains(root)) {
-    const dom = loadDomain(root, d)
-    if (!dom) continue
-    for (const items of Object.values(dom.groups)) {
-      if (items.find(x => x.path === filePath)) return true
     }
   }
   return false
