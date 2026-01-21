@@ -31,7 +31,7 @@ const PRO_TIPS = [
   'Run "!lk sync -a" to re-sync all files after major changes',
   'Use "!lk clean" to reset context if things get stale',
   'Use "!lk ignore --list" to see excluded paths',
-  'Use "!lk stats" to check your API token consumption',
+  'Use "!lk savings" to see your time and cost savings',
   'Run "!lk update" to get the latest version',
   'Use "!lk pro-tips" to see all tips',
   'LK works with both Claude Code and Gemini CLI',
