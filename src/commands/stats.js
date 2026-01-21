@@ -1,40 +1,33 @@
 import { loadStats, resetStats, getStatsSummary, statsPath, MODEL_PRICING, PRICING_DATE } from '../lib/stats.js'
 import fs from 'fs'
-
 /**
  * Display LLM usage statistics for the current project
  */
 export async function stats(options = {}) {
   const cwd = process.cwd()
   const statsFile = statsPath(cwd)
-
   // Check if stats file exists
   if (!fs.existsSync(statsFile)) {
     console.log('No statistics recorded yet.')
     console.log('Stats will be collected automatically when you run lk commands that use AI.')
     return
   }
-
   // Handle reset option
   if (options.reset) {
     resetStats(cwd)
     console.log('Statistics reset.')
     return
   }
-
   // Handle raw JSON output
   if (options.json) {
     const stats = loadStats(cwd)
     console.log(JSON.stringify(stats, null, 2))
     return
   }
-
   // Display summary
   const summary = getStatsSummary(cwd)
-
   console.log('LLM Usage Statistics\n')
   console.log('─'.repeat(50))
-
   console.log('\nTotals:')
   console.log(`  Sessions: ${summary.totalSessions}`)
   console.log(`  Calls: ${summary.totalCalls}${summary.totalErrors > 0 ? ` (${summary.totalErrors} errors)` : ''}`)
@@ -43,7 +36,6 @@ export async function stats(options = {}) {
   console.log(`  Cost: $${formatCost(summary.totalCostUsd)}`)
   console.log(`  Parse success rate: ${summary.parseSuccessRate}%`)
   console.log(`  Avg duration: ${summary.avgDurationMs}ms`)
-
   // By operation type (logical operations like analyzeFile, classifyPrompt)
   const operationTypes = Object.keys(summary.byOperationType)
   if (operationTypes.length > 0) {
@@ -56,7 +48,6 @@ export async function stats(options = {}) {
       console.log(`    Tokens received: ${formatNumber(data.tokensReceivedEstimate)}`)
     }
   }
-
   // By API operation (JSON API call, Text API call)
   const operations = Object.keys(summary.byOperation)
   if (operations.length > 0) {
@@ -68,7 +59,6 @@ export async function stats(options = {}) {
       console.log(`    Tokens (estimate): ${formatNumber(data.tokensSentEstimate + data.tokensReceivedEstimate)}`)
     }
   }
-
   // By model
   const models = Object.keys(summary.byModel)
   if (models.length > 0) {
@@ -82,7 +72,6 @@ export async function stats(options = {}) {
       console.log(`    Avg duration: ${Math.round(data.totalDurationMs / data.calls)}ms`)
     }
   }
-
   // Recent errors
   if (summary.recentErrors && summary.recentErrors.length > 0) {
     console.log('\nRecent Errors:')
@@ -91,11 +80,9 @@ export async function stats(options = {}) {
       console.log(`  [${time}] ${err.operationType || err.operation}: ${err.error.slice(0, 60)}`)
     }
   }
-
   console.log('\n' + '─'.repeat(50))
   console.log(`First recorded: ${formatDate(summary.created)}`)
   console.log(`Last updated: ${formatDate(summary.lastUpdated)}`)
-
   // Show pricing info for models used
   const usedModels = Object.keys(summary.byModel)
   if (usedModels.length > 0) {
@@ -107,17 +94,14 @@ export async function stats(options = {}) {
       }
     }
   }
-
   console.log('')
   console.log('Options:')
   console.log('  lk stats --json    Output raw JSON')
   console.log('  lk stats --reset   Reset statistics')
 }
-
 function formatNumber(n) {
   return n.toLocaleString()
 }
-
 function formatCost(cost) {
   if (cost < 0.01) {
     return cost.toFixed(4)
@@ -126,7 +110,6 @@ function formatCost(cost) {
   }
   return cost.toFixed(2)
 }
-
 function formatDate(isoString) {
   try {
     return new Date(isoString).toLocaleString()

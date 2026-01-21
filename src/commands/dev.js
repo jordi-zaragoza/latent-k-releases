@@ -3,32 +3,25 @@ import { existsSync, createWriteStream, unlinkSync } from 'fs'
 import { homedir, platform } from 'os'
 import { join, dirname } from 'path'
 import https from 'https'
-
 const MODE_FILE = '.lk-mode'
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
-
 function getProjectRoot() {
   return process.cwd()
 }
-
 function getModeFilePath() {
   return join(getProjectRoot(), MODE_FILE)
 }
-
 function getBinaryDir() {
   return '/usr/local/bin'
 }
-
 function getBinaryPath() {
   const ext = platform() === 'win32' ? '.exe' : ''
   return join(getBinaryDir(), `lk${ext}`)
 }
-
 function getSourcePath() {
   return join(getProjectRoot(), 'src', 'cli.js')
 }
-
 async function getCurrentMode() {
   try {
     const content = await readFile(getModeFilePath(), 'utf8')
@@ -37,11 +30,9 @@ async function getCurrentMode() {
     return 'source' // default to source
   }
 }
-
 async function setMode(mode) {
   await writeFile(getModeFilePath(), mode)
 }
-
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
     https.get(url, {
@@ -50,7 +41,6 @@ function fetchJSON(url) {
       if (res.statusCode === 302 || res.statusCode === 301) {
         return fetchJSON(res.headers.location).then(resolve).catch(reject)
       }
-
       let data = ''
       res.on('data', chunk => data += chunk)
       res.on('end', () => {
@@ -63,13 +53,10 @@ function fetchJSON(url) {
     }).on('error', reject)
   })
 }
-
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const file = createWriteStream(dest)
-
     file.on('error', reject)
-
     const request = (url) => {
       https.get(url, {
         headers: {
@@ -80,23 +67,18 @@ function downloadFile(url, dest) {
         if (res.statusCode === 302 || res.statusCode === 301) {
           return request(res.headers.location)
         }
-
         if (res.statusCode !== 200) {
           reject(new Error(`Download failed: ${res.statusCode}`))
           return
         }
-
         const total = parseInt(res.headers['content-length'], 10)
         let downloaded = 0
-
         res.on('data', (chunk) => {
           downloaded += chunk.length
           const pct = total ? Math.round(downloaded / total * 100) : 0
           process.stdout.write(`\rDownloading... ${pct}%`)
         })
-
         res.pipe(file)
-
         file.on('finish', () => {
           file.close()
           console.log('\rDownloading... done')
@@ -107,14 +89,11 @@ function downloadFile(url, dest) {
         reject(err)
       })
     }
-
     request(url)
   })
 }
-
 function getPlatformAsset(assets) {
   const p = platform()
-
   let target
   if (p === 'darwin') {
     target = 'macos'
@@ -123,69 +102,53 @@ function getPlatformAsset(assets) {
   } else {
     target = 'linux'
   }
-
   return assets.find(asset => {
     const name = asset.name.toLowerCase()
     return name.includes(target) && !name.endsWith('.sh')
   })
 }
-
 async function ensureBinary() {
   const binaryPath = getBinaryPath()
-
   if (existsSync(binaryPath)) {
     return binaryPath
   }
-
   console.log('Binary not found. Downloading...\n')
-
   const release = await fetchJSON(RELEASES_URL)
   if (!release || !release.tag_name) {
     throw new Error('No releases found')
   }
-
   const asset = getPlatformAsset(release.assets)
   if (!asset) {
     throw new Error(`No binary available for ${platform()}`)
   }
-
   await mkdir(getBinaryDir(), { recursive: true })
   await downloadFile(asset.browser_download_url, binaryPath)
-
   if (platform() !== 'win32') {
     await chmod(binaryPath, 0o755)
   }
-
   console.log(`Installed: ${binaryPath}\n`)
   return binaryPath
 }
-
 function getHookCommands(mode, cli = 'claude') {
   const lkBin = '/usr/local/bin/lk'
   const sourcePath = getSourcePath()
   const jsonFlag = cli === 'gemini' ? ' --json' : ''
-
   const expandCmd = mode === 'binary'
     ? `${lkBin} expand || true`
     : `node ${sourcePath} expand || true`
-
   const syncCmd = mode === 'binary'
     ? `${lkBin} sync`
     : `node ${sourcePath} sync`
-
   const sessionCmd = mode === 'binary'
     ? `${lkBin} session-info${jsonFlag} || true`
     : `node ${sourcePath} session-info${jsonFlag} || true`
-
   return { expandCmd, syncCmd, sessionCmd }
 }
-
 function isLkExpandHook(command) {
   if (!command) return false
   const isLk = /\blk\b/.test(command) || command.includes('cli.js')
   return isLk && (command.includes('expand') || command.includes('context'))
 }
-
 function updateHooksInSettings(settings, promptEvent, stopEvent, expandCmd, syncCmd, sessionCmd) {
   // Update prompt hook (expand on every prompt) - UserPromptSubmit for Claude, BeforeAgent for Gemini
   if (settings.hooks?.[promptEvent]) {
@@ -204,7 +167,6 @@ function updateHooksInSettings(settings, promptEvent, stopEvent, expandCmd, sync
       return h
     })
   }
-
   // Update SessionStart hooks: session-info and remove legacy expand/context hooks
   if (settings.hooks?.SessionStart) {
     // Update session-info hooks
@@ -230,7 +192,6 @@ function updateHooksInSettings(settings, promptEvent, stopEvent, expandCmd, sync
       delete settings.hooks.SessionStart
     }
   }
-
   // Update stop hook (Stop for Claude, SessionEnd for Gemini)
   if (settings.hooks?.[stopEvent]) {
     settings.hooks[stopEvent] = settings.hooks[stopEvent].map(h => {
@@ -248,13 +209,10 @@ function updateHooksInSettings(settings, promptEvent, stopEvent, expandCmd, sync
       return h
     })
   }
-
   return settings
 }
-
 async function updateClaudeHooks(mode) {
   const settingsPath = join(homedir(), '.claude', 'settings.json')
-
   let settings = {}
   try {
     const content = await readFile(settingsPath, 'utf8')
@@ -262,17 +220,13 @@ async function updateClaudeHooks(mode) {
   } catch {
     return false
   }
-
   const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode, 'claude')
   settings = updateHooksInSettings(settings, 'UserPromptSubmit', 'Stop', expandCmd, syncCmd, sessionCmd)
-
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true
 }
-
 async function updateGeminiHooks(mode) {
   const settingsPath = join(homedir(), '.gemini', 'settings.json')
-
   let settings = {}
   try {
     const content = await readFile(settingsPath, 'utf8')
@@ -280,17 +234,13 @@ async function updateGeminiHooks(mode) {
   } catch {
     return false
   }
-
   const { expandCmd, syncCmd, sessionCmd } = getHookCommands(mode, 'gemini')
   settings = updateHooksInSettings(settings, 'BeforeAgent', 'SessionEnd', expandCmd, syncCmd, sessionCmd)
-
   await writeFile(settingsPath, JSON.stringify(settings, null, 2))
   return true
 }
-
 export async function dev(action) {
   const currentMode = await getCurrentMode()
-
   if (!action || action === 'status') {
     console.log(`Current mode: ${currentMode}`)
     console.log(`Mode file: ${getModeFilePath()}`)
@@ -301,10 +251,8 @@ export async function dev(action) {
     }
     return
   }
-
   if (action === 'toggle') {
     const newMode = currentMode === 'source' ? 'binary' : 'source'
-
     if (newMode === 'binary') {
       try {
         await ensureBinary()
@@ -313,12 +261,9 @@ export async function dev(action) {
         return
       }
     }
-
     await setMode(newMode)
-
     const claudeUpdated = await updateClaudeHooks(newMode)
     const geminiUpdated = await updateGeminiHooks(newMode)
-
     if (claudeUpdated || geminiUpdated) {
       console.log(`Switched to: ${newMode}`)
       if (newMode === 'binary') {
@@ -331,19 +276,16 @@ export async function dev(action) {
     }
     return
   }
-
   if (action === 'use-source' || action === 'source') {
     await setMode('source')
     const claudeUpdated = await updateClaudeHooks('source')
     const geminiUpdated = await updateGeminiHooks('source')
-
     console.log('Switched to: source')
     console.log(`Using: node ${getSourcePath()}`)
     if (claudeUpdated) console.log('✓ Claude hooks updated')
     if (geminiUpdated) console.log('✓ Gemini hooks updated')
     return
   }
-
   if (action === 'use-binary' || action === 'binary') {
     try {
       await ensureBinary()
@@ -351,17 +293,14 @@ export async function dev(action) {
       console.error(`✗ Failed to get binary: ${err.message}`)
       return
     }
-
     await setMode('binary')
     const claudeUpdated = await updateClaudeHooks('binary')
     const geminiUpdated = await updateGeminiHooks('binary')
-
     console.log('Switched to: binary')
     console.log(`Using: ${getBinaryPath()}`)
     if (claudeUpdated) console.log('✓ Claude hooks updated')
     if (geminiUpdated) console.log('✓ Gemini hooks updated')
     return
   }
-
   console.log('Usage: lk dev [status|toggle|source|binary]')
 }

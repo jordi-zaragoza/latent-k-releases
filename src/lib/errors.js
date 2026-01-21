@@ -2,41 +2,33 @@
  * Centralized error handling for LK CLI
  * Provides consistent error types, codes, and user-friendly messages
  */
-
 import { log } from './config.js'
-
 // Error codes for scripting/automation
 export const ErrorCodes = {
   // Configuration errors (1xx)
   NOT_CONFIGURED: 100,
   INVALID_API_KEY: 101,
   MISSING_API_KEY: 102,
-
   // License errors (2xx)
   LICENSE_REQUIRED: 200,
   LICENSE_EXPIRED: 201,
   LICENSE_INVALID: 202,
-
   // File system errors (3xx)
   FILE_NOT_FOUND: 300,
   PERMISSION_DENIED: 301,
   DIRECTORY_NOT_FOUND: 302,
-
   // AI/API errors (4xx)
   API_ERROR: 400,
   API_RATE_LIMITED: 401,
   API_TIMEOUT: 402,
   API_INVALID_RESPONSE: 403,
-
   // Context errors (5xx)
   CONTEXT_NOT_INITIALIZED: 500,
   CONTEXT_CORRUPTED: 501,
   CONTEXT_PARSE_ERROR: 502,
-
   // General errors (9xx)
   UNKNOWN_ERROR: 999
 }
-
 // User-friendly error messages
 const ErrorMessages = {
   [ErrorCodes.NOT_CONFIGURED]: 'LK is not configured. Run: lk setup',
@@ -57,7 +49,6 @@ const ErrorMessages = {
   [ErrorCodes.CONTEXT_PARSE_ERROR]: 'Failed to parse LK context',
   [ErrorCodes.UNKNOWN_ERROR]: 'An unexpected error occurred'
 }
-
 /**
  * Custom error class for LK errors
  */
@@ -65,17 +56,14 @@ export class LKError extends Error {
   constructor(code, message = null, details = null) {
     const msg = message || ErrorMessages[code] || ErrorMessages[ErrorCodes.UNKNOWN_ERROR]
     super(msg)
-
     this.name = 'LKError'
     this.code = code
     this.details = details
-
     // Capture stack trace
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, LKError)
     }
   }
-
   /**
    * Get a user-friendly error message
    */
@@ -86,7 +74,6 @@ export class LKError extends Error {
     }
     return msg
   }
-
   /**
    * Get error info for logging
    */
@@ -99,7 +86,6 @@ export class LKError extends Error {
     }
   }
 }
-
 /**
  * Wrap an async function with error handling
  * @param {Function} fn - Async function to wrap
@@ -108,7 +94,6 @@ export class LKError extends Error {
  */
 export function withErrorHandling(fn, options = {}) {
   const { silent = false, exitOnError = false } = options
-
   return async (...args) => {
     try {
       return await fn(...args)
@@ -117,7 +102,6 @@ export function withErrorHandling(fn, options = {}) {
     }
   }
 }
-
 /**
  * Handle an error with logging and optional exit
  * @param {Error} error - The error to handle
@@ -125,14 +109,12 @@ export function withErrorHandling(fn, options = {}) {
  */
 export function handleError(error, options = {}) {
   const { silent = false, exitOnError = false, context = '' } = options
-
   // Log the error
   if (error instanceof LKError) {
     log('ERROR', `[${error.code}] ${error.message}`, error.details || '')
   } else {
     log('ERROR', error.message, error.stack)
   }
-
   // Print user message unless silent
   if (!silent) {
     const prefix = context ? `${context}: ` : ''
@@ -142,43 +124,34 @@ export function handleError(error, options = {}) {
       console.error(`${prefix}${error.message}`)
     }
   }
-
   // Exit if requested
   if (exitOnError) {
     const code = error instanceof LKError ? error.code : 1
     process.exit(code)
   }
-
   return error
 }
-
 /**
  * Create specific error types for common scenarios
  */
 export function createConfigError(message = null) {
   return new LKError(ErrorCodes.NOT_CONFIGURED, message)
 }
-
 export function createApiKeyError(message = null) {
   return new LKError(ErrorCodes.INVALID_API_KEY, message)
 }
-
 export function createLicenseError(code = ErrorCodes.LICENSE_REQUIRED, message = null) {
   return new LKError(code, message)
 }
-
 export function createApiError(message = null, details = null) {
   return new LKError(ErrorCodes.API_ERROR, message, details)
 }
-
 export function createFileError(code = ErrorCodes.FILE_NOT_FOUND, path = null) {
   return new LKError(code, null, path)
 }
-
 export function createContextError(code = ErrorCodes.CONTEXT_NOT_INITIALIZED, message = null) {
   return new LKError(code, message)
 }
-
 /**
  * Retry an async operation with exponential backoff
  * @param {Function} fn - Async function to retry
@@ -192,33 +165,27 @@ export async function withRetry(fn, options = {}) {
     maxDelay = 10000,
     retryOn = [ErrorCodes.API_RATE_LIMITED, ErrorCodes.API_TIMEOUT]
   } = options
-
   let lastError
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn()
     } catch (error) {
       lastError = error
-
       // Check if we should retry
       const shouldRetry = error instanceof LKError
         ? retryOn.includes(error.code)
         : false
-
       if (!shouldRetry || attempt === maxRetries) {
         throw error
       }
-
       // Calculate delay with exponential backoff
       const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay)
       log('ERROR', `Retry ${attempt + 1}/${maxRetries} after ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
-
   throw lastError
 }
-
 /**
  * Safe wrapper for JSON parsing
  * @param {string} text - Text to parse
@@ -232,7 +199,6 @@ export function safeJsonParse(text, fallback = null) {
     return fallback
   }
 }
-
 /**
  * Check if error is a specific LK error code
  */

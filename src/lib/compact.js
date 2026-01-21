@@ -50,16 +50,7 @@ export function programmaticCompact(code,ext){
 }
 function compactJS(code){
   let c=code
-  c=c.replace(/^\s*['"]use strict['"];?\s*$/gm,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
-  c=c.replace(/ *([=\-<>&|!:,;{}()\[\]]) */g,'$1')
-  c=c.replace(/\{ +/g,'{').replace(/ +\}/g,'}')
-  c=c.replace(/\( +/g,'(').replace(/ +\)/g,')')
-  c=c.replace(/\[ +/g,'[').replace(/ +\]/g,']')
-  c=c.replace(/\b(const|let|var|function|return|if|else|for|while|export|from|async|await|class|extends|new|throw|try|catch|finally|typeof|instanceof|of|in)\b(?=[^\s\w])/g,'$1 ')
-  c=c.replace(/\bimport\b(?!\.meta)(?=[^\s\w])/g,'import ')
-  c=c.replace(/([^\s\w])(?=\b(const|let|var|function|return|if|else|for|while|export|from|async|await|class|extends|new|throw|try|catch|finally|typeof|instanceof|of|in)\b)/g,'$1 ')
-  c=c.replace(/\( import\.meta/g,'(import.meta')
+  c=c.split('\n').filter(l=>l.trim()).join('\n')
   return{code:c,needsAI:true}
 }
 function compactPY(code){
@@ -160,9 +151,7 @@ function compactSQL(code){
   return{code:c,needsAI:false}
 }
 const COMPACT_PROMPT=`${PURE_MODE_INSTRUCTIONS}
-
 Compact this code. Output ONLY the compacted code. No markdown, no explanations.
-
 %CODE%`
 function validateJS(code){
   const tmp=path.join(os.tmpdir(),`lk-validate-${Date.now()}.js`)

@@ -3,10 +3,8 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-
 // Max settings file size (1MB) to prevent DoS from corrupted files
 const MAX_SETTINGS_SIZE = 1024 * 1024
-
 // CLI-specific configurations
 const CLI_CONFIG = {
   claude: {
@@ -22,18 +20,14 @@ const CLI_CONFIG = {
     name: 'Gemini CLI'
   }
 }
-
 const ALL_CLIS = Object.keys(CLI_CONFIG)
-
 function getConfig(cli) {
   return CLI_CONFIG[cli] || CLI_CONFIG.claude
 }
-
 function getSourcePath() {
   const __dirname = dirname(fileURLToPath(import.meta.url))
   return join(__dirname, '..', 'cli.js')
 }
-
 async function loadSettings(cli) {
   const { dir } = getConfig(cli)
   const settingsPath = join(dir, 'settings.json')
@@ -50,13 +44,11 @@ async function loadSettings(cli) {
     return {}
   }
 }
-
 async function saveSettings(cli, settings) {
   const { dir } = getConfig(cli)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, 'settings.json'), JSON.stringify(settings, null, 2))
 }
-
 function isLkHook(command, type) {
   if (!command) return false
   // Match lk command but not other commands containing 'lk'
@@ -67,11 +59,9 @@ function isLkHook(command, type) {
   }
   return isLk && command.includes(type)
 }
-
 function hasLkHook(hooks, type) {
   return hooks?.some(h => h.hooks?.some(hh => isLkHook(hh.command, type)))
 }
-
 function removeLkHooks(hooks, type) {
   if (!hooks) return []
   return hooks
@@ -81,20 +71,16 @@ function removeLkHooks(hooks, type) {
     }))
     .filter(h => h.hooks && h.hooks.length > 0)
 }
-
 async function enableSingleCli(cli, silent = false) {
   const { dir, promptEvent, stopEvent, name } = getConfig(cli)
-
   // Skip if CLI config dir doesn't exist (CLI not installed)
   if (!existsSync(dir)) {
     if (!silent) console.log(`Skipped ${name} (not installed)`)
     return { skipped: true }
   }
-
   try {
     const settings = await loadSettings(cli)
     settings.hooks = settings.hooks || {}
-
     let expandCmd, syncCmd, sessionCmd
     const lkBin = '/usr/local/bin/lk'
     const jsonFlag = cli === 'gemini' ? ' --json' : ''
@@ -108,9 +94,7 @@ async function enableSingleCli(cli, silent = false) {
       syncCmd = `${lkBin} sync`
       sessionCmd = `${lkBin} session-info${jsonFlag} || true`
     }
-
     let added = false
-
     settings.hooks.SessionStart = settings.hooks.SessionStart || []
     const hasSessionHook = settings.hooks.SessionStart.some(h => h.hooks?.some(hh =>
       hh.command?.includes('session-info') || hh.command?.includes('LK context loaded')
@@ -122,7 +106,6 @@ async function enableSingleCli(cli, silent = false) {
       })
       added = true
     }
-
     // Prompt hook (expand prompt with context) - UserPromptSubmit for Claude, BeforeAgent for Gemini
     settings.hooks[promptEvent] = settings.hooks[promptEvent] || []
     if (!hasLkHook(settings.hooks[promptEvent], 'expand') && !hasLkHook(settings.hooks[promptEvent], 'context')) {
@@ -132,7 +115,6 @@ async function enableSingleCli(cli, silent = false) {
       })
       added = true
     }
-
     // Stop/SessionEnd hook
     settings.hooks[stopEvent] = settings.hooks[stopEvent] || []
     if (!hasLkHook(settings.hooks[stopEvent], 'sync')) {
@@ -142,7 +124,6 @@ async function enableSingleCli(cli, silent = false) {
       })
       added = true
     }
-
     // Remove legacy hooks
     if (settings.hooks.Start) delete settings.hooks.Start
     // Migrate from SessionStart to prompt event (remove old context hooks)
@@ -159,9 +140,7 @@ async function enableSingleCli(cli, silent = false) {
       })
       added = true
     }
-
     await saveSettings(cli, settings)
-
     if (!silent) {
       if (added) {
         console.log(`✓ ${name}`)
@@ -169,32 +148,25 @@ async function enableSingleCli(cli, silent = false) {
         console.log(`✓ ${name} (already enabled)`)
       }
     }
-
     return { added }
   } catch (err) {
     if (!silent) console.log(`✗ ${name}: ${err.message}`)
     return { error: err.message }
   }
 }
-
 async function disableSingleCli(cli, silent = false) {
   const { dir, promptEvent, stopEvent, name } = getConfig(cli)
-
   if (!existsSync(dir)) {
     if (!silent) console.log(`Skipped ${name} (not installed)`)
     return { skipped: true }
   }
-
   try {
     const settings = await loadSettings(cli)
-
     if (!settings.hooks) {
       if (!silent) console.log(`✓ ${name} (no hooks)`)
       return { removed: false }
     }
-
     let removed = false
-
     // Remove all LK hooks from prompt event (both expand and legacy context)
     if (hasLkHook(settings.hooks[promptEvent], 'expand') || hasLkHook(settings.hooks[promptEvent], 'context')) {
       settings.hooks[promptEvent] = removeLkHooks(settings.hooks[promptEvent], 'expand')
@@ -202,7 +174,6 @@ async function disableSingleCli(cli, silent = false) {
       if (settings.hooks[promptEvent]?.length === 0) delete settings.hooks[promptEvent]
       removed = true
     }
-
     // Remove all LK hooks from SessionStart (session-info, context, LK context)
     if (settings.hooks.SessionStart) {
       settings.hooks.SessionStart = settings.hooks.SessionStart.filter(h =>
@@ -215,37 +186,29 @@ async function disableSingleCli(cli, silent = false) {
       if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart
       removed = true
     }
-
     // Remove sync hooks from Stop/SessionEnd
     if (hasLkHook(settings.hooks[stopEvent], 'sync')) {
       settings.hooks[stopEvent] = removeLkHooks(settings.hooks[stopEvent], 'sync')
       if (settings.hooks[stopEvent].length === 0) delete settings.hooks[stopEvent]
       removed = true
     }
-
     if (Object.keys(settings.hooks).length === 0) delete settings.hooks
-
     await saveSettings(cli, settings)
-
     if (!silent) {
       console.log(removed ? `✓ ${name} disabled` : `✓ ${name} (already disabled)`)
     }
-
     return { removed }
   } catch (err) {
     if (!silent) console.log(`✗ ${name}: ${err.message}`)
     return { error: err.message }
   }
 }
-
 // Enable hooks - if no target, enable for all installed CLIs
 export async function enableHooks(target = null, silent = false) {
   const clis = target ? [target] : ALL_CLIS
-
   if (!target && !silent) {
     console.log(`Enabling hooks (${!process.pkg ? 'source' : 'binary'} mode)...\n`)
   }
-
   for (const cli of clis) {
     if (!CLI_CONFIG[cli]) {
       console.error(`Unknown CLI: ${cli}. Use: claude, gemini`)
@@ -253,18 +216,14 @@ export async function enableHooks(target = null, silent = false) {
     }
     await enableSingleCli(cli, silent)
   }
-
   if (!target && !silent) {
     console.log('\nHooks inject .lk context at session start and sync on end.')
   }
 }
-
 // Disable hooks - if no target, disable for all CLIs
 export async function disableHooks(target = null) {
   const clis = target ? [target] : ALL_CLIS
-
   if (!target) console.log('Disabling hooks...\n')
-
   for (const cli of clis) {
     if (!CLI_CONFIG[cli]) {
       console.error(`Unknown CLI: ${cli}. Use: claude, gemini`)
@@ -272,6 +231,5 @@ export async function disableHooks(target = null) {
     }
     await disableSingleCli(cli)
   }
-
   if (!target) console.log('\nRun "lk enable" to re-enable.')
 }
