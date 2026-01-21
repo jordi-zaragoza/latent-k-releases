@@ -126,17 +126,17 @@ Action: ${action}
 ${content ? `Content:\n${content.slice(0, 3000)}` : ''}
 Current .lk context:
 ${lkContent}
-Symbols (pick ONE):
-- "▸": Entry point, main/index
-- "⇄": Interface, API, commands, entry points
-- "λ": Core logic, utilities, helpers
-- "⚙": Config files
-- "⧫": Test files
-- "⊚": UI Component
-- "⟐": Schema, types, models
-- "◈": Background jobs, workers, queues
-- "⤳": Pipeline, workflow, process
-- "⚑": State management (store, reducer)
+Symbols (pick ONE based on PRIMARY purpose):
+- "▸": Entry point - main.js, index.js, app bootstrap, server start
+- "⇄": Interface - CLI commands, API routes, HTTP handlers, external contracts
+- "λ": Logic - utilities, helpers, pure functions, business logic, algorithms
+- "⚙": Config - settings, env, constants, feature flags
+- "⧫": Test - unit tests, integration tests, e2e tests, fixtures
+- "⊚": UI - React/Vue/Svelte components, templates, views
+- "⟐": Schema - types, interfaces, models, DB schemas, validation
+- "◈": Background - workers, queues, cron jobs, async processors
+- "⤳": Pipeline - ETL, build scripts, data transforms, workflows
+- "⚑": State - Redux stores, Vuex, Zustand, state machines
 Domain rules:
 - src/commands/*, src/cli/* → "cli"
 - src/lib/*, src/utils/* → "core"
@@ -145,12 +145,8 @@ Domain rules:
 - test/*, *.test.*, *.spec.* → "test"
 - Default: "core"
 IMPORTANT: If the file should be IGNORED (generated code, migrations, fixtures, minified, etc.), return {"ignore": true} instead.
-Respond with this JSON schema:
-{
-  "symbol": "string (one of: ▸, ⇄, λ, ⚙, ⧫, ⊚, ⟐, ◈, ⤳, ⚑)",
-  "description": "string (3-6 keywords) or null",
-  "domain": "string"
-}
+Respond JSON. description = concise docstring (1 line, ~10 words max):
+{"symbol": "▸|⇄|λ|⚙|⧫|⊚|⟐|◈|⤳|⚑", "description": "Syncs project context with AI", "domain": "string"}
 Or: {"ignore": true}`
 }
 /**
@@ -165,17 +161,17 @@ FILES TO ANALYZE:
 ${filesSection}
 Current .lk context:
 ${lkContent}
-Symbols (pick ONE per file):
-- "▸": Entry point, main/index
-- "⇄": Interface, API, commands, entry points
-- "λ": Core logic, utilities, helpers
-- "⚙": Config files
-- "⧫": Test files
-- "⊚": UI Component
-- "⟐": Schema, types, models
-- "◈": Background jobs, workers, queues
-- "⤳": Pipeline, workflow, process
-- "⚑": State management (store, reducer)
+Symbols (pick ONE per file based on PRIMARY purpose):
+- "▸": Entry point - main.js, index.js, app bootstrap, server start
+- "⇄": Interface - CLI commands, API routes, HTTP handlers, external contracts
+- "λ": Logic - utilities, helpers, pure functions, business logic, algorithms
+- "⚙": Config - settings, env, constants, feature flags
+- "⧫": Test - unit tests, integration tests, e2e tests, fixtures
+- "⊚": UI - React/Vue/Svelte components, templates, views
+- "⟐": Schema - types, interfaces, models, DB schemas, validation
+- "◈": Background - workers, queues, cron jobs, async processors
+- "⤳": Pipeline - ETL, build scripts, data transforms, workflows
+- "⚑": State - Redux stores, Vuex, Zustand, state machines
 Domain rules:
 - src/commands/*, src/cli/* → "cli"
 - src/lib/*, src/utils/* → "core"
@@ -183,12 +179,12 @@ Domain rules:
 - src/components/*, src/ui/* → "ui"
 - test/*, *.test.*, *.spec.* → "test"
 - Default: "core"
-IMPORTANT: If a file should be IGNORED (generated code, migrations, fixtures, minified, etc.), return "ignore": true instead of symbol/domain.
-Respond with a JSON array. Each element MUST have "file" matching the input filename:
+IMPORTANT: If a file should be IGNORED (generated code, migrations, fixtures, minified, etc.), return "ignore": true instead.
+Respond JSON array. description = concise docstring (1 line, ~10 words max):
 [
-  { "file": "path/to/file1.js", "symbol": "λ", "description": "keywords", "domain": "core" },
+  { "file": "path/to/file1.js", "symbol": "λ", "description": "Parses source files into AST tokens", "domain": "core" },
   { "file": "path/to/file2.js", "ignore": true },
-  { "file": "path/to/file3.js", "symbol": "⇄", "description": "keywords", "domain": "cli" }
+  { "file": "path/to/file3.js", "symbol": "⇄", "description": "Syncs project context with AI backend", "domain": "cli" }
 ]`
 }
 export async function analyzeFile({ lkContent, file, content, action }) {
