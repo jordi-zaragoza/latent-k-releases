@@ -15,302 +15,275 @@ import {
   MAX_FILES_PER_SYNC,
   prepareBatch, analyzeBatch, processBatchResults, processDeferredFiles
 } from '../lib/batch.js'
-// Thresholds for deferred project.lk regeneration
 const DEFAULT_FILE_THRESHOLD = 5
 const DEFAULT_DOMAIN_THRESHOLD = 2
 const REGEN_INTERVAL = 10
-/**
- * Sync only the project.lk file (no domain analysis)
- * Called at session start to avoid empty API calls and keep project context fresh
- * @returns {{ synced: boolean, error?: string }}
- */
 export async function syncProjectOnly() {
-  const cwd = process.cwd()
+  const c = process.cwd()
   log('SYNC', '=== Starting project-only sync ===')
-  // Check access (license or trial, verify email)
-  const userEmail = getClaudeUserEmail()
-  const access = await checkAccess(userEmail)
-  if (!access.allowed) {
-    log('SYNC', 'Access denied:', access.message)
-    return { synced: false, error: access.message }
+  const uE = getClaudeUserEmail()
+  const a = await checkAccess(uE)
+  if (!a.allowed) {
+    log('SYNC', 'Access denied:', a.message)
+    return { synced: false, error: a.message }
   }
   if (!isConfigured()) {
     log('SYNC', 'Not configured')
     return { synced: false, error: 'Not configured' }
   }
-  // Check if .lk exists
-  if (!fs.existsSync(path.join(cwd, '.lk'))) {
+  if (!fs.existsSync(path.join(c, '.lk'))) {
     log('SYNC', 'No .lk directory')
     return { synced: false, error: 'No context' }
   }
-  // Check if project needs regeneration
-  const currentProject = getProject(cwd)
-  const needsRegen = currentProject.includes('TODO') || currentProject.trim() === ''
-  if (!needsRegen) {
+  const cP = getProject(c)
+  const nR = cP.includes('TODO') || cP.trim() === ''
+  if (!nR) {
     log('SYNC', 'Project already up to date')
     return { synced: true }
   }
-  // Regenerate project.lk
   try {
-    const pkgPath = path.join(cwd, 'package.json')
-    const packageJson = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, 'utf8') : null
-    const globalPatterns = getIgnorePatterns()
-    const projectPatterns = loadIgnore(cwd)
-    const ignorePatterns = [...globalPatterns, ...projectPatterns]
-    const allFiles = getAllFiles(cwd).filter(f => !isIgnored(f, ignorePatterns))
-    const fullContext = buildContext(cwd)
-    log('SYNC', `Regenerating project.lk (${allFiles.length} files)...`)
-    const result = await generateProject({ files: allFiles, packageJson, context: fullContext })
-    setProject(cwd, result.lk, result.human)
+    const pP = path.join(c, 'package.json')
+    const pJ = fs.existsSync(pP) ? fs.readFileSync(pP, 'utf8') : null
+    const gP = getIgnorePatterns()
+    const prP = loadIgnore(c)
+    const iP = [...gP, ...prP]
+    const aF = getAllFiles(c).filter(f => !isIgnored(f, iP))
+    const fC = buildContext(c)
+    log('SYNC', `Regenerating project.lk (${aF.length} files)...`)
+    const r = await generateProject({ files: aF, packageJson: pJ, context: fC })
+    setProject(c, r.lk, r.human)
     log('SYNC', '=== Project sync complete ===')
     return { synced: true }
-  } catch (err) {
-    log('SYNC', `Failed to generate project.lk: ${err.message}`)
-    return { synced: false, error: err.message }
+  } catch (e) {
+    log('SYNC', `Failed to generate project.lk: ${e.message}`)
+    return { synced: false, error: e.message }
   }
 }
-export async function sync(options = {}) {
+export async function sync(o = {}) {
   log('HOOK', '#### Stop hook started ####')
-  const cwd = process.cwd()
+  const c = process.cwd()
   const {
-    regenerateProject = false,
-    quiet = false,
-    fileThreshold = DEFAULT_FILE_THRESHOLD,
-    domainThreshold = DEFAULT_DOMAIN_THRESHOLD,
-    all = false
-  } = options
-  const print = quiet ? () => {} : console.log.bind(console)
-  const printErr = quiet ? () => {} : console.error.bind(console)
+    regenerateProject: rP = false,
+    quiet: q = false,
+    fileThreshold: fT = DEFAULT_FILE_THRESHOLD,
+    domainThreshold: dT = DEFAULT_DOMAIN_THRESHOLD,
+    all: a = false
+  } = o
+  const p = q ? () => {} : console.log.bind(console)
+  const pE = q ? () => {} : console.error.bind(console)
   log('SYNC', '=== Starting sync ===')
-  log('SYNC', `Working directory: ${cwd}`)
-  // Block home/root directory entirely
-  if (isHomeOrRoot(cwd)) {
-    printErr('Cannot sync in home/root directory.')
+  log('SYNC', `Working directory: ${c}`)
+  if (isHomeOrRoot(c)) {
+    pE('Cannot sync in home/root directory.')
     process.exit(1)
   }
-  // Check access (license or trial, verify email)
-  const userEmail = getClaudeUserEmail()
-  const access = await checkAccess(userEmail)
-  if (!access.allowed) {
-    log('SYNC', 'Access denied:', access.message)
-    printErr(access.message)
+  const uE = getClaudeUserEmail()
+  const acc = await checkAccess(uE)
+  if (!acc.allowed) {
+    log('SYNC', 'Access denied:', acc.message)
+    pE(acc.message)
     process.exit(1)
   }
-  if (access.message) print(access.message)
+  if (acc.message) p(acc.message)
   log('SYNC', 'Access OK')
   if (!isConfigured()) {
     log('SYNC', 'Not configured')
-    printErr('Not configured. Run: lk setup')
+    pE('Not configured. Run: lk setup')
     process.exit(1)
   }
   log('SYNC', 'Config OK')
-  // Warn if directory doesn't look like a project (only when .lk/ doesn't exist)
-  if (!exists(cwd)) {
-    const validation = validateProjectDirectory(cwd)
-    if (!validation.valid) {
-      const reason = validation.reason === 'home_or_root'
+  if (!exists(c)) {
+    const v = validateProjectDirectory(c)
+    if (!v.valid) {
+      const rsn = v.reason === 'home_or_root'
         ? 'This looks like your home directory.'
-        : validation.reason === 'too_many_files'
-        ? `Found ${validation.count} code files (>500).`
+        : v.reason === 'too_many_files'
+        ? `Found ${v.count} code files (>500).`
         : 'No project markers found (package.json, .git, etc).'
-      print(`⚠ Warning: ${reason}`)
-      print('Press Ctrl+C within 3 seconds to cancel...')
+      p(`⚠ Warning: ${rsn}`)
+      p('Press Ctrl+C within 3 seconds to cancel...')
       await new Promise(r => setTimeout(r, 3000))
     }
   }
-  // Initialize .lk if needed
-  init(cwd)
-  // Load and generate ignore patterns
-  const globalPatterns = getIgnorePatterns()
-  const projectPatterns = loadIgnore(cwd)
-  log('SYNC', `Ignore patterns: ${globalPatterns.length} global + ${projectPatterns.length} project`)
-  if (!ignoreExists(cwd)) {
-    await generateProjectIgnore(cwd, globalPatterns, print, printErr)
+  init(c)
+  const gP = getIgnorePatterns()
+  const prP = loadIgnore(c)
+  log('SYNC', `Ignore patterns: ${gP.length} global + ${prP.length} project`)
+  if (!ignoreExists(c)) {
+    await generateProjectIgnore(c, gP, p, pE)
   }
-  const ignorePatterns = [...globalPatterns, ...loadIgnore(cwd)]
-  // Discover files to sync
-  const allFilesRaw = getAllFiles(cwd)
-  const allFiles = allFilesRaw.filter(f => !isIgnored(f, ignorePatterns))
-  log('SYNC', `Found ${allFilesRaw.length} code files, ${allFiles.length} after ignore filter`)
-  const unsynced = getUnsyncedFiles(cwd, allFiles)
-  const deleted = getDeletedFiles(cwd)
-  const nowIgnored = findNowIgnoredFiles(cwd, ignorePatterns)
-  log('SYNC', `Unsynced: ${unsynced.length}, Deleted: ${deleted.length}, Now ignored: ${nowIgnored.length}`)
-  if (unsynced.length === 0 && deleted.length === 0 && nowIgnored.length === 0 && !regenerateProject) {
-    print('✓ Everything is in sync')
+  const iP = [...gP, ...loadIgnore(c)]
+  const aFR = getAllFiles(c)
+  const aF = aFR.filter(f => !isIgnored(f, iP))
+  log('SYNC', `Found ${aFR.length} code files, ${aF.length} after ignore filter`)
+  const u = getUnsyncedFiles(c, aF)
+  const d = getDeletedFiles(c)
+  const nI = findNowIgnoredFiles(c, iP)
+  log('SYNC', `Unsynced: ${u.length}, Deleted: ${d.length}, Now ignored: ${nI.length}`)
+  if (u.length === 0 && d.length === 0 && nI.length === 0 && !rP) {
+    p('✓ Everything is in sync')
     log('SYNC', '=== Sync complete ===')
     return
   }
-  // Remove deleted and now-ignored files
-  const affectedDomains = new Set()
-  removeFiles(cwd, deleted, nowIgnored, affectedDomains, print)
-  // Process files in batches
-  const { synced, totalDeferred, deferredNew } = await processFiles(
-    cwd, unsynced, all, affectedDomains, print, printErr
+  const aD = new Set()
+  removeFiles(c, d, nI, aD, p)
+  const { synced: s, totalDeferred: tD, deferredNew: dN } = await processFiles(
+    c, u, a, aD, p, pE
   )
-  // Print summary
-  printSummary(synced, totalDeferred, deleted.length, nowIgnored.length, print)
-  // Handle project.lk regeneration
+  printSummary(s, tD, d.length, nI.length, p)
   await handleProjectRegeneration(
-    cwd, allFiles, synced, deferredNew.length, deleted.length, nowIgnored.length,
-    affectedDomains.size, regenerateProject, all, fileThreshold, domainThreshold,
-    print, printErr
+    c, aF, s, dN.length, d.length, nI.length,
+    aD.size, rP, a, fT, dT,
+    p, pE
   )
   log('SYNC', '=== Sync complete ===')
 }
-async function generateProjectIgnore(cwd, globalPatterns, print, printErr) {
+async function generateProjectIgnore(c, gP, p, pE) {
   log('SYNC', 'No project ignore file found, generating...')
   try {
-    const allFilesForIgnore = getAllFiles(cwd, cwd, { codeOnly: false })
-    const aiPatterns = await withSpinner('Analyzing project for ignore patterns...', () =>
-      generateIgnore({ files: allFilesForIgnore, globalPatterns })
+    const aFI = getAllFiles(c, c, { codeOnly: false })
+    const aIP = await withSpinner('Analyzing project for ignore patterns...', () =>
+      generateIgnore({ files: aFI, globalPatterns: gP })
     )
-    const globalSet = new Set(globalPatterns.map(p => p.replace(/^\*\*\//, '').replace(/\/\*\*$/, '')))
-    const projectOnly = aiPatterns.filter(p => {
-      if (p.startsWith('#')) return true
-      const normalized = p.replace(/^\*\*\//, '').replace(/\/\*\*$/, '')
-      return !globalSet.has(normalized)
+    const gS = new Set(gP.map(pat => pat.replace(/^\*\*\//, '').replace(/\/\*\*$/, '')))
+    const pO = aIP.filter(pat => {
+      if (pat.startsWith('#')) return true
+      const n = pat.replace(/^\*\*\//, '').replace(/\/\*\*$/, '')
+      return !gS.has(n)
     })
-    saveIgnore(cwd, projectOnly)
-    const count = projectOnly.filter(p => !p.startsWith('#')).length
-    print(count > 0
-      ? `✓ Generated .lk/ignore (${count} project-specific patterns)`
+    saveIgnore(c, pO)
+    const cnt = pO.filter(pat => !pat.startsWith('#')).length
+    p(cnt > 0
+      ? `✓ Generated .lk/ignore (${cnt} project-specific patterns)`
       : '✓ Created .lk/ignore (no project-specific patterns)')
-  } catch (err) {
-    log('SYNC', `Failed to generate ignore: ${err.message}`)
-    printErr(`✗ Failed to generate ignore: ${err.message}`)
+  } catch (e) {
+    log('SYNC', `Failed to generate ignore: ${e.message}`)
+    pE(`✗ Failed to generate ignore: ${e.message}`)
   }
 }
-function findNowIgnoredFiles(cwd, ignorePatterns) {
-  const allEntries = getAllEntries(cwd)
-  return Object.entries(allEntries)
-    .filter(([filePath]) => isIgnored(filePath, ignorePatterns))
-    .map(([filePath, entry]) => ({ ...entry, file: filePath }))
+function findNowIgnoredFiles(c, iP) {
+  const aE = getAllEntries(c)
+  return Object.entries(aE)
+    .filter(([fP]) => isIgnored(fP, iP))
+    .map(([fP, e]) => ({ ...e, file: fP }))
 }
-function removeFiles(cwd, deleted, nowIgnored, affectedDomains, print) {
-  for (const { file, domain } of deleted) {
-    log('SYNC', `Removing deleted file: ${file}`)
-    removeEntry(cwd, file)
-    if (domain) affectedDomains.add(domain)
+function removeFiles(c, del, nI, aD, p) {
+  for (const { file: f, domain: dom } of del) {
+    log('SYNC', `Removing deleted file: ${f}`)
+    removeEntry(c, f)
+    if (dom) aD.add(dom)
   }
-  for (const { file, domain } of nowIgnored) {
-    log('SYNC', `Removing ignored file: ${file}`)
-    removeEntry(cwd, file)
-    print(`⊘ ${file} (removed - now ignored)`)
-    if (domain) affectedDomains.add(domain)
+  for (const { file: f, domain: dom } of nI) {
+    log('SYNC', `Removing ignored file: ${f}`)
+    removeEntry(c, f)
+    p(`⊘ ${f} (removed - now ignored)`)
+    if (dom) aD.add(dom)
   }
 }
-async function processFiles(cwd, unsynced, all, affectedDomains, print, printErr) {
-  // Sort: modified first (by mtime), then new files
-  // Uses try/catch to handle files that may have been deleted between discovery and sort
-  const getMtime = (file) => {
+async function processFiles(c, u, a, aD, p, pE) {
+  const gM = (f) => {
     try {
-      return fs.statSync(path.join(cwd, file)).mtimeMs
+      return fs.statSync(path.join(c, f)).mtimeMs
     } catch {
-      return 0  // Deleted files sort to end
+      return 0
     }
   }
-  const sortByMtime = (a, b) => getMtime(b.file) - getMtime(a.file)
-  const modified = unsynced.filter(f => f.status === 'modified').sort(sortByMtime)
-  const newFiles = unsynced.filter(f => f.status === 'new').sort(sortByMtime)
-  const allToProcess = [...modified, ...newFiles]
-  const totalBatches = all ? Math.ceil(allToProcess.length / MAX_FILES_PER_SYNC) : 1
-  const filesToDefer = all ? [] : allToProcess.slice(MAX_FILES_PER_SYNC)
-  if (all && allToProcess.length > 0) {
-    print(`Processing ${allToProcess.length} files in ${totalBatches} batches...`)
+  const sBM = (x, y) => gM(y.file) - gM(x.file)
+  const mod = u.filter(f => f.status === 'modified').sort(sBM)
+  const nF = u.filter(f => f.status === 'new').sort(sBM)
+  const aTP = [...mod, ...nF]
+  const tB = a ? Math.ceil(aTP.length / MAX_FILES_PER_SYNC) : 1
+  const fTD = a ? [] : aTP.slice(MAX_FILES_PER_SYNC)
+  if (a && aTP.length > 0) {
+    p(`Processing ${aTP.length} files in ${tB} batches...`)
   }
-  let synced = 0
-  // Process batches
-  for (let batch = 0; batch < totalBatches; batch++) {
-    const start = batch * MAX_FILES_PER_SYNC
-    const filesToAnalyze = allToProcess.slice(start, start + MAX_FILES_PER_SYNC)
-    if (filesToAnalyze.length === 0) break
-    if (all && totalBatches > 1) print(`\n[Batch ${batch + 1}/${totalBatches}]`)
+  let s = 0
+  for (let b = 0; b < tB; b++) {
+    const st = b * MAX_FILES_PER_SYNC
+    const fTA = aTP.slice(st, st + MAX_FILES_PER_SYNC)
+    if (fTA.length === 0) break
+    if (a && tB > 1) p(`\n[Batch ${b + 1}/${tB}]`)
     try {
-      // Build context filtered for this batch's files (reduces tokens ~50%)
-      const batchFiles = filesToAnalyze.map(f => f.file)
-      const lkContent = buildContextForFiles(cwd, batchFiles)
-      const { filesForAI } = prepareBatch(cwd, filesToAnalyze)
-      const results = await analyzeBatch(lkContent, filesForAI)
-      const analyzedFiles = filesToAnalyze.slice(0, filesForAI.length)
-      const batchResult = processBatchResults(cwd, analyzedFiles, results, print, printErr)
-      synced += batchResult.synced
-      batchResult.affectedDomains.forEach(d => affectedDomains.add(d))
-    } catch (err) {
-      log('SYNC', `AI batch error: ${err.message}`)
-      printErr(`⚠ AI analysis failed for batch ${batch + 1}: ${err.message}`)
-      if (!all) filesToDefer.push(...filesToAnalyze)
+      const bF = fTA.map(f => f.file)
+      const lC = buildContextForFiles(c, bF)
+      const { filesForAI: fFAI } = prepareBatch(c, fTA)
+      const res = await analyzeBatch(lC, fFAI)
+      const aF = fTA.slice(0, fFAI.length)
+      const bR = processBatchResults(c, aF, res, p, pE)
+      s += bR.synced
+      bR.affectedDomains.forEach(dom => aD.add(dom))
+    } catch (e) {
+      log('SYNC', `AI batch error: ${e.message}`)
+      pE(`⚠ AI analysis failed for batch ${b + 1}: ${e.message}`)
+      if (!a) fTD.push(...fTA)
     }
   }
-  // Process deferred files
-  const deferredNew = filesToDefer.filter(f => f.status === 'new')
-  const deferredModified = filesToDefer.filter(f => f.status === 'modified')
-  const deferredDomains = processDeferredFiles(cwd, deferredNew, print, printErr)
-  deferredDomains.forEach(d => affectedDomains.add(d))
-  if (deferredModified.length > 0) {
-    print(`↻ ${deferredModified.length} modified files deferred to next sync`)
-    log('SYNC', `↻ Deferred ${deferredModified.length} modified files`)
+  const dN = fTD.filter(f => f.status === 'new')
+  const dM = fTD.filter(f => f.status === 'modified')
+  const dD = processDeferredFiles(c, dN, p, pE)
+  dD.forEach(dom => aD.add(dom))
+  if (dM.length > 0) {
+    p(`↻ ${dM.length} modified files deferred to next sync`)
+    log('SYNC', `↻ Deferred ${dM.length} modified files`)
   }
   return {
-    synced,
-    totalDeferred: deferredNew.length + deferredModified.length,
-    deferredNew
+    synced: s,
+    totalDeferred: dN.length + dM.length,
+    deferredNew: dN
   }
 }
-function printSummary(synced, totalDeferred, deletedCount, ignoredCount, print) {
-  const totalSynced = synced + (totalDeferred > 0 ? totalDeferred : 0)
-  print(`\nSynced ${totalSynced} files (${synced} analyzed` + (totalDeferred > 0 ? `, ${totalDeferred} deferred` : '') + ')')
-  if (deletedCount > 0 || ignoredCount > 0) {
-    const parts = []
-    if (deletedCount > 0) parts.push(`${deletedCount} deleted`)
-    if (ignoredCount > 0) parts.push(`${ignoredCount} ignored`)
-    print(`Removed ${parts.join(', ')} files`)
+function printSummary(s, tD, dC, iC, p) {
+  const tS = s + (tD > 0 ? tD : 0)
+  p(`\nSynced ${tS} files (${s} analyzed` + (tD > 0 ? `, ${tD} deferred` : '') + ')')
+  if (dC > 0 || iC > 0) {
+    const pts = []
+    if (dC > 0) pts.push(`${dC} deleted`)
+    if (iC > 0) pts.push(`${iC} ignored`)
+    p(`Removed ${pts.join(', ')} files`)
   }
 }
 async function handleProjectRegeneration(
-  cwd, allFiles, synced, deferredNewCount, deletedCount, ignoredCount,
-  domainsAffected, regenerateProject, all, fileThreshold, domainThreshold,
-  print, printErr
+  c, aF, s, dNC, dC, iC,
+  dA, rP, a, fT, dT,
+  p, pE
 ) {
-  const state = loadState(cwd)
-  state.syncCount = (state.syncCount || 0) + 1
-  const currentProject = getProject(cwd)
-  const totalChanges = synced + deferredNewCount + deletedCount + ignoredCount
-  log('SYNC', `Changes: ${totalChanges} files, ${domainsAffected} domains affected`)
-  // Check if threshold exceeded
-  if (totalChanges >= fileThreshold || domainsAffected >= domainThreshold) {
-    state.pendingRegen = true
-    state.pendingChanges = (state.pendingChanges || 0) + totalChanges
-    log('SYNC', `Threshold exceeded, marking pending (${state.pendingChanges} total changes)`)
+  const st = loadState(c)
+  st.syncCount = (st.syncCount || 0) + 1
+  const cP = getProject(c)
+  const tC = s + dNC + dC + iC
+  log('SYNC', `Changes: ${tC} files, ${dA} domains affected`)
+  if (tC >= fT || dA >= dT) {
+    st.pendingRegen = true
+    st.pendingChanges = (st.pendingChanges || 0) + tC
+    log('SYNC', `Threshold exceeded, marking pending (${st.pendingChanges} total changes)`)
   }
-  // Decide if we should regenerate now
-  const forceRegen = regenerateProject || all || currentProject.includes('TODO')
-  const intervalRegen = state.pendingRegen && state.syncCount % REGEN_INTERVAL === 0
-  const shouldRegenerate = forceRegen || intervalRegen
-  if (shouldRegenerate) {
-    let reason = '--regenerate-project flag'
-    if (!regenerateProject) {
-      if (all) reason = '--all flag'
-      else if (currentProject.includes('TODO')) reason = 'contains TODO'
-      else if (intervalRegen) reason = `${state.pendingChanges} changes over ${state.syncCount} syncs`
+  const fR = rP || a || cP.includes('TODO')
+  const iR = st.pendingRegen && st.syncCount % REGEN_INTERVAL === 0
+  const sR = fR || iR
+  if (sR) {
+    let rsn = '--regenerate-project flag'
+    if (!rP) {
+      if (a) rsn = '--all flag'
+      else if (cP.includes('TODO')) rsn = 'contains TODO'
+      else if (iR) rsn = `${st.pendingChanges} changes over ${st.syncCount} syncs`
     }
-    log('SYNC', `Generating project.lk (${reason})...`)
-    print('')
+    log('SYNC', `Generating project.lk (${rsn})...`)
+    p('')
     try {
-      const pkgPath = path.join(cwd, 'package.json')
-      const packageJson = fs.existsSync(pkgPath) ? fs.readFileSync(pkgPath, 'utf8') : null
-      const fullContext = buildContext(cwd)
-      const result = await withSpinner('Regenerating project.lk...', () =>
-        generateProject({ files: allFiles, packageJson, context: fullContext })
+      const pkP = path.join(c, 'package.json')
+      const pJ = fs.existsSync(pkP) ? fs.readFileSync(pkP, 'utf8') : null
+      const fC = buildContext(c)
+      const res = await withSpinner('Regenerating project.lk...', () =>
+        generateProject({ files: aF, packageJson: pJ, context: fC })
       )
-      setProject(cwd, result.lk, result.human)
-      print(`✓ Regenerated project.lk (${reason})`)
-      state.pendingRegen = false
-      state.pendingChanges = 0
-    } catch (err) {
-      log('SYNC', `Failed to generate project.lk: ${err.message}`)
-      printErr(`✗ Failed to generate project.lk: ${err.message}`)
+      setProject(c, res.lk, res.human)
+      p(`✓ Regenerated project.lk (${rsn})`)
+      st.pendingRegen = false
+      st.pendingChanges = 0
+    } catch (e) {
+      log('SYNC', `Failed to generate project.lk: ${e.message}`)
+      pE(`✗ Failed to generate project.lk: ${e.message}`)
     }
   }
-  saveState(cwd, state)
+  saveState(c, st)
 }

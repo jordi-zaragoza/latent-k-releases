@@ -411,11 +411,19 @@ program
           const st = loadStats(cwd)
           const ops = st.byOperationType || {}
           const expKeys = Object.keys(ops).filter(k => k.toLowerCase().includes('expand'))
-          let tUsed = 0
-          for (const k of expKeys) tUsed += ops[k].totalDurationMs || 0
+          let tUsed = 0, tokUsed = 0
+          for (const k of expKeys) {
+            tUsed += ops[k].totalDurationMs || 0
+            tokUsed += (ops[k].tokensSentEstimate || 0) + (ops[k].tokensReceivedEstimate || 0)
+          }
           if (tUsed >= 60000) {
-            const mins = Math.round(tUsed * 0.4 / 60000)
-            if (mins > 0) t = `${mins}min saved with LK context injection`
+            if (Math.random() < 0.5) {
+              const mins = Math.round(tUsed * 0.4 / 60000)
+              if (mins > 0) t = `${mins}min saved with LK context injection`
+            } else {
+              const toks = Math.round(tokUsed * 0.4 / 1000)
+              if (toks > 0) t = `${toks}k tokens saved with LK context injection`
+            }
           }
         }
       } catch {}
