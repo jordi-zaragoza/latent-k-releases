@@ -5,6 +5,7 @@ import { setup } from './commands/setup.js'
 import { sync } from './commands/sync.js'
 import { status } from './commands/status.js'
 import { stats } from './commands/stats.js'
+import { savings } from './commands/savings.js'
 import { update, checkMinVersion } from './commands/update.js'
 import { dev } from './commands/dev.js'
 import { enableHooks, disableHooks } from './commands/hooks.js'
@@ -23,7 +24,6 @@ import { sync as runSync, syncProjectOnly } from './commands/sync.js'
 import { join } from 'path'
 import { homedir } from 'os'
 import { readFileSync } from 'fs'
-// Pro tips shown randomly at session start
 const PRO_TIPS = [
   'Start your prompt with "lk" to inject fresh context anytime',
   'Use "!lk status" to see your current context health',
@@ -38,34 +38,33 @@ const PRO_TIPS = [
 ]
 function getClaudeUserEmail() {
   try {
-    const claudeConfigPath = join(homedir(), '.claude.json')
-    if (!existsSync(claudeConfigPath)) return null
-    const config = JSON.parse(readFileSync(claudeConfigPath, 'utf8'))
-    return config.oauthAccount?.emailAddress || null
+    const cCPath = join(homedir(), '.claude.json')
+    if (!existsSync(cCPath)) return null
+    const cfg = JSON.parse(readFileSync(cCPath, 'utf8'))
+    return cfg.oauthAccount?.emailAddress || null
   } catch {
     return null
   }
 }
 function getGeminiUserEmail() {
   try {
-    const geminiAccountsPath = join(homedir(), '.gemini', 'google_accounts.json')
-    if (!existsSync(geminiAccountsPath)) return null
-    const accounts = JSON.parse(readFileSync(geminiAccountsPath, 'utf8'))
-    return accounts.active || null
+    const gAPath = join(homedir(), '.gemini', 'google_accounts.json')
+    if (!existsSync(gAPath)) return null
+    const accts = JSON.parse(readFileSync(gAPath, 'utf8'))
+    return accts.active || null
   } catch {
     return null
   }
 }
-function terminalPrint(message) {
+function terminalPrint(msg) {
   try {
-    writeFileSync('/dev/tty', message + '\n')
+    writeFileSync('/dev/tty', msg + '\n')
   } catch {
-    // Fallback to stdout if no tty (e.g., Gemini CLI hooks)
-    console.log(message)
+    console.log(msg)
   }
 }
-const IS_BINARY = !!process.pkg  // true when running as compiled binary
-const DEV_MODE = !IS_BINARY      // dev mode only when running from source
+const IS_BINARY = !!process.pkg
+const DEV_MODE = !IS_BINARY
 program
   .name('lk')
   .description('Auto-sync context for AI coding assistants')
@@ -86,12 +85,12 @@ program
   .option('-d, --domain-threshold <n>', 'Auto-regenerate after N domains', parseInt)
   .option('--hash-only', 'Update hashes only (no AI calls)')
   .option('-a, --all', 'Re-sync all files (in batches of 10)')
-  .action((options) => sync({
-    regenerateProject: options.regenerateProject,
-    fileThreshold: options.fileThreshold,
-    domainThreshold: options.domainThreshold,
-    hashOnly: options.hashOnly,
-    all: options.all
+  .action((opts) => sync({
+    regenerateProject: opts.regenerateProject,
+    fileThreshold: opts.fileThreshold,
+    domainThreshold: opts.domainThreshold,
+    hashOnly: opts.hashOnly,
+    all: opts.all
   }))
 program
   .command('status')
@@ -102,32 +101,35 @@ program
   .description('Show LLM usage statistics')
   .option('--json', 'Output raw JSON')
   .option('--reset', 'Reset statistics')
-  .action((options) => stats({
-    json: options.json,
-    reset: options.reset
+  .action((opts) => stats({
+    json: opts.json,
+    reset: opts.reset
   }))
 program
-  .command('pure [action] [file]')
+  .command('savings')
+  .description('Show estimated time/token savings from expand')
+  .option('--json', 'Output raw JSON')
+  .action((opts) => savings({ json: opts.json }))
+program
+  .command('pure [action]')
   .description('Toggle pure mode (m2m coding style)')
-  .option('-n, --dry-run','Preview changes without modifying')
   .option('-l, --list','List all files in status')
-  .option('-a, --all','Compact all files (unlimited AI)')
-  .action((action,file,opts)=>pure(action,{dryRun:opts.dryRun,file,list:opts.list,all:opts.all}))
+  .action((a,opts)=>pure(a,{list:opts.list}))
 program
   .command('update')
   .description('Update lk to latest version')
   .option('-f, --force', 'Force update even if already on latest version')
-  .action((options) => update({ force: options.force }))
+  .action((opts) => update({ force: opts.force }))
 program
   .command('enable')
   .description('Enable CLI hooks (all CLIs by default)')
   .option('-t, --target <cli>', 'Target specific CLI: claude or gemini')
-  .action((options) => enableHooks(options.target || null))
+  .action((opts) => enableHooks(opts.target || null))
 program
   .command('disable')
   .description('Disable CLI hooks (all CLIs by default)')
   .option('-t, --target <cli>', 'Target specific CLI: claude or gemini')
-  .action((options) => disableHooks(options.target || null))
+  .action((opts) => disableHooks(opts.target || null))
 program
   .command('clean')
   .description('Remove lk data (context, license, config)')
@@ -138,86 +140,79 @@ program
   .option('--logs', 'Remove debug logs')
   .option('-a, --all', 'Remove everything')
   .option('-y, --yes', 'Skip confirmation')
-  .action((options) => clean({
-    context: options.context,
-    license: options.license,
-    cfg: options.config,
-    device: options.device,
-    logs: options.logs,
-    all: options.all,
-    yes: options.yes
+  .action((opts) => clean({
+    context: opts.context,
+    license: opts.license,
+    cfg: opts.config,
+    device: opts.device,
+    logs: opts.logs,
+    all: opts.all,
+    yes: opts.yes
   }))
 program
-  .command('ignore [pattern]')
+  .command('ignore [p]')
   .description('Manage ignore patterns')
   .option('-a, --add <pattern>', 'Add pattern to ignore list')
   .option('-r, --remove <pattern>', 'Remove pattern from ignore list')
   .option('-l, --list', 'List all ignored files')
-  .action((pattern, options) => {
-    const cwd = process.cwd()
-    if (!ignoreExists(cwd)) {
+  .action((p, opts) => {
+    const c = process.cwd()
+    if (!ignoreExists(c)) {
       console.log('No ignore file found. Run "lk sync" first.')
       return
     }
-    const projectPatterns = loadIgnore(cwd)
-    // Add pattern
-    if (options.add) {
-      if (projectPatterns.includes(options.add)) {
-        console.log(`Pattern already exists: ${options.add}`)
+    const pPats = loadIgnore(c)
+    if (opts.add) {
+      if (pPats.includes(opts.add)) {
+        console.log(`Pattern already exists: ${opts.add}`)
       } else {
-        projectPatterns.push(options.add)
-        saveIgnore(cwd, projectPatterns)
-        console.log(`Added: ${options.add}`)
+        pPats.push(opts.add)
+        saveIgnore(c, pPats)
+        console.log(`Added: ${opts.add}`)
       }
       return
     }
-    // Remove pattern
-    if (options.remove) {
-      const idx = projectPatterns.indexOf(options.remove)
-      if (idx === -1) {
-        console.log(`Pattern not found: ${options.remove}`)
+    if (opts.remove) {
+      const i = pPats.indexOf(opts.remove)
+      if (i === -1) {
+        console.log(`Pattern not found: ${opts.remove}`)
       } else {
-        projectPatterns.splice(idx, 1)
-        saveIgnore(cwd, projectPatterns)
-        console.log(`Removed: ${options.remove}`)
+        pPats.splice(i, 1)
+        saveIgnore(c, pPats)
+        console.log(`Removed: ${opts.remove}`)
       }
       return
     }
-    // Calculate ignored files for both views
-    const globalPatterns = getIgnorePatterns()
-    const allPatterns = [...globalPatterns, ...projectPatterns]
-    const allFiles = getAllFiles(cwd)
-    const ignoredByGlobal = allFiles.filter(f => isIgnored(f, globalPatterns))
-    const ignoredByProject = allFiles.filter(f => isIgnored(f, projectPatterns))
-    const ignoredFiles = allFiles.filter(f => isIgnored(f, allPatterns))
-    // List ignored files
-    if (options.list) {
-      console.log(`Ignored files: ${ignoredByGlobal.length} global, ${ignoredByProject.length} project\n`)
-      if (ignoredFiles.length === 0) {
+    const gPats = getIgnorePatterns()
+    const aPats = [...gPats, ...pPats]
+    const aFs = getAllFiles(c)
+    const iBG = aFs.filter(f => isIgnored(f, gPats))
+    const iBP = aFs.filter(f => isIgnored(f, pPats))
+    const iFs = aFs.filter(f => isIgnored(f, aPats))
+    if (opts.list) {
+      console.log(`Ignored files: ${iBG.length} global, ${iBP.length} project\n`)
+      if (iFs.length === 0) {
         console.log('No files are being ignored.')
       } else {
-        ignoredFiles.forEach(f => console.log(`  ${f}`))
+        iFs.forEach(f => console.log(`  ${f}`))
       }
       return
     }
-    // Show patterns
-    console.log(`Global patterns (${globalPatterns.length}): ${ignoredByGlobal.length} files`)
-    if (globalPatterns.length > 0) {
-      globalPatterns.forEach(p => console.log(`  ${p}`))
+    console.log(`Global patterns (${gPats.length}): ${iBG.length} files`)
+    if (gPats.length > 0) {
+      gPats.forEach(p => console.log(`  ${p}`))
     }
     console.log('')
-    console.log(`Project patterns (${projectPatterns.length}): ${ignoredByProject.length} files`)
-    if (projectPatterns.length > 0) {
-      projectPatterns.forEach(p => console.log(`  ${p}`))
+    console.log(`Project patterns (${pPats.length}): ${iBP.length} files`)
+    if (pPats.length > 0) {
+      pPats.forEach(p => console.log(`  ${p}`))
     }
   })
-// Expand command - available in binary (used by hooks)
 program
-  .command('expand [prompt]')
+  .command('expand [p]')
   .description('Expand prompt with context (for hooks)')
   .option('--debug', 'Show debug info to stderr')
-  .action((prompt, options) => expandCommand(prompt, { debug: options.debug }))
-// Dev commands only available when running from source (not compiled binary)
+  .action((p, opts) => expandCommand(p, { debug: opts.debug }))
 if (!IS_BINARY) {
   program
     .command('context')
@@ -228,91 +223,85 @@ if (!IS_BINARY) {
     .option('-p, --project', 'Only project.lk')
     .option('-H, --header', 'Only project_h.lk (project summary)')
     .option('-d, --domain <name>', 'Filter by domain')
-    .action((options) => {
-      const cwd = process.cwd()
-      if (!exists(cwd)) {
+    .action((opts) => {
+      const c = process.cwd()
+      if (!exists(c)) {
         console.log('[No LK context - run: lk sync]')
         process.exit(0)
       }
-      let context = ''
-      // Get content
-      if (options.syntax) {
-        context = getSyntax(cwd)
-      } else if (options.project) {
-        context = getProject(cwd)
-      } else if (options.header) {
-        context = getProjectHeader(cwd)
-      } else if (options.domain) {
-        const domain = loadDomain(cwd, options.domain)
-        if (!domain) {
-          console.log(`Domain not found: ${options.domain}`)
-          console.log(`Available domains: ${listDomains(cwd).join(', ')}`)
+      let ctx = ''
+      if (opts.syntax) {
+        ctx = getSyntax(c)
+      } else if (opts.project) {
+        ctx = getProject(c)
+      } else if (opts.header) {
+        ctx = getProjectHeader(c)
+      } else if (opts.domain) {
+        const d = loadDomain(c, opts.domain)
+        if (!d) {
+          console.log(`Domain not found: ${opts.domain}`)
+          console.log(`Available domains: ${listDomains(c).join(', ')}`)
           process.exit(1)
         }
-        context = buildDomain(domain.id, domain.domain, domain.vibe, domain.groups, domain.invariants)
+        ctx = buildDomain(d.id, d.domain, d.vibe, d.groups, d.invariants)
       } else {
-        context = options.verbose ? buildVerboseContext(cwd) : buildContext(cwd)
+        ctx = opts.verbose ? buildVerboseContext(c) : buildContext(c)
       }
-      // Minify unless verbose or already minified (full context case)
-      if (!options.verbose && (options.syntax || options.project || options.header || options.domain)) {
-        context = minifyContext(context)
+      if (!opts.verbose && (opts.syntax || opts.project || opts.header || opts.domain)) {
+        ctx = minifyContext(ctx)
       }
-      if (options.tokens) {
-        const stats = countTokens(context)
-        console.log(`Tokens: ~${stats.tokens.toLocaleString()}`)
-        console.log(`Chars:  ${stats.chars.toLocaleString()}`)
-        console.log(`Lines:  ${stats.lines.toLocaleString()}`)
+      if (opts.tokens) {
+        const s = countTokens(ctx)
+        console.log(`Tokens: ~${s.tokens.toLocaleString()}`)
+        console.log(`Chars:  ${s.chars.toLocaleString()}`)
+        console.log(`Lines:  ${s.lines.toLocaleString()}`)
       } else {
-        console.log(context)
+        console.log(ctx)
       }
     })
   program
-    .command('benchmark [question]')
+    .command('benchmark [q]')
     .description('[DEV] Compare token usage with/without LK context')
     .option('-s, --scenarios', 'Run all predefined scenarios')
     .option('-r, --run', 'Actually call the API (not just estimate)')
     .option('-v, --verbose', 'Show full responses')
-    .action((question, options) => benchmark(question, {
-      scenarios: options.scenarios,
-      run: options.run,
-      verbose: options.verbose
+    .action((q, opts) => benchmark(q, {
+      scenarios: opts.scenarios,
+      run: opts.run,
+      verbose: opts.verbose
     }))
 }
 program
   .command('session-info')
   .description('Print session start info (for hooks)')
   .option('--json', 'Output JSON for Gemini CLI hooks')
-  .action(async (options) => {
-    const jsonMode = options.json
-    // Helper to output message (JSON for Gemini, text for Claude)
-    const output = (msg, isError = false) => {
-      if (jsonMode) {
+  .action(async (opts) => {
+    const jM = opts.json
+    const output = (msg, iE = false) => {
+      if (jM) {
         console.log(JSON.stringify({ systemMessage: msg }))
       } else {
         terminalPrint(msg)
       }
     }
-    const green = '\x1b[32m'
-    const yellow = '\x1b[33m'
-    const red = '\x1b[31m'
-    const reset = '\x1b[0m'
-    // Check for true color support
-    const supportsTrueColor = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit'
-    const cyan = '\x1b[36m'
-    const lkBlue = supportsTrueColor ? '\x1b[38;2;0;212;255m' : cyan
-    const lilac = supportsTrueColor ? '\x1b[38;2;168;85;247m' : '\x1b[35m'
-    // Diagonal gradient function (cyan #00d4ff to purple #a855f7)
-    const gradientChar = (char, row, col, rows, cols) => {
-      const t = (row / rows) * 0.1 + (col / cols) * 0.9
-      const r = Math.round(0 + t * 168)
-      const g = Math.round(212 - t * 127)
-      const b = Math.round(255 - t * 8)
-      return `\x1b[38;2;${r};${g};${b}m${char}`
+    const g = '\x1b[32m'
+    const y = '\x1b[33m'
+    const r = '\x1b[31m'
+    const rst = '\x1b[0m'
+    const sTC = process.env.COLORTERM === 'truecolor' || process.env.COLORTERM === '24bit'
+    const c = '\x1b[36m'
+    const lb = sTC ? '\x1b[38;2;0;212;255m' : c
+    const llc = sTC ? '\x1b[38;2;168;85;247m' : '\x1b[35m'
+    const gradientChar = (ch, rw, cl, rws, cls) => {
+      const t = (rw / rws) * 0.1 + (cl / cls) * 0.9
+      const R = Math.round(0 + t * 168)
+      const G = Math.round(212 - t * 127)
+      const B = Math.round(255 - t * 8)
+      return `\x1b[38;2;${R};${G};${B}m${ch}`
     }
-    // ASCII banner (only for Claude/tty mode)
-    if (!jsonMode) {
-      const isPure = getPureMode()
-      const banner = isPure ? [
+    if (!jM) {
+      const iP = getPureMode()
+      const b = iP ? [
         '╔═══════════════════════════════════╗',
         '║    ◈ P U R E   M O D E ◈  L K     ║',
         '╚═══════════════════════════════════╝'
@@ -322,122 +311,107 @@ program
         '╚═══════════════════════════════════╝'
       ]
       terminalPrint('')
-      if (supportsTrueColor) {
-        const rows = banner.length - 1
-        const cols = banner[0].length - 1
-        if (isPure) {
-          // Pure mode: white/silver gradient
-          banner.forEach((line, row) => {
-            const coloredLine = [...line].map((char, col) => {
-              const t = col / cols
+      if (sTC) {
+        const rws = b.length - 1
+        const cls = b[0].length - 1
+        if (iP) {
+          b.forEach((ln, rw) => {
+            const cLn = [...ln].map((ch, cl) => {
+              const t = cl / cls
               const v = Math.round(180 + t * 75)
-              return `\x1b[38;2;${v};${v};${v}m${char}`
+              return `\x1b[38;2;${v};${v};${v}m${ch}`
             }).join('')
-            terminalPrint(coloredLine + reset)
+            terminalPrint(cLn + rst)
           })
         } else {
-          banner.forEach((line, row) => {
-            const coloredLine = [...line].map((char, col) => gradientChar(char, row, col, rows, cols)).join('')
-            terminalPrint(coloredLine + reset)
+          b.forEach((ln, rw) => {
+            const cLn = [...ln].map((ch, cl) => gradientChar(ch, rw, cl, rws, cls)).join('')
+            terminalPrint(cLn + rst)
           })
         }
       } else {
-        banner.forEach(line => terminalPrint(`${cyan}${line}${reset}`))
+        b.forEach(ln => terminalPrint(`${c}${ln}${rst}`))
       }
     }
-    // Check minimum version requirement (skip in dev mode)
     if (!DEV_MODE) {
-      const versionCheck = await checkMinVersion()
-      if (!versionCheck.ok) {
-        output(jsonMode
-          ? `❌ Update required: v${versionCheck.minVersion} (current: v${versionCheck.currentVersion}) - run: lk update`
-          : `${red}Update required: v${versionCheck.minVersion} (current: v${versionCheck.currentVersion})${reset}\n${yellow}Run: lk update${reset}`, true)
+      const vC = await checkMinVersion()
+      if (!vC.ok) {
+        output(jM
+          ? `❌ Update required: v${vC.minVersion} (current: v${vC.currentVersion}) - run: lk update`
+          : `${r}Update required: v${vC.minVersion} (current: v${vC.currentVersion})${rst}\n${y}Run: lk update${rst}`, true)
         return
       }
     }
-    // Check license with email verification (skip in dev mode)
-    // Priority: Claude email first, fallback to Gemini if no Claude
     if (!DEV_MODE) {
-      const userEmail = getClaudeUserEmail() || getGeminiUserEmail()
-      const access = await checkAccess(userEmail)
-      if (!access.allowed) {
-        output(jsonMode ? `❌ ${access.message}` : `${red}${access.message}${reset}`, true)
+      const uE = getClaudeUserEmail() || getGeminiUserEmail()
+      const a = await checkAccess(uE)
+      if (!a.allowed) {
+        output(jM ? `❌ ${a.message}` : `${r}${a.message}${rst}`, true)
         return
       }
-      // Show license warning if present
-      if (access.message && !jsonMode) {
-        terminalPrint(`${yellow}${access.message}${reset}`)
+      if (a.message && !jM) {
+        terminalPrint(`${y}${a.message}${rst}`)
       }
     }
-    // Check API key configuration
     if (!isConfigured()) {
-      output(jsonMode ? '❌ No API key - run: lk setup' : `${red}No API key - Stop Claude and run: lk setup${reset}`, true)
+      output(jM ? '❌ No API key - run: lk setup' : `${r}No API key - Stop Claude and run: lk setup${rst}`, true)
       return
     }
-    // Block home/root directory (always invalid, even if .lk/ exists)
     if (isHomeOrRoot(process.cwd())) {
-      const msg = 'Cannot run in home/root directory. Use "lk clean -c" to remove .lk/ if needed.'
-      output(jsonMode ? `❌ ${msg}` : `${red}${msg}${reset}`, true)
+      const m = 'Cannot run in home/root directory. Use "lk clean -c" to remove .lk/ if needed.'
+      output(jM ? `❌ ${m}` : `${r}${m}${rst}`, true)
       return
     }
-    // Sync context: full sync if no .lk, project-only if exists
-    const provider = getAiProvider()
-    let syncResult
+    const pr = getAiProvider()
+    let sR
     if (!existsSync('.lk')) {
-      // Validate directory before auto-sync
-      const validation = validateProjectDirectory(process.cwd())
-      if (!validation.valid) {
-        const msg = validation.reason === 'home_or_root'
+      const v = validateProjectDirectory(process.cwd())
+      if (!v.valid) {
+        const m = v.reason === 'home_or_root'
           ? 'Not a project directory. Run "lk sync" manually if intended.'
-          : validation.reason === 'too_many_files'
-          ? `Found ${validation.count} files. Run "lk sync" manually to confirm.`
+          : v.reason === 'too_many_files'
+          ? `Found ${v.count} files. Run "lk sync" manually to confirm.`
           : 'No project detected. Run "lk sync" manually if intended.'
-        output(jsonMode ? `⚠ ${msg}` : `${yellow}${msg}${reset}`)
+        output(jM ? `⚠ ${m}` : `${y}${m}${rst}`)
         return
       }
-      // No context yet - do full sync
-      if (!jsonMode) terminalPrint(`${yellow}Initializing context...${reset}`)
+      if (!jM) terminalPrint(`${y}Initializing context...${rst}`)
       await runSync({ quiet: true })
-      syncResult = { synced: true }
+      sR = { synced: true }
     } else {
-      // Context exists - only sync project.lk if needed
-      syncResult = await syncProjectOnly()
+      sR = await syncProjectOnly()
     }
-    // Build info line
-    const isPureMode = getPureMode()
-    const infoParts = [isPureMode ? '◈ LK PURE' : '⦓ LK']
-    if (syncResult.synced) {
-      infoParts.push(`${provider} ready`)
-    } else if (syncResult.error) {
-      infoParts.push(`⚠ ${syncResult.error}`)
+    const iPM = getPureMode()
+    const iPs = [iPM ? '◈ LK PURE' : '⦓ LK']
+    if (sR.synced) {
+      iPs.push(`${pr} ready`)
+    } else if (sR.error) {
+      iPs.push(`⚠ ${sR.error}`)
     }
-    // Add trial license info
-    const licenseKey = getLicenseKey()
-    if (licenseKey) {
-      const licenseData = parseLicense(licenseKey)
-      if (licenseData?.type === 'trial') {
-        const expiration = getLicenseExpiration()
-        const daysText = expiration?.daysLeft === 1 ? '1 day' : `${expiration?.daysLeft} days`
-        if (jsonMode) {
-          infoParts.push(`trial (${daysText})`)
+    const lK = getLicenseKey()
+    if (lK) {
+      const lD = parseLicense(lK)
+      if (lD?.type === 'trial') {
+        const exp = getLicenseExpiration()
+        const dT = exp?.daysLeft === 1 ? '1 day' : `${exp?.daysLeft} days`
+        if (jM) {
+          iPs.push(`trial (${dT})`)
         } else {
-          infoParts.push(`${yellow}\x1b[1mtrial (${daysText})\x1b[22m${reset}${lkBlue}`)
+          iPs.push(`${y}\x1b[1mtrial (${dT})\x1b[22m${rst}${lb}`)
         }
       }
     }
-    // Show random pro tip (or pure mode message)
-    const pureActive = getPureMode()
-    const tip = pureActive
+    const pA = getPureMode()
+    const t = pA
       ? 'code only • no fluff • pure signal'
       : PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
-    const infoLine = infoParts.join(' | ').replace('⦓ LK', 'Context loaded').replace('◈ LK PURE', '◈ Pure mode')
-    output(jsonMode ? infoParts.join(' | ') : infoLine)
-    if (!jsonMode) {
-      const tipColor = pureActive ? '\x1b[38;2;200;200;200m' : lilac
-      terminalPrint(`${tipColor}✦ ${tip} ✦${reset}`)
+    const iL = iPs.join(' | ').replace('⦓ LK', 'Context loaded').replace('◈ LK PURE', '◈ Pure mode')
+    output(jM ? iPs.join(' | ') : iL)
+    if (!jM) {
+      const tC = pA ? '\x1b[38;2;200;200;200m' : llc
+      terminalPrint(`${tC}✦ ${t} ✦${rst}`)
     }
-    // Output pure mode instructions as system context (LLM will see this)
-    if (pureActive) {
+    if (pA) {
       console.log(`\n${PURE_MODE_INSTRUCTIONS}`)
     }
   })
@@ -445,20 +419,18 @@ program
   .command('pro-tips')
   .description('Show all LK pro tips')
   .action(() => {
-    const cyan = '\x1b[36m'
-    const reset = '\x1b[0m'
+    const c = '\x1b[36m'
+    const rst = '\x1b[0m'
     console.log('')
-    PRO_TIPS.forEach(tip => {
-      console.log(`${cyan}✦ ${tip} ✦${reset}`)
+    PRO_TIPS.forEach(t => {
+      console.log(`${c}✦ ${t} ✦${rst}`)
     })
     console.log('')
   })
-// Dev-only commands (only from source, never in compiled binary)
 if (!IS_BINARY) {
   program
     .command('dev [action]')
     .description('[DEV] Toggle between source and binary mode (status|toggle|source|binary)')
     .action(dev)
-  // License generation: use scripts/license-admin.js directly (external to binary)
 }
 program.parse()

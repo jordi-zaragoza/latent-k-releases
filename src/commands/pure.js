@@ -1,108 +1,61 @@
 import {getPureMode,setPureMode} from '../lib/config.js'
-import {compactProject,compactFile} from '../lib/compact.js'
-import {markCompacted,listDomains,loadDomain,clearAllCompacted} from '../lib/context.js'
-import {writeFileSync} from 'fs'
-import path from 'path'
+import {listDomains,loadDomain} from '../lib/context.js'
 const IS_BINARY=!!process.pkg
-export async function pure(action,opts={}){
+export async function pure(a,o={}){
   if(IS_BINARY){console.log('Pure mode: dev only');return}
-  if(action==='status'){
-    const mode=getPureMode()
-    const list=opts.list
-    console.log(`Pure mode: ${mode?'ON':'OFF'}\n`)
-    const root=process.cwd()
-    const domains=listDomains(root)
-    let total=0
-    const compactedFiles=[],pending=[]
-    for(const d of domains){
-      const dom=loadDomain(root,d)
-      if(!dom)continue
-      for(const items of Object.values(dom.groups)){
-        for(const e of items){
-          total++
-          if(e.compacted)compactedFiles.push(e.path)
-          else pending.push(e.path)
+  if(a==='status'){
+    const m=getPureMode()
+    const l=o.list
+    console.log(`Pure mode: ${m?'ON':'OFF'}\n`)
+    const r=process.cwd()
+    const d=listDomains(r)
+    let t=0
+    const cF=[],p=[]
+    for(const D of d){
+      const dO=loadDomain(r,D)
+      if(!dO)continue
+      for(const i of Object.values(dO.groups)){
+        for(const e of i){
+          t++
+          if(e.compacted)cF.push(e.path)
+          else p.push(e.path)
         }
       }
     }
-    console.log(`Files: ${total} total, ${compactedFiles.length} compacted (•), ${pending.length} pending`)
-    if(list){
-      if(compactedFiles.length>0){
+    console.log(`Files: ${t} total, ${cF.length} compacted (•), ${p.length} pending`)
+    if(l){
+      if(cF.length>0){
         console.log('\nCompacted (•):')
-        compactedFiles.forEach(f=>console.log(`  ${f}`))
+        cF.forEach(f=>console.log(`  ${f}`))
       }
-      if(pending.length>0){
+      if(p.length>0){
         console.log('\nPending:')
-        pending.forEach(f=>console.log(`  ${f}`))
+        p.forEach(f=>console.log(`  ${f}`))
       }
-    }else if(pending.length>0&&pending.length<=10){
+    }else if(p.length>0&&p.length<=10){
       console.log('\nPending:')
-      pending.forEach(f=>console.log(`  ${f}`))
-    }else if(pending.length>10){
+      p.forEach(f=>console.log(`  ${f}`))
+    }else if(p.length>10){
       console.log(`\nUse -l to list all files`)
     }
     return
   }
-  if(action==='clean'){
-    const n=clearAllCompacted(process.cwd())
-    console.log(n?`✓ Cleared compact state from ${n} files`:'No compacted files found')
-    return
-  }
-  if(action==='compact'){
-    const file=opts.file
-    if(file){
-      const fp=path.resolve(file)
-      console.log(`Compacting ${file}...\n`)
-      const{og,compacted,usedAI}=await compactFile(fp)
-      const saved=og.length-compacted.length
-      const pct=Math.round(saved/og.length*100)
-      console.log(`Original: ${og.length}b`)
-      console.log(`Compacted: ${compacted.length}b`)
-      console.log(`Saved: ${saved}b (${pct}%)`)
-      console.log(`AI: ${usedAI?'yes':'no'}`)
-      if(!opts.dryRun){
-        writeFileSync(fp,compacted)
-        const rel=path.relative(process.cwd(),fp)
-        markCompacted(process.cwd(),rel)
-        console.log('\nFile updated & marked as compacted.')
-      }else{
-        console.log('\n--- Preview ---')
-        console.log(compacted.slice(0,2000))
-        if(compacted.length>2000)console.log(`\n... (${compacted.length-2000} more chars)`)
-      }
-      return
-    }
-    const aiLimit=opts.all?Infinity:1
-    console.log(`Compacting project...${opts.all?'':' (AI limit: 1)'}\n`)
-    const r=await compactProject(process.cwd(),{dryRun:opts.dryRun,verbose:true,aiLimit})
-    console.log(`\n${r.compacted}/${r.total} files compacted`)
-    console.log(`${r.savedTokens.toLocaleString()}tk saved (${r.pct}%) | ${r.ogTokens.toLocaleString()}tk → ${r.finalTokens.toLocaleString()}tk`)
-    if(r.aiPending.length)console.log(`${r.aiPending.length} pending (need AI)`)
-    if(r.errors.length)console.log(`${r.errors.length} errors`)
-    if(opts.dryRun)console.log('\n(dry run - no files modified)')
-    return
-  }
-  const current=getPureMode()
-  if(!action){
-    console.log(`Pure mode: ${current?'ON':'OFF'}`)
+  const c=getPureMode()
+  if(!a){
+    console.log(`Pure mode: ${c?'ON':'OFF'}`)
     console.log('')
     console.log('Usage:')
-    console.log('  lk pure on              - Enable m2m coding style')
-    console.log('  lk pure off             - Disable (human-readable)')
-    console.log('  lk pure status          - Show compact/verbose stats')
-    console.log('  lk pure compact         - Compact (5 AI files max)')
-    console.log('  lk pure compact -a      - Compact all (unlimited AI)')
-    console.log('  lk pure compact <file>  - Compact single file')
-    console.log('  lk pure compact -n      - Dry run (preview)')
-    console.log('  lk pure clean           - Clear all compact state')
+    console.log('  lk pure on      - Enable m2m coding style')
+    console.log('  lk pure off     - Disable (human-readable)')
+    console.log('  lk pure status  - Show file stats')
     return
   }
-  const enable=action==='on'||action==='1'||action==='true'
-  const disable=action==='off'||action==='0'||action==='false'
-  if(!enable&&!disable){console.log('Usage: lk pure [on|off|compact]');return}
-  setPureMode(enable)
-  console.log(`Pure mode: ${enable?'ON':'OFF'}`)
-  if(enable){
+  const e=a==='on'||a==='1'||a==='true'
+  const d=a==='off'||a==='0'||a==='false'
+  if(!e&&!d){console.log('Usage: lk pure [on|off|status]');return}
+  setPureMode(e)
+  console.log(`Pure mode: ${e?'ON':'OFF'}`)
+  if(e){
     console.log('')
     console.log('Style: m2m, austere, dense')
     console.log('- No unnecessary comments')
