@@ -60,7 +60,7 @@ export async function syncProjectOnly() {
   }
 }
 export async function sync(o = {}) {
-  log('SYNC', '#### Sync started ####')
+  log('SYNC', '#### Stop hook started ####')
   const c = process.cwd()
   const {
     regenerateProject: rP = false,
