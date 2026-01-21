@@ -1,4 +1,4 @@
-import { loadStats, statsPath } from '../lib/stats.js'
+import { loadStats, statsPath, MODEL_PRICING } from '../lib/stats.js'
 import fs from 'fs'
 import path from 'path'
 import { execSync } from 'child_process'
@@ -8,8 +8,9 @@ const BENCH = [
 ]
 const SLOPE = (BENCH[1].ratio - BENCH[0].ratio) / (BENCH[1].files - BENCH[0].files)
 const INTERCEPT = BENCH[0].ratio - SLOPE * BENCH[0].files
-const LK_PRICE = { input: 0.075, output: 0.30 }
-const OPUS_PRICE = { input: 5.00, output: 25.00 }
+const FLASH = MODEL_PRICING['gemini-2.5-flash']
+const LITE = MODEL_PRICING['gemini-2.5-flash-lite']
+const OPUS = MODEL_PRICING['claude-3-opus-20240229']
 function getEfficiency(f) { return Math.max(1.1, Math.min(2.5, INTERCEPT + SLOPE * f)) }
 function calcCost(i, o, p) { return (i / 1e6) * p.input + (o / 1e6) * p.output }
 function getProjName(r) {
@@ -52,8 +53,13 @@ export async function savings(opts = {}) {
   try { files = parseInt(execSync(`find "${r}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' })) || 0 } catch {}
   const eff = getEfficiency(files)
   const tSaved = tUsed * (eff - 1)
-  const costUsed = calcCost(tokIn + syncIn, tokOut + syncOut, LK_PRICE)
-  const opusCost = calcCost(tokIn * eff, tokOut * eff, OPUS_PRICE)
+  const mods = s.byModel || {}
+  const liteM = mods['gemini-2.5-flash-lite'] || { tokensSentEstimate: 0, tokensReceivedEstimate: 0 }
+  const flashM = mods['gemini-2.5-flash'] || { tokensSentEstimate: 0, tokensReceivedEstimate: 0 }
+  const liteCost = calcCost(liteM.tokensSentEstimate, liteM.tokensReceivedEstimate, LITE)
+  const flashCost = calcCost(flashM.tokensSentEstimate, flashM.tokensReceivedEstimate, FLASH)
+  const costUsed = liteCost + flashCost
+  const opusCost = calcCost(tokIn * eff, tokOut * eff, OPUS)
   const costSaved = opusCost - costUsed
   const pct = Math.round((costSaved / opusCost) * 100)
   const g = '\x1b[32m', cy = '\x1b[36m', y = '\x1b[33m', b = '\x1b[1m', rst = '\x1b[0m'
@@ -68,7 +74,7 @@ export async function savings(opts = {}) {
   console.log(ln(pName))
   console.log(`${cy}╠${'═'.repeat(W)}╣${rst}`)
   console.log(ln(''))
-  console.log(ln(`  ${g}${b}$${fC(costSaved)}${rst} saved`))
+  console.log(ln(`  ${g}${b}$${fC(costSaved)}${rst} saved vs Opus`))
   console.log(ln(`  ${y}${fT(tSaved)}${rst} of time saved`))
   console.log(ln(`  ${b}${eff.toFixed(2)}x${rst} faster`))
   console.log(ln(''))
