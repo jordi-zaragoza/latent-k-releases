@@ -47,7 +47,7 @@ export function programmaticCompact(code,ext){
 function compactJS(code){
   let c=code
   c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/(^|[^:])\/\/.*$/gm,'$1')
+  c=c.replace(/(^|[^:\\])\/\/.*$/gm,'$1')
   c=c.replace(/^\s*['"]use strict['"];?\s*$/gm,'')
   c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
   c=c.replace(/ *([=+\-*/%<>&|!?:,;{}()\[\]]) */g,'$1')
