@@ -8,7 +8,7 @@ import { withSpinner } from './spinner.js'
 // Default symbol when AI returns invalid symbol
 const DEFAULT_SYMBOL = 'λ'
 // Batch processing limits
-export const MAX_FILES_PER_SYNC = 5
+export const MAX_FILES_PER_SYNC = 20
 export const MAX_CHARS_PER_FILE = 8000
 export const MAX_BATCH_CHARS = 100000
 export const MAX_LINES_PER_FILE = 150
