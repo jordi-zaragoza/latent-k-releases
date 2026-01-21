@@ -1,270 +1,37 @@
-import fs from 'fs'
-import path from 'path'
-import {execSync} from 'child_process'
-import os from 'os'
-import {getAllFiles,getFileExtension,markCompacted,isCompacted,isInDomain,hashContent} from './context.js'
-import {getApiKey} from './config.js'
-import {GoogleGenerativeAI} from '@google/generative-ai'
-import {PURE_MODE_INSTRUCTIONS,logLlmCall,logLlmResponse,recordError} from './ai-prompts.js'
-const MODEL='gemini-2.5-flash'
-const MAX_AI_TOKENS=100000
-const MAX_AI_CHARS=MAX_AI_TOKENS*3.5
-let model=null,curKey=null
-function initModel(){
-  const k=getApiKey('gemini')
-  if(!k)throw new Error('Gemini API key required for compact')
-  if(model&&curKey===k)return
-  model=new GoogleGenerativeAI(k).getGenerativeModel({model:MODEL})
-  curKey=k
-}
-const JS_EXTS=['js','mjs','cjs','ts','tsx','jsx']
-const PY_EXTS=['py']
-const GO_EXTS=['go']
-const RS_EXTS=['rs']
-const CSS_EXTS=['css','scss','less','sass']
-const JSON_EXTS=['json']
-const HTML_EXTS=['html','htm','xml','svg']
-const YAML_EXTS=['yaml','yml']
-const SH_EXTS=['sh','bash','zsh']
-const RUBY_EXTS=['rb']
-const PHP_EXTS=['php']
-const JAVA_EXTS=['java','kt','kts','scala']
-const C_EXTS=['c','cpp','h','hpp','cc','cxx']
-const SWIFT_EXTS=['swift']
-const SQL_EXTS=['sql']
-export function programmaticCompact(code,ext){
-  if(JS_EXTS.includes(ext))return compactJS(code)
-  if(PY_EXTS.includes(ext))return compactPY(code)
-  if(GO_EXTS.includes(ext))return compactGO(code)
-  if(RS_EXTS.includes(ext))return compactRS(code)
-  if(CSS_EXTS.includes(ext))return compactCSS(code)
-  if(JSON_EXTS.includes(ext))return compactJSON(code)
-  if(HTML_EXTS.includes(ext))return compactHTML(code)
-  if(YAML_EXTS.includes(ext))return compactYAML(code)
-  if(SH_EXTS.includes(ext))return compactSH(code)
-  if(RUBY_EXTS.includes(ext))return compactRuby(code)
-  if(PHP_EXTS.includes(ext))return compactPHP(code)
-  if(JAVA_EXTS.includes(ext))return compactJava(code)
-  if(C_EXTS.includes(ext))return compactC(code)
-  if(SWIFT_EXTS.includes(ext))return compactSwift(code)
-  if(SQL_EXTS.includes(ext))return compactSQL(code)
-  return{code,needsAI:true}
-}
-function compactJS(code){
-  let c=code
-  c=c.split('\n').filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactPY(code){
-  let c=code
-  c=c.replace(/'''[\s\S]*?'''/g,'')
-  c=c.replace(/"""[\s\S]*?"""/g,'')
-  c=c.replace(/#.*$/gm,'')
-  c=c.split('\n').filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactGO(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
-  c=c.split('\n').map(l=>l.trimEnd()).filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactRS(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
-  c=c.split('\n').map(l=>l.trimEnd()).filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactCSS(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('')
-  c=c.replace(/\s*([{};:,>+~])\s*/g,'$1')
-  return{code:c,needsAI:false}
-}
-function compactJSON(code){
-  try{return{code:JSON.stringify(JSON.parse(code)),needsAI:false}}
-  catch{return{code,needsAI:false}}
-}
-function compactHTML(code){
-  let c=code
-  c=c.replace(/<!--[\s\S]*?-->/g,'')
-  c=c.replace(/>\s+</g,'><')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('')
-  c=c.replace(/\s{2,}/g,' ')
-  return{code:c,needsAI:false}
-}
-function compactYAML(code){
-  let c=code
-  c=c.replace(/#.*$/gm,'')
-  c=c.split('\n').filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:false}
-}
-function compactSH(code){
-  let c=code
-  c=c.replace(/#.*$/gm,m=>m.startsWith('#!')?m:'')
-  c=c.split('\n').filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactRuby(code){
-  let c=code
-  c=c.replace(/=begin[\s\S]*?=end/g,'')
-  c=c.replace(/#.*$/gm,'')
-  c=c.split('\n').filter(l=>l.trim()).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactPHP(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
-  c=c.replace(/#.*$/gm,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactJava(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactC(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactSwift(code){
-  let c=code
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.replace(/\/\/.*$/gm,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n')
-  return{code:c,needsAI:true}
-}
-function compactSQL(code){
-  let c=code
-  c=c.replace(/--.*$/gm,'')
-  c=c.replace(/\/\*[\s\S]*?\*\//g,'')
-  c=c.split('\n').map(l=>l.trim()).filter(l=>l).join(' ')
-  c=c.replace(/\s{2,}/g,' ')
-  return{code:c,needsAI:false}
-}
+import fs from 'fs';import path from 'path';import {execSync} from 'child_process';import os from 'os';import {getAllFiles,getFileExtension,markCompacted,isCompacted,isInDomain,hashContent} from './context.js';import {getApiKey} from './config.js';import {GoogleGenerativeAI} from '@google/generative-ai';import {PURE_MODE_INSTRUCTIONS,logLlmCall,logLlmResponse,recordError} from './ai-prompts.js';const MODEL='gemini-2.5-flash';const MAX_AI_TOKENS=100000;const MAX_AI_CHARS=MAX_AI_TOKENS*3.5;let model=null,curKey=null;function initModel(){const k=getApiKey('gemini');if(!k)throw new Error('Gemini API key required for compact');if(model&&curKey===k)return;model=new GoogleGenerativeAI(k).getGenerativeModel({model:MODEL});curKey=k;}
+const JS_EXTS=['js','mjs','cjs','ts','tsx','jsx'];const PY_EXTS=['py'];const GO_EXTS=['go'];const RS_EXTS=['rs'];const CSS_EXTS=['css','scss','less','sass'];const JSON_EXTS=['json'];const HTML_EXTS=['html','htm','xml','svg'];const YAML_EXTS=['yaml','yml'];const SH_EXTS=['sh','bash','zsh'];const RUBY_EXTS=['rb'];const PHP_EXTS=['php'];const JAVA_EXTS=['java','kt','kts','scala'];const C_EXTS=['c','cpp','h','hpp','cc','cxx'];const SWIFT_EXTS=['swift'];const SQL_EXTS=['sql'];export function programmaticCompact(code,ext){if(JS_EXTS.includes(ext))return compactJS(code);if(PY_EXTS.includes(ext))return compactPY(code);if(GO_EXTS.includes(ext))return compactGO(code);if(RS_EXTS.includes(ext))return compactRS(code);if(CSS_EXTS.includes(ext))return compactCSS(code);if(JSON_EXTS.includes(ext))return compactJSON(code);if(HTML_EXTS.includes(ext))return compactHTML(code);if(YAML_EXTS.includes(ext))return compactYAML(code);if(SH_EXTS.includes(ext))return compactSH(code);if(RUBY_EXTS.includes(ext))return compactRuby(code);if(PHP_EXTS.includes(ext))return compactPHP(code);if(JAVA_EXTS.includes(ext))return compactJava(code);if(C_EXTS.includes(ext))return compactC(code);if(SWIFT_EXTS.includes(ext))return compactSwift(code);if(SQL_EXTS.includes(ext))return compactSQL(code);return{code,needsAI:true};}
+function compactJS(c){c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
+function compactPY(c){c=c.replace(/'''[\s\S]*?'''/g,'');c=c.replace(/"""[\s\S]*?"""/g,'');c=c.replace(/#.*$/gm,'');c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
+function compactGO(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trimEnd()).filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
+function compactRS(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trimEnd()).filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
+function compactCSS(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('');c=c.replace(/\s*([{};:,>+~])\s*/g,'$1');return{code:c,needsAI:false};}
+function compactJSON(c){try{return{code:JSON.stringify(JSON.parse(c)),needsAI:false}}catch{return{code:c,needsAI:false}};}
+function compactHTML(c){c=c.replace(/<!--[\s\S]*?-->/g,'');c=c.replace(/>\s+</g,'><');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('');c=c.replace(/\s{2,}/g,' ');return{code:c,needsAI:false};}
+function compactYAML(c){c=c.replace(/#.*$/gm,'');c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:false};}
+function compactSH(c){c=c.replace(/#.*$/gm,m=>m.startsWith('#!')?m:'');c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
+function compactRuby(c){c=c.replace(/=begin[\s\S]*?=end/g,'');c=c.replace(/#.*$/gm,'');c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
+function compactPHP(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.replace(/#.*$/gm,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n');return{code:c,needsAI:true};}
+function compactJava(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n');return{code:c,needsAI:true};}
+function compactC(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n');return{code:c,needsAI:true};}
+function compactSwift(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n');return{code:c,needsAI:true};}
+function compactSQL(c){c=c.replace(/--.*$/gm,'');c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join(' ');c=c.replace(/\s{2,}/g,' ');return{code:c,needsAI:false};}
 const COMPACT_PROMPT=`${PURE_MODE_INSTRUCTIONS}
 Compact this code preserving EXACT behavior:
 - KEEP all export names unchanged
 - KEEP all string literals unchanged
-- KEEP all imports unchanged
+- KEEP all imports unchanged (exact package names)
 - KEEP valid JS syntax (semicolons where needed)
+- Do NOT shadow imported modules (don't name vars fs, path, os, etc)
 - Only remove: comments, blank lines, unnecessary whitespace
 - Shorten ONLY internal variable names
 Output ONLY the code. No markdown.
-%CODE%`
-function validateJS(code){
-  const tmp=path.join(os.tmpdir(),`lk-validate-${Date.now()}.js`)
-  try{
-    fs.writeFileSync(tmp,code)
-    execSync(`node --check "${tmp}"`,{stdio:'pipe'})
-    fs.unlinkSync(tmp)
-    return true
-  }catch{
-    try{fs.unlinkSync(tmp)}catch{}
-    return false
-  }
-}
-async function aiCompact(code,ext){
-  if(!model)initModel()
-  const prompt=COMPACT_PROMPT.replace('%CODE%',code)
-  const tracking=logLlmCall('GEMINI','compact',prompt.length,MODEL,'compact')
-  try{
-    const r=await model.generateContent(prompt)
-    let t=r.response?.text?.()?.trim()||code
-    t=t.replace(/^```\w*\n?/,'').replace(/\n?```$/,'')
-    logLlmResponse(tracking,t)
-    if(JS_EXTS.includes(ext)&&!validateJS(t)){
-      recordError({provider:'GEMINI',operation:'compact',operationType:'compact',error:'AI returned invalid JS'})
-      return code
-    }
-    return t
-  }catch(e){
-    recordError({provider:'GEMINI',operation:'compact',operationType:'compact',error:e.message})
-    return code
-  }
-}
-export async function compactFile(filePath){
-  const ext=getFileExtension(filePath)
-  const og=fs.readFileSync(filePath,'utf8')
-  const{code,needsAI}=programmaticCompact(og,ext)
-  if(!needsAI)return{og,compacted:code,usedAI:false}
-  if(code.length>MAX_AI_CHARS)return{og,compacted:code,usedAI:false,skippedAI:'too_large'}
-  const final=await aiCompact(code,ext)
-  return{og,compacted:final,usedAI:true}
-}
-const ALL_EXTS=[...JS_EXTS,...PY_EXTS,...GO_EXTS,...RS_EXTS,...CSS_EXTS,...JSON_EXTS,...HTML_EXTS,...YAML_EXTS,...SH_EXTS,...RUBY_EXTS,...PHP_EXTS,...JAVA_EXTS,...C_EXTS,...SWIFT_EXTS,...SQL_EXTS]
-function toTokens(chars){return Math.ceil(chars/3.5)}
-export async function compactProject(root,opts={}){
-  const{dryRun=false,verbose=false,aiLimit=Infinity}=opts
-  const files=getAllFiles(root)
-  const results={total:0,compacted:0,skipped:0,saved:0,ogBytes:0,finalBytes:0,errors:[],aiUsed:0,aiPending:[]}
-  for(const f of files){
-    results.total++
-    const fp=path.join(root,f)
-    const ext=getFileExtension(f)
-    if(!ALL_EXTS.includes(ext)){
-      results.skipped++
-      if(verbose)console.log(`skip ${f}`)
-      continue
-    }
-    if(isCompacted(root,f)){
-      results.skipped++
-      if(verbose)console.log(`  • ${f} (compacted)`)
-      continue
-    }
-    try{
-      const og=fs.readFileSync(fp,'utf8')
-      const{code,needsAI}=programmaticCompact(og,ext)
-      const inDom=isInDomain(root,f)
-      const tooLarge=code.length>MAX_AI_CHARS
-      const skipAI=needsAI&&(results.aiUsed>=aiLimit||tooLarge||!inDom)
-      let final=code
-      if(needsAI&&!skipAI){
-        final=await aiCompact(code,ext)
-        results.aiUsed++
-      }
-      if(skipAI)results.aiPending.push(f)
-      if(JS_EXTS.includes(ext)&&!validateJS(final)){
-        if(verbose)console.log(`ERR ${f}: syntax invalid after compact`)
-        results.errors.push({file:f,error:'syntax invalid'})
-        results.aiPending.push(f)
-        continue
-      }
-      results.ogBytes+=og.length
-      results.finalBytes+=final.length
-      const savedBytes=og.length-final.length
-      if(savedBytes>0){
-        results.compacted++
-        results.saved+=savedBytes
-        const pct=Math.round(savedBytes/og.length*100)
-        const tkSaved=toTokens(savedBytes)
-        const flag=tooLarge?'LG':!inDom?'ND':skipAI?'SY':needsAI?'AI':'  '
-        if(verbose)console.log(`${flag} ${f} -${tkSaved}tk (${pct}%)`)
-        if(!dryRun){
-          fs.writeFileSync(fp,final)
-          if(!skipAI)markCompacted(root,f,hashContent(final))
-        }
-      }else if(verbose){
-        console.log(`   ${f} (no change)`)
-      }
-    }catch(e){
-      results.errors.push({file:f,error:e.message})
-      if(verbose)console.log(`ERR ${f}: ${e.message}`)
-    }
-  }
-  results.ogTokens=toTokens(results.ogBytes)
-  results.finalTokens=toTokens(results.finalBytes)
-  results.savedTokens=results.ogTokens-results.finalTokens
-  results.pct=results.ogTokens?Math.round(results.savedTokens/results.ogTokens*100):0
-  return results
-}
+%CODE%`;function validateJS(c){const t=path.join(os.tmpdir(),`lk-validate-${Date.now()}.js`);try{fs.writeFileSync(t,c);execSync(`node --check "${t}"`,{stdio:'pipe'});fs.unlinkSync(t);return true;}catch{try{fs.unlinkSync(t)}catch{}return false;}}
+async function aiCompact(c,e){if(!model)initModel();const p=COMPACT_PROMPT.replace('%CODE%',c);const trk=logLlmCall('GEMINI','compact',p.length,MODEL,'compact');try{const r=await model.generateContent(p);let t=r.response?.text?.()?.trim()||c;t=t.replace(/^```\w*\n?/,'').replace(/\n?```$/,'');logLlmResponse(trk,t);if(JS_EXTS.includes(e)&&!validateJS(t)){recordError({provider:'GEMINI',operation:'compact',operationType:'compact',error:'AI returned invalid JS'});return c;}return t;}catch(err){recordError({provider:'GEMINI',operation:'compact',operationType:'compact',error:err.message});return c;}}
+export async function compactFile(fP){const e=getFileExtension(fP);const og=fs.readFileSync(fP,'utf8');const{code,needsAI}=programmaticCompact(og,e);if(!needsAI)return{og,compacted:code,usedAI:false};if(code.length>MAX_AI_CHARS)return{og,compacted:code,usedAI:false,skippedAI:'too_large'};const fnl=await aiCompact(code,e);return{og,compacted:fnl,usedAI:true};}
+const ALL_EXTS=[...JS_EXTS,...PY_EXTS,...GO_EXTS,...RS_EXTS,...CSS_EXTS,...JSON_EXTS,...HTML_EXTS,...YAML_EXTS,...SH_EXTS,...RUBY_EXTS,...PHP_EXTS,...JAVA_EXTS,...C_EXTS,...SWIFT_EXTS,...SQL_EXTS];function toTokens(c){return Math.ceil(c/3.5);}
+export async function compactProject(r,o={}){const{dryRun:dr=false,verbose:v=false,aiLimit:aiL=Infinity}=o;const fls=getAllFiles(r);const res={total:0,compacted:0,skipped:0,saved:0,ogBytes:0,finalBytes:0,errors:[],aiUsed:0,aiPending:[]};for(const f of fls){res.total++;const fp=path.join(r,f);const e=getFileExtension(f);if(!ALL_EXTS.includes(e)){res.skipped++;if(v)console.log(`skip ${f}`);continue;}
+if(isCompacted(r,f)){res.skipped++;if(v)console.log(`  • ${f} (compacted)`);continue;}
+try{const og=fs.readFileSync(fp,'utf8');const{code,needsAI}=programmaticCompact(og,e);const inD=isInDomain(r,f);const tooL=code.length>MAX_AI_CHARS;const skpAI=needsAI&&(res.aiUsed>=aiL||tooL||!inD);let fnl=code;if(needsAI&&!skpAI){fnl=await aiCompact(code,e);res.aiUsed++;}
+if(skpAI)res.aiPending.push(f);if(JS_EXTS.includes(e)&&!validateJS(fnl)){if(v)console.log(`ERR ${f}: syntax invalid after compact`);res.errors.push({file:f,error:'syntax invalid'});res.aiPending.push(f);continue;}
+res.ogBytes+=og.length;res.finalBytes+=fnl.length;const sB=og.length-fnl.length;if(sB>0){res.compacted++;res.saved+=sB;const pct=Math.round(sB/og.length*100);const tKS=toTokens(sB);const flg=tooL?'LG':!inD?'ND':skpAI?'SY':needsAI?'AI':'  ';if(v)console.log(`${flg} ${f} -${tKS}tk (${pct}%)`);if(!dr){fs.writeFileSync(fp,fnl);if(!skpAI)markCompacted(r,f,hashContent(fnl));}}else if(v){console.log(`   ${f} (no change)`);}}catch(err){res.errors.push({file:f,error:err.message});if(v)console.log(`ERR ${f}: ${err.message}`);}}
+res.ogTokens=toTokens(res.ogBytes);res.finalTokens=toTokens(res.finalBytes);res.savedTokens=res.ogTokens-res.finalTokens;res.pct=res.ogTokens?Math.round(res.savedTokens/res.ogTokens*100):0;return res;}
