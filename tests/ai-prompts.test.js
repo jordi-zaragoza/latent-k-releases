@@ -447,7 +447,7 @@ A test project for unit tests.
     const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'])
     expect(prompt).toContain('EXAMPLES')
     expect(prompt).toContain('hello')
-    expect(prompt).toContain('meta_question')
+    expect(prompt).toContain('not_related')
   })
 
   it('includes is_continuation field in JSON format', () => {
@@ -476,7 +476,7 @@ A test project for unit tests.
 
   it('includes continuation examples', () => {
     const prompt = buildClassifyPrompt('test', sampleProjectLk, ['core'], 'previous message')
-    expect(prompt).toContain('is_continuation: true')
+    expect(prompt).toContain('"is_continuation": true')
   })
 })
 
