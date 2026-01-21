@@ -1,4 +1,4 @@
-import fs from 'fs';import path from 'path';import {execSync} from 'child_process';import os from 'os';import {getAllFiles,getFileExtension,markCompacted,isCompacted,isInDomain,hashContent} from './context.js';import {getApiKey} from './config.js';import {GoogleGenerativeAI} from '@google/generative-ai';import {PURE_MODE_INSTRUCTIONS,logLlmCall,logLlmResponse,recordError} from './ai-prompts.js';const MODEL='gemini-2.5-flash';const MAX_AI_TOKENS=100000;const MAX_AI_CHARS=MAX_AI_TOKENS*3.5;let model=null,curKey=null;function initModel(){const k=getApiKey('gemini');if(!k)throw new Error('Gemini API key required for compact');if(model&&curKey===k)return;model=new GoogleGenerativeAI(k).getGenerativeModel({model:MODEL});curKey=k;}
+import fs from 'fs';import path from 'path';import {execSync} from 'child_process';import os from 'os';import {getAllFiles,getFileExtension,markCompacted,isCompacted,isInDomain,hashContent} from './context.js';import {getApiKey} from './config.js';import {GoogleGenerativeAI} from '@google/generative-ai';import {logLlmCall,logLlmResponse,recordError} from './ai-prompts.js';const MODEL='gemini-2.5-flash';const MAX_AI_TOKENS=100000;const MAX_AI_CHARS=MAX_AI_TOKENS*3.5;let model=null,curKey=null;function initModel(){const k=getApiKey('gemini');if(!k)throw new Error('Gemini API key required for compact');if(model&&curKey===k)return;model=new GoogleGenerativeAI(k).getGenerativeModel({model:MODEL});curKey=k;}
 const JS_EXTS=['js','mjs','cjs','ts','tsx','jsx'];const PY_EXTS=['py'];const GO_EXTS=['go'];const RS_EXTS=['rs'];const CSS_EXTS=['css','scss','less','sass'];const JSON_EXTS=['json'];const HTML_EXTS=['html','htm','xml','svg'];const YAML_EXTS=['yaml','yml'];const SH_EXTS=['sh','bash','zsh'];const RUBY_EXTS=['rb'];const PHP_EXTS=['php'];const JAVA_EXTS=['java','kt','kts','scala'];const C_EXTS=['c','cpp','h','hpp','cc','cxx'];const SWIFT_EXTS=['swift'];const SQL_EXTS=['sql'];export function programmaticCompact(c,e){if(JS_EXTS.includes(e))return compactJS(c);if(PY_EXTS.includes(e))return compactPY(c);if(GO_EXTS.includes(e))return compactGO(c);if(RS_EXTS.includes(e))return compactRS(c);if(CSS_EXTS.includes(e))return compactCSS(c);if(JSON_EXTS.includes(e))return compactJSON(c);if(HTML_EXTS.includes(e))return compactHTML(c);if(YAML_EXTS.includes(e))return compactYAML(c);if(SH_EXTS.includes(e))return compactSH(c);if(RUBY_EXTS.includes(e))return compactRuby(c);if(PHP_EXTS.includes(e))return compactPHP(c);if(JAVA_EXTS.includes(e))return compactJava(c);if(C_EXTS.includes(e))return compactC(c);if(SWIFT_EXTS.includes(e))return compactSwift(c);if(SQL_EXTS.includes(e))return compactSQL(c);return{code:c,needsAI:true};}
 function compactJS(c){c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
 function compactPY(c){c=c.replace(/'''[\s\S]*?'''/g,'');c=c.replace(/"""[\s\S]*?"""/g,'');c=c.replace(/#.*$/gm,'');c=c.split('\n').filter(l=>l.trim()).join('\n');return{code:c,needsAI:true};}
@@ -15,16 +15,12 @@ function compactJava(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$
 function compactC(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n');return{code:c,needsAI:true};}
 function compactSwift(c){c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.replace(/\/\/.*$/gm,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join('\n');return{code:c,needsAI:true};}
 function compactSQL(c){c=c.replace(/--.*$/gm,'');c=c.replace(/\/\*[\s\S]*?\*\//g,'');c=c.split('\n').map(l=>l.trim()).filter(l=>l).join(' ');c=c.replace(/\s{2,}/g,' ');return{code:c,needsAI:false};}
-const COMPACT_PROMPT=`${PURE_MODE_INSTRUCTIONS}
-Compact this code preserving EXACT behavior:
-- KEEP all export names unchanged
-- KEEP all string literals unchanged
-- KEEP all imports unchanged (exact package names)
-- KEEP valid JS syntax (semicolons where needed)
-- Do NOT shadow imported modules (don't name vars fs, path, os, etc)
-- Only remove: comments, blank lines, unnecessary whitespace
-- Shorten ONLY internal variable names
-Output ONLY the code. No markdown.
+const COMPACT_PROMPT=`Compact this code. Rules:
+- Keep exports, imports, strings unchanged
+- Keep valid syntax
+- Remove comments, blank lines
+- Shorten internal var names only
+Output code only, no markdown.
 %CODE%`;function extractImports(c){const m=c.match(/from\s+['"]([^'"]+)['"]/g)||[];return m.map(x=>x.replace(/from\s+['"]|['"]/g,'')).sort();}
 function validateRegex(c){const m=c.match(/(?<!\\)\/(?:[^\/\\]|\\.)+\/[gimsuy]*/g)||[];for(const r of m){try{const p=r.slice(1,r.lastIndexOf('/'));const f=r.slice(r.lastIndexOf('/')+1);new RegExp(p,f);}catch{return false;}}return true;}
 function validateJS(c,og=null){const t=path.join(os.tmpdir(),`lk-validate-${Date.now()}.js`);try{fs.writeFileSync(t,c);execSync(`node --check "${t}"`,{stdio:'pipe'});fs.unlinkSync(t);if(!validateRegex(c))return false;if(og){const oI=extractImports(og),cI=extractImports(c);if(oI.join()!==cI.join())return false;}return true;}catch{try{fs.unlinkSync(t)}catch{}return false;}}
