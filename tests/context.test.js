@@ -147,7 +147,8 @@ describe('parseEntry', () => {
       hash: 'abc1234',
       path: 'context.js',
       desc: 'file system context',
-      exports: ['init', 'exists']
+      exports: ['init', 'exists'],
+      compacted: false
     })
   })
 
@@ -199,7 +200,7 @@ describe('parseEntry', () => {
 describe('buildEntry', () => {
   it('builds entry with all fields', () => {
     const entry = buildEntry('λ', 'file.js', 'abc1234', 'description', ['foo', 'bar'])
-    expect(entry).toBe('  λ file.js [⦗abc1234⦘ "description" {foo, bar}]')
+    expect(entry).toBe('  λ file.js [⦗abc1234⦘ "description" {foo,bar}]')
   })
 
   it('builds entry without description', () => {

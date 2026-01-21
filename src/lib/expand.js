@@ -31,7 +31,12 @@ let cachedHeader = { root: null, content: null }
  */
 function compactText(text) {
   if (!text) return ''
-  return text.split('\n').map(l => l.trim()).filter(l => l).join(' ')
+  return text.split('\n').map(l => l.trim()).filter(l => l).join('')
+    .replace(/ → /g, '→').replace(/→ /g, '→')
+    .replace(/⟧ ⟦/g, '⟧⟦').replace(/⟫ ⟪/g, '⟫⟪').replace(/⦔ ⟪/g, '⦔⟪').replace(/⫸ /g, '⫸')
+    .replace(/VIBE: /g, 'VIBE:').replace(/NAME: /g, 'NAME:').replace(/VERSION: /g, 'VERSION:')
+    .replace(/([▸⇄λ⚙⧫⊚⟐◈⤳⚑◇]) /g, '$1').replace(/@([^/]+)\/ /g, '@$1/')
+    .replace(/ \[/g, '[').replace(/\[ /g, '[').replace(/• /g, '•').replace(/ \{/g, '{').replace(/ ⫸/g, '⫸').replace(/ \(/g, '(')
 }
 
 /**
