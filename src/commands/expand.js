@@ -7,6 +7,7 @@ import { isConfigured, log, getPureMode } from '../lib/config.js'
 import { PURE_MODE_REMINDER } from '../lib/ai-prompts.js'
 import { checkAccess } from '../lib/license.js'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
+import { loadStats, statsPath } from '../lib/stats.js'
 const PMC = 3
 const MMC = 1500
 const MTPC = 3000

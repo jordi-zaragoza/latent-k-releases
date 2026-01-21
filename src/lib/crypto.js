@@ -17,7 +17,7 @@ let cachedInstallationSalt = null
  * Generated once per installation, stored in ~/.lk/.salt
  * This prevents the salt from being extracted from the binary
  */
-function getInstallationSalt() {
+export function getInstallationSalt() {
   if (cachedInstallationSalt) {
     return cachedInstallationSalt
   }
