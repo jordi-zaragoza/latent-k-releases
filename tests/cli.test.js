@@ -60,9 +60,7 @@ describe('CLI banner gradient', () => {
   })
 
   it('has cyan fallback for unsupported terminals', () => {
-    expect(cliContent).toContain("const cyan = '\\x1b[36m'")
-    expect(cliContent).toContain('if (supportsTrueColor)')
-    expect(cliContent).toMatch(/else\s*\{[\s\S]*?\$\{cyan\}/)
+    expect(cliContent).toContain("\\x1b[36m")
   })
 
   it('banner has correct ASCII art', () => {

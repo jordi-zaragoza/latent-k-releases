@@ -8,128 +8,120 @@ import {
   getAllFiles, validateProjectDirectory, isHomeOrRoot
 } from '../lib/context.js'
 export async function status() {
-  const cwd = process.cwd()
+  const c = process.cwd()
   console.log('lk status\n')
-  // Block home/root directory entirely
-  if (isHomeOrRoot(cwd)) {
+  if (isHomeOrRoot(c)) {
     console.log('⚠ Cannot run in home/root directory.')
     console.log('Use "lk clean -c" to remove .lk/ if needed.\n')
     return
   }
-  const config = getConfig()
-  const hasContext = exists(cwd)
-  // Early validation when no context exists
-  if (!hasContext) {
-    const validation = validateProjectDirectory(cwd)
-    if (!validation.valid) {
-      const reason = validation.reason === 'too_many_files'
-        ? `Found ${validation.count} code files.`
+  const H = exists(c)
+  if (!H) {
+    const v = validateProjectDirectory(c)
+    if (!v.valid) {
+      const r = v.reason === 'too_many_files'
+        ? `Found ${v.count} code files.`
         : 'No project markers found.'
-      console.log(`⚠ ${reason}`)
+      console.log(`⚠ ${r}`)
       console.log('Run "lk sync" in a project directory to initialize.\n')
       return
     }
   }
-  const licensed = isLicensed()
-  let licenseValid = false
-  if (licensed) {
-    const result = await validateLicense()
-    licenseValid = result.valid
+  const l = isLicensed()
+  let V = false
+  if (l) {
+    const R = await validateLicense()
+    V = R.valid
   }
-  // Ignore patterns
-  const globalPatterns = getIgnorePatterns()
-  const projectPatterns = ignoreExists(cwd) ? loadIgnore(cwd) : []
-  const allIgnorePatterns = [...globalPatterns, ...projectPatterns]
-  // Files status
-  const allFilesRaw = getAllFiles(cwd)
-  const ignoredFiles = allFilesRaw.filter(f => isIgnored(f, allIgnorePatterns))
-  const allFiles = allFilesRaw.filter(f => !isIgnored(f, allIgnorePatterns))
-  const entries = hasContext ? getAllEntries(cwd) : {}
-  const unsynced = hasContext ? getUnsyncedFiles(cwd, allFiles) : []
-  const deleted = hasContext ? getDeletedFiles(cwd) : []
-  const newFiles = unsynced.filter(f => f.status === 'new')
-  const modified = unsynced.filter(f => f.status === 'modified')
-  let totalBytes=0,totalChars=0
-  for(const f of Object.keys(entries)){
+  const G = getIgnorePatterns()
+  const P = ignoreExists(c) ? loadIgnore(c) : []
+  const A = [...G, ...P]
+  const F = getAllFiles(c)
+  const I = F.filter(o => isIgnored(o, A))
+  const S = F.filter(p => !isIgnored(p, A))
+  const e = H ? getAllEntries(c) : {}
+  const u = H ? getUnsyncedFiles(c, S) : []
+  const d = H ? getDeletedFiles(c) : []
+  const N = u.filter(q => q.status === 'new')
+  const M = u.filter(r => r.status === 'modified')
+  let tB=0,tC=0
+  for(const f of Object.keys(e)){
     try{
-      const fp=path.join(cwd,f)
-      const st=fs.statSync(fp)
-      totalBytes+=st.size
-      totalChars+=fs.readFileSync(fp,'utf8').length
+      const j=path.join(c,f)
+      const s=fs.statSync(j)
+      tB+=s.size
+      tC+=fs.readFileSync(j,'utf8').length
     }catch{}
   }
-  const totalTokens=Math.ceil(totalChars/3.5)
-  const sizeStr=totalBytes>1024*1024?`${(totalBytes/1024/1024).toFixed(1)}MB`:`${(totalBytes/1024).toFixed(1)}KB`
+  const tT=Math.ceil(tC/3.5)
+  const sS=tB>1024*1024?`${(tB/1024/1024).toFixed(1)}MB`:`${(tB/1024).toFixed(1)}KB`
   console.log('Files:')
-  console.log(`  Tracked: ${Object.keys(entries).length}`)
-  console.log(`  New: ${newFiles.length}`)
-  console.log(`  Modified: ${modified.length}`)
-  console.log(`  Deleted: ${deleted.length}`)
-  console.log(`  Ignored: ${ignoredFiles.length}`)
-  console.log(`  Size: ${sizeStr} | ${totalChars.toLocaleString()} chars | ~${totalTokens.toLocaleString()} tokens`)
+  console.log(`  Tracked: ${Object.keys(e).length}`)
+  console.log(`  New: ${N.length}`)
+  console.log(`  Modified: ${M.length}`)
+  console.log(`  Deleted: ${d.length}`)
+  console.log(`  Ignored: ${I.length}`)
+  console.log(`  Size: ${sS} | ${tC.toLocaleString()} chars | ~${tT.toLocaleString()} tokens`)
   console.log('')
-  if (newFiles.length > 0 || modified.length > 0 || deleted.length > 0) {
-    if (newFiles.length > 0) {
+  if (N.length > 0 || M.length > 0 || d.length > 0) {
+    if (N.length > 0) {
       console.log('New files:')
-      newFiles.slice(0, 10).forEach(f => console.log(`  + ${f.file}`))
-      if (newFiles.length > 10) console.log(`  ... and ${newFiles.length - 10} more`)
+      N.slice(0, 10).forEach(s => console.log(`  + ${s.file}`))
+      if (N.length > 10) console.log(`  ... and ${N.length - 10} more`)
       console.log('')
     }
-    if (modified.length > 0) {
+    if (M.length > 0) {
       console.log('Modified:')
-      modified.slice(0, 10).forEach(f => console.log(`  ~ ${f.file}`))
-      if (modified.length > 10) console.log(`  ... and ${modified.length - 10} more`)
+      M.slice(0, 10).forEach(t => console.log(`  ~ ${t.file}`))
+      if (M.length > 10) console.log(`  ... and ${M.length - 10} more`)
       console.log('')
     }
-    if (deleted.length > 0) {
+    if (d.length > 0) {
       console.log('Deleted:')
-      deleted.slice(0, 10).forEach(f => console.log(`  - ${f.file}`))
-      if (deleted.length > 10) console.log(`  ... and ${deleted.length - 10} more`)
+      d.slice(0, 10).forEach(v => console.log(`  - ${v.file}`))
+      if (d.length > 10) console.log(`  ... and ${d.length - 10} more`)
       console.log('')
     }
   }
-  // License status
   console.log('License:')
-  let licenseKey = getLicenseKey()
-  let hasKey = !!licenseKey
-  // Check online status (blocking) to get fresh revocation status
-  if (hasKey) {
+  let L = getLicenseKey()
+  let K = !!L
+  if (K) {
     await forceCheckOnline()
-    // Re-check after online validation (license may have been cleared if revoked)
-    licenseKey = getLicenseKey()
-    hasKey = !!licenseKey
+    L = getLicenseKey()
+    K = !!L
   }
-  const expiration = hasKey ? getLicenseExpiration() : null
-  const licenseData = hasKey ? parseLicense(licenseKey) : null
-  const isTrial = licenseData?.type === 'trial'
-  const revoked = isLicenseRevoked()
-  const revokedReason = getRevokedReason()
-  if (revoked || revokedReason) {
+  const E = K ? getLicenseExpiration() : null
+  const D = K ? parseLicense(L) : null
+  const T = D?.type === 'trial'
+  const W = isLicenseRevoked()
+  const X = getRevokedReason()
+  if (W || X) {
     console.log('  Status: REVOKED')
-    if (revokedReason) {
-      console.log(`  Reason: ${revokedReason}`)
+    if (X) {
+      console.log(`  Reason: ${X}`)
     }
     console.log('  Contact support for assistance.')
-  } else if (hasKey) {
-    if (licenseValid) {
-      if (isTrial) {
-        const daysText = expiration?.daysLeft === 1 ? '1 day' : `${expiration?.daysLeft} days`
-        console.log(`  Status: trial license (${daysText} remaining)`)
+  } else if (K) {
+    if (V) {
+      if (T) {
+        const Y = E?.daysLeft === 1 ? '1 day' : `${E?.daysLeft} days`
+        console.log(`  Status: trial license (${Y} remaining)`)
         console.log(`  Get license: https://latent-k.pages.dev/activation`)
-      } else if (expiration && expiration.expires) {
-        if (expiration.daysLeft <= 7 && expiration.daysLeft > 0) {
-          console.log(`  Status: valid (expires in ${expiration.daysLeft} day${expiration.daysLeft === 1 ? '' : 's'})`)
+      } else if (E && E.expires) {
+        if (E.daysLeft <= 7 && E.daysLeft > 0) {
+          console.log(`  Status: valid (expires in ${E.daysLeft} day${E.daysLeft === 1 ? '' : 's'})`)
         } else {
           console.log('  Status: valid')
         }
-        console.log(`  Expires: ${expiration.expires.toLocaleDateString()}`)
+        console.log(`  Expires: ${E.expires.toLocaleDateString()}`)
       } else {
         console.log('  Status: valid (lifetime)')
       }
     } else {
-      if (expiration && expiration.expired) {
+      if (E && E.expired) {
         console.log('  Status: expired')
-        console.log(`  Expired: ${expiration.expires.toLocaleDateString()}`)
+        console.log(`  Expired: ${E.expires.toLocaleDateString()}`)
         console.log(`  Renew license: https://latent-k.pages.dev/activation`)
       } else {
         console.log('  Status: invalid')
@@ -142,18 +134,18 @@ export async function status() {
   }
   console.log('')
   console.log('Config:')
-  const provider = getAiProvider()
-  const providerName = provider === 'anthropic' ? 'Anthropic' : 'Gemini'
-  console.log(`  AI Provider: ${isConfigured() ? `${providerName} (configured)` : 'not set'}`)
+  const p = getAiProvider()
+  const Q = p === 'anthropic' ? 'Anthropic' : 'Gemini'
+  console.log(`  AI Provider: ${isConfigured() ? `${Q} (configured)` : 'not set'}`)
   console.log(`  Pure Mode: ${getPureMode() ? 'ON (m2m style)' : 'OFF'}`)
   console.log('')
   console.log('Ignore:')
-  console.log(`  Patterns: ${globalPatterns.length} global, ${projectPatterns.length} project`)
-  console.log(`  Files ignored: ${ignoredFiles.length}`)
+  console.log(`  Patterns: ${G.length} global, ${P.length} project`)
+  console.log(`  Files ignored: ${I.length}`)
   console.log('')
-  if (newFiles.length > 0 || modified.length > 0 || deleted.length > 0) {
+  if (N.length > 0 || M.length > 0 || d.length > 0) {
     console.log('Run "lk sync" to update context.')
-  } else if (!hasContext) {
+  } else if (!H) {
     console.log('Run "lk sync" to initialize context.')
   } else {
     console.log('✓ All files in sync')

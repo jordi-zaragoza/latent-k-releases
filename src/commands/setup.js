@@ -9,97 +9,87 @@ import { platform } from 'os'
 import { getClaudeUserEmail } from '../lib/claude-utils.js'
 const ANTHROPIC_KEY_URL = 'https://console.anthropic.com/settings/keys'
 const GEMINI_KEY_URL = 'https://aistudio.google.com/app/apikey'
-function openBrowser(url) {
-  const cmd = platform() === 'darwin' ? 'open' :
-              platform() === 'win32' ? 'cmd' : 'xdg-open'
-  const args = platform() === 'win32' ? ['/c', 'start', '', url] : [url]
-  execFile(cmd, args, { shell: false })
-}
-let rl = null
-function question(prompt) {
-  return new Promise(resolve => rl.question(prompt, resolve))
-}
-export async function setup() {
-  rl = createInterface({
+function openBrowser(U){const K=platform()==='darwin'?'open':platform()==='win32'?'cmd':'xdg-open';const R=platform()==='win32'?['/c','start','',U]:[U];execFile(K,R,{shell:false})}
+let R = null
+function question(P){return new Promise(C=>R.question(P,C))}
+export async function setup(){
+  R = createInterface({
     input: process.stdin,
     output: process.stdout
   })
   console.log('lk setup\n')
-  // Check access (license or trial, verify email)
-  const userEmail = getClaudeUserEmail()
-  const access = await checkAccess(userEmail)
-  if (!access.allowed) {
-    console.log(access.message)
-    rl.close()
+  const E = getClaudeUserEmail()
+  const A = await checkAccess(E)
+  if(!A.allowed){
+    console.log(A.message)
+    R.close()
     return
   }
-  if (access.message) {
-    console.log(access.message)
+  if(A.message){
+    console.log(A.message)
     console.log('')
   }
-  if (isConfigured()) {
-    const currentProvider = getAiProvider()
-    const providerName = currentProvider === 'anthropic' ? 'Anthropic' : 'Gemini'
-    const overwrite = await question(`Already configured (${providerName}). Overwrite? (y/N): `)
-    if (overwrite.toLowerCase() !== 'y') {
-      rl.close()
+  if(isConfigured()){
+    const P = getAiProvider()
+    const N = P === 'anthropic' ? 'Anthropic' : 'Gemini'
+    const O = await question(`Already configured (${N}). Overwrite? (y/N): `)
+    if(O.toLowerCase() !== 'y'){
+      R.close()
       return
     }
   }
   console.log('\nSelect AI provider for auto-describe:')
   console.log('  1. Anthropic (Claude Haiku)')
   console.log('  2. Gemini (free)')
-  const providerChoice = await question('\nChoice (1/2): ')
-  const provider = providerChoice.trim() === '1' ? 'anthropic' : 'gemini'
-  setAiProvider(provider)
-  if (provider === 'anthropic') {
+  const C = await question('\nChoice (1/2): ')
+  const Pr = C.trim() === '1' ? 'anthropic' : 'gemini'
+  setAiProvider(Pr)
+  if(Pr === 'anthropic'){
     console.log('\nOpening Anthropic Console to get your API key...')
     openBrowser(ANTHROPIC_KEY_URL)
     console.log('(If browser did not open, go to: ' + ANTHROPIC_KEY_URL + ')\n')
-    const apiKey = await question('Paste your Anthropic API key here: ')
-    if (!apiKey.trim()) {
+    const K = await question('Paste your Anthropic API key here: ')
+    if(!K.trim()){
       console.log('No API key provided. Setup cancelled.')
-      rl.close()
+      R.close()
       return
     }
-    // Validate the API key
-    const validation = await withSpinner('Validating API key...', () =>
-      validateApiKey('anthropic', apiKey.trim())
+    const V = await withSpinner('Validating API key...', ()=>
+      validateApiKey('anthropic', K.trim())
     )
-    if (!validation.valid) {
-      console.log(`✗ ${validation.error || 'Invalid API key'}`)
+    if(!V.valid){
+      console.log(`✗ ${V.error || 'Invalid API key'}`)
       console.log('Setup cancelled.')
-      rl.close()
+      R.close()
       return
     }
     console.log('✓ API key valid\n')
-    setApiKey(apiKey.trim(), 'anthropic')
+    setApiKey(K.trim(), 'anthropic')
   } else {
     console.log('\nOpening Google AI Studio to get your API key...')
     openBrowser(GEMINI_KEY_URL)
     console.log('(If browser did not open, go to: ' + GEMINI_KEY_URL + ')\n')
-    const apiKey = await question('Paste your Gemini API key here: ')
-    if (!apiKey.trim()) {
+    const K = await question('Paste your Gemini API key here: ')
+    if(!K.trim()){
       console.log('No API key provided. Setup cancelled.')
-      rl.close()
+      R.close()
       return
     }
-    // Validate the API key
-    const validation = await withSpinner('Validating API key...', () =>
-      validateApiKey('gemini', apiKey.trim())
+    const V = await withSpinner('Validating API key...', ()=>
+      validateApiKey('gemini', K.trim())
     )
-    if (!validation.valid) {
-      console.log(`✗ ${validation.error || 'Invalid API key'}`)
+    if(!V.valid){
+      console.log(`✗ ${V.error || 'Invalid API key'}`)
       console.log('Setup cancelled.')
-      rl.close()
+      R.close()
       return
     }
     console.log('✓ API key valid\n')
-    setApiKey(apiKey.trim(), 'gemini')
+    setApiKey(K.trim(), 'gemini')
   }
   console.log('API key saved.\n')
-  const setupHooks = await question('Configure CLI integrations (Claude Code, Gemini CLI)? (Y/n): ')
-  if (setupHooks.toLowerCase() !== 'n') {
+  const H = await question('Configure CLI integrations (Claude Code, Gemini CLI)? (Y/n): ')
+  if(H.toLowerCase() !== 'n'){
     await enableHooks(null, true)
     console.log('Global settings configured (SessionStart/Stop hooks).')
   }
@@ -108,5 +98,5 @@ export async function setup() {
   console.log('\nNext steps:')
   console.log('  lk sync      # Initialize project context')
   console.log('  claude       # or: gemini')
-  rl.close()
+  R.close()
 }

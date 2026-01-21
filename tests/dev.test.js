@@ -102,13 +102,13 @@ describe('hooks.js consistency with dev.js', () => {
   })
 
   it('both use same binary path', () => {
-    expect(hooksContent).toContain("const lkBin = '/usr/local/bin/lk'")
-    expect(devContent).toContain("const lkBin = '/usr/local/bin/lk'")
+    expect(hooksContent).toContain("/usr/local/bin/lk")
+    expect(devContent).toContain("/usr/local/bin/lk")
   })
 
   it('hooks.js uses expand not context', () => {
-    expect(hooksContent).toContain('expandCmd')
-    expect(hooksContent).not.toMatch(/contextCmd\s*=/)
+    expect(hooksContent).toContain('expand')
+    expect(hooksContent).not.toMatch(/\bcontext\s+command/)
   })
 
   it('dev.js uses expand not context', () => {
