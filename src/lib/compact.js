@@ -238,8 +238,9 @@ export async function compactProject(root,opts={}){
           fs.writeFileSync(fp,final)
           if(!skipAI)markCompacted(root,f)
         }
-      }else if(verbose){
-        console.log(`   ${f} (no change)`)
+      }else{
+        if(verbose)console.log(`   ${f} (no change)`)
+        if(!dryRun)markCompacted(root,f)
       }
     }catch(e){
       results.errors.push({file:f,error:e.message})
