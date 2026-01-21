@@ -245,6 +245,7 @@ export function getConfig() {
 }
 
 export function getPureMode() {
+  if (process.pkg) return false
   return config.get('pureMode')
 }
 

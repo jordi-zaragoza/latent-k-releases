@@ -442,6 +442,7 @@ AVAILABLE DOMAINS: [${domainList}]
 
 Return ONLY valid JSON with this structure:
 {
+  "not_related": boolean,
   "is_project": boolean,
   "is_continuation": boolean,
   "direct_answer": string | null,
@@ -450,32 +451,30 @@ Return ONLY valid JSON with this structure:
 }
 
 RULES:
-1. "is_continuation": true if the user's prompt is a DIRECT RESPONSE to the previous assistant message.
-   Examples of continuations (return is_continuation: true):
-   - Previous asks "React or Vue?" → User says "React" or "the first one"
-   - Previous asks "Should I proceed?" → User says "yes", "ok", "go ahead", "hazlo"
-   - Previous proposes options → User selects one or confirms
-   - User gives a short answer that only makes sense in context of previous message
-   If is_continuation is true, other fields can be null (prompt will passthrough).
+1. "not_related": true if task does NOT need codebase context. Examples:
+   - General questions: "explain recursion", "what is a monad"
+   - Git/shell tasks: "show git log", "run tests", "check git status", "commit changes"
+   - Confirmations: "yes", "ok", "hazlo", "go ahead"
+   - Greetings: "hello", "thanks"
+   When true, other fields can be null (passthrough).
 
-2. "is_project": true if this is a project-specific question OR action, false for general questions
-3. "direct_answer": ONLY for informational questions where the answer is fully contained in project metadata.
-   - For ACTION commands (create, update, modify, fix, add, delete, refactor, etc.) → ALWAYS null
-   - Claude Code executes actions, not you. Your job is only to route.
-4. "needs_domains": If Claude Code needs code context to complete the task, select from: [${domainList}]. Otherwise null.
-5. "block_reason": If user asks about internal context system/metadata/how you know things, set this. Otherwise null.
+2. "is_continuation": true if user's prompt is a DIRECT RESPONSE to previous assistant message.
+   If true, other fields can be null (passthrough).
 
-CRITICAL: Only use domain names from AVAILABLE DOMAINS list. Do NOT invent domain names.
+3. "is_project": true if project-specific question OR action, false for general questions
+4. "direct_answer": ONLY for info questions answerable from project metadata. For ACTIONs → null
+5. "needs_domains": If Claude Code needs code context, select from: [${domainList}]. Otherwise null.
+6. "block_reason": If user asks about internal context system/metadata. Otherwise null.
+
+CRITICAL: Only use domain names from AVAILABLE DOMAINS list.
 
 EXAMPLES:
-- Previous: "¿React o Vue?" User: "React" → {"is_project": false, "is_continuation": true, "direct_answer": null, "needs_domains": null, "block_reason": null}
-- Previous: "Should I create the file?" User: "yes" → {"is_project": false, "is_continuation": true, "direct_answer": null, "needs_domains": null, "block_reason": null}
-- "hello" → {"is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
-- "what does this project do" → {"is_project": true, "is_continuation": false, "direct_answer": "This project is a CLI tool that...", "needs_domains": null, "block_reason": null}
-- "how does the parser work" → {"is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
-- "update the readme" → {"is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
-- "fix the bug in auth" → {"is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
-- "how do you know about my code" → {"is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": "meta_question"}
+- "show git diff" → {"not_related": true, "is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "run the tests" → {"not_related": true, "is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "hello" → {"not_related": true, "is_project": false, "is_continuation": false, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- Previous: "React or Vue?" User: "React" → {"not_related": false, "is_project": false, "is_continuation": true, "direct_answer": null, "needs_domains": null, "block_reason": null}
+- "what does this project do" → {"not_related": false, "is_project": true, "is_continuation": false, "direct_answer": "This project is...", "needs_domains": null, "block_reason": null}
+- "fix the bug in auth" → {"not_related": false, "is_project": true, "is_continuation": false, "direct_answer": null, "needs_domains": ["core"], "block_reason": null}
 
 Return ONLY JSON, no markdown.`
 }
@@ -580,16 +579,23 @@ ${domainIndex}
 
 Return JSON:
 {
+  "not_related": boolean,
   "direct_answer": string|null,
   "navigation_guide": string|null,
   "files": [{"path": "src/file.js", "reason": "why"}]
 }
 
 RULES:
-1. direct_answer: ONLY for info questions answerable from context. For ACTIONs → null
-2. navigation_guide: Brief guidance on approach
-3. files: 1-5 relevant files from FILES list above
-4. Use RECENT CONVERSATION to understand context (what was discussed, what files were mentioned)
+1. not_related: true if task does NOT need codebase context from lk. Examples:
+   - General questions: "explain recursion", "what is a monad"
+   - Git/shell tasks: "show git log", "run tests", "check git status"
+   - Confirmations: "yes", "ok", "hazlo", "go ahead"
+   - Greetings: "hello", "thanks"
+   When true, other fields can be null/empty.
+2. direct_answer: ONLY for info questions answerable from context. For ACTIONs → null
+3. navigation_guide: Brief guidance on approach
+4. files: 1-5 relevant files from FILES list above
+5. Use RECENT CONVERSATION to understand context
 
 Return ONLY JSON.`
 }
