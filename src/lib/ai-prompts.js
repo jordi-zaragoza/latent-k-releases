@@ -167,15 +167,23 @@ FILE TREE:
 ${files.join('\n')}
 ALREADY IGNORED (global config - DO NOT include these):
 ${globalPatterns.join('\n')}
-Generate patterns for files that should be ignored, such as:
-- Virtual environments (venv, .venv, env, .env directories)
-- Generated files specific to this project
-- Data/fixture files that are large or not useful
-- Project-specific build artifacts not covered by global patterns
+PURPOSE: Ignore files that add NO VALUE for AI code understanding. These are NOT sensitive files.
+Ignore patterns are for files UNNECESSARY for AI context:
+- Generated/compiled outputs (minified JS, CSS bundles, sourcemaps)
+- Binary/media files (images, PDFs, ZIPs, fonts)
+- Large data files (fixtures, dumps, CSVs, JSONs with raw data)
+- Dependency licenses (licenses.json, NOTICE files)
+- Static HTML shells (index.html with no logic, just template)
+- Vendor bundles, cache files, coverage reports
+DO NOT IGNORE:
+- Source code files (even index.js, main.js - these are entry points!)
+- Config files (package.json, tsconfig, .env.example)
+- Type definitions, schemas, interfaces
+- Documentation that explains architecture
 Rules:
-- Check the ALREADY IGNORED list above - only add patterns NOT already covered
+- Check ALREADY IGNORED list - only add patterns NOT already covered
 - ONLY include patterns for things that ACTUALLY EXIST in the tree
-- ALWAYS include virtual environment directories if present and not already ignored
+- Include virtual environment directories if present and not already ignored
 - Return empty if nothing needs ignoring
 Return ONLY project-specific patterns, one per line. Empty response is OK.`
 }
