@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import {execSync} from 'child_process'
 import os from 'os'
-import {getAllFiles,getFileExtension,markCompacted,isCompacted,hashContent} from './context.js'
+import {getAllFiles,getFileExtension,markCompacted,isCompacted,isInDomain,hashContent} from './context.js'
 import {getApiKey} from './config.js'
 import {GoogleGenerativeAI} from '@google/generative-ai'
 import {PURE_MODE_INSTRUCTIONS,logLlmCall,logLlmResponse,recordError} from './ai-prompts.js'
@@ -218,8 +218,9 @@ export async function compactProject(root,opts={}){
     try{
       const og=fs.readFileSync(fp,'utf8')
       const{code,needsAI}=programmaticCompact(og,ext)
+      const inDom=isInDomain(root,f)
       const tooLarge=code.length>MAX_AI_CHARS
-      const skipAI=needsAI&&(results.aiUsed>=aiLimit||tooLarge)
+      const skipAI=needsAI&&(results.aiUsed>=aiLimit||tooLarge||!inDom)
       let final=code
       if(needsAI&&!skipAI){
         final=await aiCompact(code,ext)
@@ -239,7 +240,7 @@ export async function compactProject(root,opts={}){
         results.saved+=savedBytes
         const pct=Math.round(savedBytes/og.length*100)
         const tkSaved=toTokens(savedBytes)
-        const flag=tooLarge?'LG':skipAI?'SY':needsAI?'AI':'  '
+        const flag=tooLarge?'LG':!inDom?'ND':skipAI?'SY':needsAI?'AI':'  '
         if(verbose)console.log(`${flag} ${f} -${tkSaved}tk (${pct}%)`)
         if(!dryRun){
           fs.writeFileSync(fp,final)
