@@ -5,6 +5,7 @@ import { setup } from './commands/setup.js'
 import { sync } from './commands/sync.js'
 import { status } from './commands/status.js'
 import { stats } from './commands/stats.js'
+import { loadStats, statsPath } from './lib/stats.js'
 import { savings } from './commands/savings.js'
 import { update, checkMinVersion } from './commands/update.js'
 import { dev } from './commands/dev.js'
@@ -402,9 +403,23 @@ program
       }
     }
     const pA = getPureMode()
-    const t = pA
-      ? 'code only • no fluff • pure signal'
-      : PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
+    let t = pA ? 'code only • no fluff • pure signal' : PRO_TIPS[Math.floor(Math.random() * PRO_TIPS.length)]
+    if (!pA && Math.random() < 0.25) {
+      try {
+        const cwd = process.cwd()
+        if (existsSync(statsPath(cwd))) {
+          const st = loadStats(cwd)
+          const ops = st.byOperationType || {}
+          const expKeys = Object.keys(ops).filter(k => k.toLowerCase().includes('expand'))
+          let tUsed = 0
+          for (const k of expKeys) tUsed += ops[k].totalDurationMs || 0
+          if (tUsed >= 60000) {
+            const mins = Math.round(tUsed * 0.4 / 60000)
+            if (mins > 0) t = `${mins}min saved with LK context injection`
+          }
+        }
+      } catch {}
+    }
     const iL = iPs.join(' | ').replace('⦓ LK', 'Context loaded').replace('◈ LK PURE', '◈ Pure mode')
     output(jM ? iPs.join(' | ') : iL)
     if (!jM) {
