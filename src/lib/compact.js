@@ -153,7 +153,14 @@ function compactSQL(code){
   return{code:c,needsAI:false}
 }
 const COMPACT_PROMPT=`${PURE_MODE_INSTRUCTIONS}
-Compact this code. KEEP exported function/variable names unchanged. Output ONLY the compacted code. No markdown, no explanations.
+Compact this code preserving EXACT behavior:
+- KEEP all export names unchanged
+- KEEP all string literals unchanged
+- KEEP all imports unchanged
+- KEEP valid JS syntax (semicolons where needed)
+- Only remove: comments, blank lines, unnecessary whitespace
+- Shorten ONLY internal variable names
+Output ONLY the code. No markdown.
 %CODE%`
 function validateJS(code){
   const tmp=path.join(os.tmpdir(),`lk-validate-${Date.now()}.js`)
