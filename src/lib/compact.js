@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import {execSync} from 'child_process'
+import os from 'os'
 import {getAllFiles,getFileExtension,markCompacted} from './context.js'
 import {getApiKey} from './config.js'
 import {GoogleGenerativeAI} from '@google/generative-ai'
@@ -165,7 +167,16 @@ Compact this code. Output ONLY the compacted code. No markdown, no explanations.
 
 %CODE%`
 function validateJS(code){
-  try{new Function(code);return true}catch{return false}
+  const tmp=path.join(os.tmpdir(),`lk-validate-${Date.now()}.js`)
+  try{
+    fs.writeFileSync(tmp,code)
+    execSync(`node --check "${tmp}"`,{stdio:'pipe'})
+    fs.unlinkSync(tmp)
+    return true
+  }catch{
+    try{fs.unlinkSync(tmp)}catch{}
+    return false
+  }
 }
 async function aiCompact(code,ext){
   if(!model)initModel()
