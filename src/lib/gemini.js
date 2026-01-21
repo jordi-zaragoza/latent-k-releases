@@ -17,9 +17,12 @@ import {
   DEFAULT_ANALYSIS
 } from './ai-prompts.js'
 const MODEL = 'gemini-2.5-flash'
+const MODEL_LITE = 'gemini-2.5-flash-lite'
 let genAI = null
 let model = null
+let modelLite = null
 let jsonModel = null
+let jsonModelLite = null
 let curKey = null
 function initClient() {
   const apiKey = getApiKey()
@@ -28,14 +31,11 @@ function initClient() {
   log('GEMINI', 'Initializing client...')
   genAI = new GoogleGenerativeAI(apiKey)
   model = genAI.getGenerativeModel({ model: MODEL })
-  jsonModel = genAI.getGenerativeModel({
-    model: MODEL,
-    generationConfig: {
-      responseMimeType: 'application/json'
-    }
-  })
+  modelLite = genAI.getGenerativeModel({ model: MODEL_LITE })
+  jsonModel = genAI.getGenerativeModel({ model: MODEL, generationConfig: { responseMimeType: 'application/json' } })
+  jsonModelLite = genAI.getGenerativeModel({ model: MODEL_LITE, generationConfig: { responseMimeType: 'application/json' } })
   curKey = apiKey
-  log('GEMINI', `Client ready (model: ${MODEL})`)
+  log('GEMINI', `Client ready (models: ${MODEL}, ${MODEL_LITE})`)
 }
 /**
  * Validate an API key by making a minimal API call
@@ -85,20 +85,16 @@ export async function checkRateLimit() {
  * @param {string} prompt - The prompt to send
  * @param {string} operationType - Logical operation type for stats tracking
  */
-async function callJsonApi(prompt, operationType = null) {
-  const tracking = logLlmCall('GEMINI', 'JSON API call', prompt.length, MODEL, operationType)
+async function callJsonApi(prompt, operationType = null, lite = false) {
+  const m = lite ? MODEL_LITE : MODEL
+  const tracking = logLlmCall('GEMINI', 'JSON API call', prompt.length, m, operationType)
   try {
-    const result = await jsonModel.generateContent(prompt)
+    const result = await (lite ? jsonModelLite : jsonModel).generateContent(prompt)
     const text = result.response?.text?.()?.trim() || null
     logLlmResponse(tracking, text)
     return text
   } catch (err) {
-    recordError({
-      provider: 'GEMINI',
-      operation: 'JSON API call',
-      operationType,
-      error: err.message
-    })
+    recordError({ provider: 'GEMINI', operation: 'JSON API call', operationType, error: err.message })
     throw err
   }
 }
@@ -107,20 +103,16 @@ async function callJsonApi(prompt, operationType = null) {
  * @param {string} prompt - The prompt to send
  * @param {string} operationType - Logical operation type for stats tracking
  */
-async function callTextApi(prompt, operationType = null) {
-  const tracking = logLlmCall('GEMINI', 'Text API call', prompt.length, MODEL, operationType)
+async function callTextApi(prompt, operationType = null, lite = false) {
+  const m = lite ? MODEL_LITE : MODEL
+  const tracking = logLlmCall('GEMINI', 'Text API call', prompt.length, m, operationType)
   try {
-    const result = await model.generateContent(prompt)
+    const result = await (lite ? modelLite : model).generateContent(prompt)
     const text = result.response?.text?.()?.trim() || null
     logLlmResponse(tracking, text)
     return text
   } catch (err) {
-    recordError({
-      provider: 'GEMINI',
-      operation: 'Text API call',
-      operationType,
-      error: err.message
-    })
+    recordError({ provider: 'GEMINI', operation: 'Text API call', operationType, error: err.message })
     throw err
   }
 }
@@ -204,7 +196,7 @@ export async function analyzeFile({ lkContent, file, content, action }) {
   log('GEMINI', `analyzeFile: ${action} ${file}`)
   log('GEMINI', `Context: ${lkContent.length} chars, Content: ${content?.length || 0} chars`)
   const prompt = buildGeminiAnalyzePrompt({ lkContent, file, content, action })
-  const text = await callJsonApi(prompt, 'analyzeFile')
+  const text = await callJsonApi(prompt, 'analyzeFile', true)
   if (!text) {
     log('GEMINI', 'Empty response - using defaults')
     return DEFAULT_ANALYSIS
@@ -229,7 +221,7 @@ export async function analyzeFiles({ lkContent, files }) {
   log('GEMINI', `analyzeFiles: ${files.length} files`)
   log('GEMINI', `Context: ${lkContent.length} chars`)
   const prompt = buildGeminiBatchPrompt({ lkContent, files })
-  const text = await callJsonApi(prompt, 'analyzeFiles')
+  const text = await callJsonApi(prompt, 'analyzeFiles', true)
   if (!text) {
     log('GEMINI', 'Empty batch response - returning defaults')
     return generateDefaultResults(files)
@@ -267,7 +259,7 @@ export async function generateIgnore({ files, globalPatterns = [] }) {
   if (!model) initClient()
   log('GEMINI', `generateIgnore: ${files.length} files, ${globalPatterns.length} global patterns`)
   const prompt = buildIgnorePrompt({ files, globalPatterns })
-  const text = await callTextApi(prompt, 'generateIgnore')
+  const text = await callTextApi(prompt, 'generateIgnore', true)
   if (!text) {
     log('GEMINI', 'Empty response - no project-specific patterns')
     return []
@@ -291,7 +283,7 @@ export async function classifyPrompt(userPrompt, projectLk, availableDomains = [
     log('GEMINI', `Previous context: ${previousContext.slice(0, 100)}...`)
   }
   const prompt = buildClassifyPrompt(userPrompt, projectLk, availableDomains, previousContext)
-  const text = await callJsonApi(prompt, 'classifyPrompt')
+  const text = await callJsonApi(prompt, 'classifyPrompt', true)
   if (!text) {
     log('GEMINI', 'Empty response - defaulting to passthrough')
     return { is_project: false, is_continuation: false, direct_answer: null, needs_domains: null, block_reason: null }
@@ -365,7 +357,7 @@ export async function generateProjectSummary(projectLk, domainNames = []) {
   if (!model) initClient()
   log('GEMINI', `generateProjectSummary: ${projectLk.length} chars, ${domainNames.length} domains`)
   const prompt = buildProjectSummaryPrompt(projectLk, domainNames)
-  const text = await callTextApi(prompt, 'generateProjectSummary')
+  const text = await callTextApi(prompt, 'generateProjectSummary', true)
   if (!text) {
     log('GEMINI', 'Empty response - no summary generated')
     return null
