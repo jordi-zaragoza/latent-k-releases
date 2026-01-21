@@ -5,6 +5,8 @@ import {getApiKey} from './config.js'
 import {GoogleGenerativeAI} from '@google/generative-ai'
 import {PURE_MODE_INSTRUCTIONS,logLlmCall,logLlmResponse,recordError} from './ai-prompts.js'
 const MODEL='gemini-2.5-flash'
+const MAX_AI_TOKENS=100000
+const MAX_AI_CHARS=MAX_AI_TOKENS*3.5
 let model=null
 function initModel(){
   const k=getApiKey('gemini')
@@ -182,6 +184,7 @@ export async function compactFile(filePath){
   const og=fs.readFileSync(filePath,'utf8')
   const{code,needsAI}=programmaticCompact(og,ext)
   if(!needsAI)return{og,compacted:code,usedAI:false}
+  if(code.length>MAX_AI_CHARS)return{og,compacted:code,usedAI:false,skippedAI:'too_large'}
   const final=await aiCompact(code,ext)
   return{og,compacted:final,usedAI:true}
 }
@@ -203,7 +206,8 @@ export async function compactProject(root,opts={}){
     try{
       const og=fs.readFileSync(fp,'utf8')
       const{code,needsAI}=programmaticCompact(og,ext)
-      const skipAI=needsAI&&results.aiUsed>=aiLimit
+      const tooLarge=code.length>MAX_AI_CHARS
+      const skipAI=needsAI&&(results.aiUsed>=aiLimit||tooLarge)
       let final=code
       if(needsAI&&!skipAI){
         final=await aiCompact(code,ext)
@@ -218,7 +222,8 @@ export async function compactProject(root,opts={}){
         results.saved+=savedBytes
         const pct=Math.round(savedBytes/og.length*100)
         const tkSaved=toTokens(savedBytes)
-        if(verbose)console.log(`${skipAI?'SY':needsAI?'AI':'  '} ${f} -${tkSaved}tk (${pct}%)`)
+        const flag=tooLarge?'LG':skipAI?'SY':needsAI?'AI':'  '
+        if(verbose)console.log(`${flag} ${f} -${tkSaved}tk (${pct}%)`)
         if(!dryRun){
           fs.writeFileSync(fp,final)
           if(!skipAI)markCompacted(root,f)
