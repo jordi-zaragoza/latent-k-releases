@@ -19,8 +19,8 @@ describe.skipIf(!hasPrivateKey)('license-gen', () => {
     })
 
     it('should require email', () => {
-      expect(() => generateLicense()).toThrow('Email is required for license generation')
-      expect(() => generateLicense({ type: 'pro' })).toThrow('Email is required for license generation')
+      expect(() => generateLicense()).toThrow('E_EMAIL_REQ')
+      expect(() => generateLicense({ type: 'pro' })).toThrow('E_EMAIL_REQ')
     })
 
     it('should include email in license data', () => {
@@ -104,7 +104,7 @@ describe.skipIf(!hasPrivateKey)('license-gen', () => {
     })
 
     it('should require email', () => {
-      expect(() => generateBatch(3)).toThrow('Email is required for license generation')
+      expect(() => generateBatch(3)).toThrow('E_EMAIL_REQ')
     })
   })
 })
