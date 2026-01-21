@@ -124,7 +124,8 @@ program
   .description('Toggle pure mode (m2m coding style)')
   .option('-n, --dry-run','Preview changes without modifying')
   .option('-l, --list','List all files in status')
-  .action((action,file,opts)=>pure(action,{dryRun:opts.dryRun,file,list:opts.list}))
+  .option('-a, --all','Compact all files (unlimited AI)')
+  .action((action,file,opts)=>pure(action,{dryRun:opts.dryRun,file,list:opts.list,all:opts.all}))
 
 program
   .command('update')
