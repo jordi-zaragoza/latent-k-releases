@@ -194,10 +194,11 @@ export async function compactFile(filePath){
   return{og,compacted:final,usedAI:true}
 }
 const ALL_EXTS=[...JS_EXTS,...PY_EXTS,...GO_EXTS,...RS_EXTS,...CSS_EXTS,...JSON_EXTS,...HTML_EXTS,...YAML_EXTS,...SH_EXTS,...RUBY_EXTS,...PHP_EXTS,...JAVA_EXTS,...C_EXTS,...SWIFT_EXTS,...SQL_EXTS]
+function toTokens(chars){return Math.ceil(chars/3.5)}
 export async function compactProject(root,opts={}){
   const{dryRun=false,verbose=false,aiLimit=Infinity}=opts
   const files=getAllFiles(root)
-  const results={total:0,compacted:0,skipped:0,saved:0,errors:[],aiUsed:0,aiPending:[]}
+  const results={total:0,compacted:0,skipped:0,saved:0,ogBytes:0,finalBytes:0,errors:[],aiUsed:0,aiPending:[]}
   for(const f of files){
     results.total++
     const fp=path.join(root,f)
@@ -217,11 +218,15 @@ export async function compactProject(root,opts={}){
         results.aiUsed++
       }
       if(skipAI)results.aiPending.push(f)
+      results.ogBytes+=og.length
+      results.finalBytes+=final.length
       const savedBytes=og.length-final.length
       if(savedBytes>0){
         results.compacted++
         results.saved+=savedBytes
-        if(verbose)console.log(`${skipAI?'SY':needsAI?'AI':'  '} ${f} -${savedBytes}b`)
+        const pct=Math.round(savedBytes/og.length*100)
+        const tkSaved=toTokens(savedBytes)
+        if(verbose)console.log(`${skipAI?'SY':needsAI?'AI':'  '} ${f} -${tkSaved}tk (${pct}%)`)
         if(!dryRun){
           fs.writeFileSync(fp,final)
           if(!skipAI)markCompacted(root,f)
@@ -234,5 +239,9 @@ export async function compactProject(root,opts={}){
       if(verbose)console.log(`ERR ${f}: ${e.message}`)
     }
   }
+  results.ogTokens=toTokens(results.ogBytes)
+  results.finalTokens=toTokens(results.finalBytes)
+  results.savedTokens=results.ogTokens-results.finalTokens
+  results.pct=results.ogTokens?Math.round(results.savedTokens/results.ogTokens*100):0
   return results
 }
