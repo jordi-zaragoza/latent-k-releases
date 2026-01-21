@@ -12,7 +12,8 @@ const STATS_FILE = 'stats.json'
 // Source: https://ai.google.dev/pricing, https://www.anthropic.com/pricing
 export const PRICING_DATE = '2025-01-18'
 export const MODEL_PRICING = {
-  'gemini-2.5-flash': { input: 0.075, output: 0.30 },    // $/1M tokens
+  'gemini-2.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-2.5-flash-lite': { input: 0.01875, output: 0.075 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gemini-1.5-flash': { input: 0.075, output: 0.30 },
   'gemini-1.5-pro': { input: 1.25, output: 5.00 },
