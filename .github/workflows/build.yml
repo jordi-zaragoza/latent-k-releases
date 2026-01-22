@@ -60,6 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binaries
+          retention-days: 1
           path: |
             dist/lk-linux
             dist/lk-macos
