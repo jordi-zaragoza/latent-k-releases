@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, chmod, access, constants } from 'fs/promises'
 import { existsSync, createWriteStream, unlinkSync } from 'fs'
 import { homedir, platform } from 'os'
-import { join, dirname } from 'path'
+import { join, dirname, resolve } from 'path'
 import https from 'https'
 import { getProjectLkMode, setProjectLkMode, statePath } from '../lib/context.js'
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
@@ -17,7 +17,7 @@ function getBinaryPath() {
   return join(getBinaryDir(), `lk${ext}`)
 }
 function getSourcePath() {
-  return join(getProjectRoot(), 'src', 'cli.js')
+  return resolve(dirname(import.meta.url.replace('file://', '')), '..', 'cli.js')
 }
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
