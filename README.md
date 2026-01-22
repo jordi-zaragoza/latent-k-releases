@@ -48,7 +48,7 @@ Binary is installed to `/usr/local/bin/lk` (Linux/macOS) or `%LOCALAPPDATA%\lk.e
 ## Quick Start
 
 ```bash
-lk activate   # Enter license key (get free trial at latent-k.com)
+lk activate   # Enter license key (get free trial at www.latentk.org)
 lk setup      # Configure AI provider
 lk enable     # Enable hooks
 lk sync       # Sync project
@@ -61,7 +61,7 @@ claude        # Start coding - context is injected automatically
 
 | Command | Description |
 |---------|-------------|
-| `lk activate` | Activate your license key. Get a free trial at [latent-k.com](https://latent-k.com) |
+| `lk activate` | Activate your license key. Get a free trial at [www.latentk.org](https://www.latentk.org) |
 | `lk setup` | Configure your AI provider (Gemini or Anthropic) and API key |
 
 ### Sync & Context
@@ -153,7 +153,7 @@ You can also edit `.lk/ignore` directly in your project.
 
 ### "License not activated" error
 
-Run `lk activate` and enter your license key. If you don't have one, get a free trial at [latent-k.com](https://latent-k.com).
+Run `lk activate` and enter your license key. If you don't have one, get a free trial at [www.latentk.org](https://www.latentk.org).
 
 ### Context not being injected
 
@@ -191,4 +191,4 @@ Or edit `.lk/ignore` directly in your project.
 
 ## License
 
-Commercial software - license required. Free 14-day trial available at [latent-k.com](https://latent-k.com).
+Commercial software - license required. Free 14-day trial available at [www.latentk.org](https://www.latentk.org).
