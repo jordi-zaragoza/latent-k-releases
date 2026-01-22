@@ -53,7 +53,7 @@ irm https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download
 
 Binary is installed to `/usr/local/bin/lk` (Linux/macOS) or `%LOCALAPPDATA%\lk.exe` (Windows).
 
-## Easy Start
+## Quick Start
 
 ```bash
 lk activate   # Enter license key (get free trial at latent-k.com)
@@ -65,28 +65,90 @@ claude        # Start coding - context is injected automatically
 
 ## Commands
 
+### License & Setup
+
 | Command | Description |
 |---------|-------------|
-| `lk activate` | Activate license |
-| `lk setup` | Configure AI provider |
-| `lk sync` | Manual sync |
-| `lk sync --all` | Sync all pending files |
-| `lk status` | Show project status |
-| `lk enable` | Enable hooks (both CLIs) |
-| `lk enable -t claude` | Enable for Claude Code only |
-| `lk enable -t gemini` | Enable for Gemini CLI only |
-| `lk disable` | Disable hooks |
-| `lk ignore <pattern>` | Add ignore pattern |
-| `lk update` | Update to latest version |
-| `lk clean` | Remove lk data |
+| `lk activate` | Activate your license key. Get a free trial at [latent-k.com](https://latent-k.com) |
+| `lk setup` | Configure your AI provider (Gemini or Anthropic) and API key |
+
+### Sync & Context
+
+| Command | Description |
+|---------|-------------|
+| `lk sync` | Sync changed files with AI. Analyzes modified files and updates project context |
+| `lk sync --all` | Force sync all files, not just changed ones |
+| `lk sync <file>` | Force sync a specific file |
+| `lk status` | Show project sync status, pending files, and configuration |
+
+### Hooks (Auto-injection)
+
+| Command | Description |
+|---------|-------------|
+| `lk enable` | Enable hooks for all supported CLIs (Claude Code + Gemini CLI) |
+| `lk enable -t claude` | Enable hooks for Claude Code only |
+| `lk enable -t gemini` | Enable hooks for Gemini CLI only |
+| `lk disable` | Disable hooks for all CLIs |
+| `lk disable -t claude` | Disable hooks for Claude Code only |
+| `lk disable -t gemini` | Disable hooks for Gemini CLI only |
+
+### Statistics
+
+| Command | Description |
+|---------|-------------|
+| `lk stats` | Show LLM usage statistics (tokens used, API calls, etc.) |
+| `lk stats --reset` | Reset usage statistics |
+| `lk savings` | Show estimated time and token savings from using prompt expansion |
+| `lk savings --reset` | Reset savings statistics |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `lk ignore <pattern>` | Add a glob pattern to ignore files from sync (e.g., `lk ignore "**/*.log"`) |
+| `lk ignore --list` | List all current ignore patterns |
+| `lk ignore --remove <pattern>` | Remove an ignore pattern |
+| `lk pure` | Check current pure mode status |
+| `lk pure on` | Enable pure mode (minimal, machine-to-machine style responses) |
+| `lk pure off` | Disable pure mode |
+
+### Maintenance
+
+| Command | Description |
+|---------|-------------|
+| `lk update` | Update lk to the latest version |
+| `lk update --force` | Force update even if already on latest version |
+| `lk clean` | Remove all lk data from current project (.lk directory) |
+| `lk clean --all` | Remove all lk data including global config and license |
+| `lk pro-tips` | Show helpful tips for getting the most out of Latent-K |
+
+### Other
+
+| Command | Description |
+|---------|-------------|
+| `lk --version` | Show current version |
+| `lk --help` | Show help for all commands |
+| `lk help <command>` | Show detailed help for a specific command |
 
 ## Ignore Patterns
 
+Latent-K uses glob patterns to exclude files from sync:
+
 ```bash
-# Add custom patterns
+# Ignore log files
+lk ignore "**/*.log"
+
+# Ignore generated files
 lk ignore "**/*.generated.js"
+
+# Ignore test fixtures
 lk ignore "**/fixtures/**"
+
+# Ignore specific directory
+lk ignore "**/node_modules/**"
 ```
+
+You can also edit `.lk/ignore` directly in your project.
 
 ## Supported CLIs
 
@@ -137,4 +199,4 @@ Or edit `.lk/ignore` directly in your project.
 
 ## License
 
-Commercial software - license required. Free 14-day trial available.
+Commercial software - license required. Free 14-day trial available at [latent-k.com](https://latent-k.com).
