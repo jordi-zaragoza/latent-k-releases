@@ -8,7 +8,8 @@ import {
   init, buildContext, buildContextForFiles, removeEntry,
   getAllEntries, getUnsyncedFiles, getDeletedFiles,
   getProject, setProject, ignoreExists, loadIgnore, saveIgnore, isIgnored,
-  loadState, saveState, getAllFiles, exists, validateProjectDirectory, isHomeOrRoot
+  loadState, saveState, getAllFiles, exists, validateProjectDirectory, isHomeOrRoot,
+  getCurrentBranch, untrackLkIfNeeded
 } from '../lib/context.js'
 import { withSpinner } from '../lib/spinner.js'
 import {
@@ -106,6 +107,7 @@ export async function sync(o = {}) {
     }
   }
   init(c)
+  if (untrackLkIfNeeded(c)) p('⚡ Untracked .lk/ from git (now local-only)')
   const gP = getIgnorePatterns()
   const prP = loadIgnore(c)
   log('SYNC', `Ignore patterns: ${gP.length} global + ${prP.length} project`)
@@ -116,7 +118,12 @@ export async function sync(o = {}) {
   const aFR = getAllFiles(c)
   const aF = aFR.filter(f => !isIgnored(f, iP))
   log('SYNC', `Found ${aFR.length} code files, ${aF.length} after ignore filter`)
-  const u = getUnsyncedFiles(c, aF)
+  const st = loadState(c)
+  const curBranch = getCurrentBranch(c)
+  const oldBranch = st.branch || null
+  const branchChanged = curBranch && oldBranch && curBranch !== oldBranch
+  if (branchChanged) { log('SYNC', `Branch: ${oldBranch}→${curBranch}`); p(`⎇ Branch: ${oldBranch}→${curBranch}`) }
+  const u = getUnsyncedFiles(c, aF, { branchChanged, oldBranch, newBranch: curBranch })
   const d = getDeletedFiles(c)
   const nI = findNowIgnoredFiles(c, iP)
   log('SYNC', `Unsynced: ${u.length}, Deleted: ${d.length}, Now ignored: ${nI.length}`)
@@ -134,7 +141,7 @@ export async function sync(o = {}) {
   await handleProjectRegeneration(
     c, aF, s, dN.length, d.length, nI.length,
     aD.size, rP, a, fT, dT,
-    p, pE
+    p, pE, curBranch
   )
   log('SYNC', '=== Sync complete ===')
 }
@@ -245,10 +252,11 @@ function printSummary(s, tD, dC, iC, p) {
 async function handleProjectRegeneration(
   c, aF, s, dNC, dC, iC,
   dA, rP, a, fT, dT,
-  p, pE
+  p, pE, curBranch
 ) {
   const st = loadState(c)
   st.syncCount = (st.syncCount || 0) + 1
+  if (curBranch) st.branch = curBranch
   const cP = getProject(c)
   const tC = s + dNC + dC + iC
   log('SYNC', `Changes: ${tC} files, ${dA} domains affected`)
