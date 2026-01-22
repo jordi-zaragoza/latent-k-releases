@@ -3,14 +3,11 @@ import { existsSync, createWriteStream, unlinkSync } from 'fs'
 import { homedir, platform } from 'os'
 import { join, dirname } from 'path'
 import https from 'https'
-const MODE_FILE = '.lk-mode'
+import { getProjectLkMode, setProjectLkMode, statePath } from '../lib/context.js'
 const GITHUB_REPO = 'jordi-zaragoza/latent-k-releases'
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
 function getProjectRoot() {
   return process.cwd()
-}
-function getModeFilePath() {
-  return join(getProjectRoot(), MODE_FILE)
 }
 function getBinaryDir() {
   return '/usr/local/bin'
@@ -21,17 +18,6 @@ function getBinaryPath() {
 }
 function getSourcePath() {
   return join(getProjectRoot(), 'src', 'cli.js')
-}
-async function getCurrentMode() {
-  try {
-    const content = await readFile(getModeFilePath(), 'utf8')
-    return content.trim() === 'binary' ? 'binary' : 'source'
-  } catch {
-    return 'source' // default to source
-  }
-}
-async function setMode(mode) {
-  await writeFile(getModeFilePath(), mode)
 }
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
@@ -240,10 +226,11 @@ async function updateGeminiHooks(mode) {
   return true
 }
 export async function dev(action) {
-  const currentMode = await getCurrentMode()
+  const root = getProjectRoot()
+  const currentMode = getProjectLkMode(root)
   if (!action || action === 'status') {
     console.log(`Current mode: ${currentMode}`)
-    console.log(`Mode file: ${getModeFilePath()}`)
+    console.log(`State file: ${statePath(root)}`)
     if (currentMode === 'binary') {
       console.log(`Binary path: ${getBinaryPath()}`)
     } else {
@@ -261,7 +248,7 @@ export async function dev(action) {
         return
       }
     }
-    await setMode(newMode)
+    setProjectLkMode(root, newMode)
     const claudeUpdated = await updateClaudeHooks(newMode)
     const geminiUpdated = await updateGeminiHooks(newMode)
     if (claudeUpdated || geminiUpdated) {
@@ -277,7 +264,7 @@ export async function dev(action) {
     return
   }
   if (action === 'use-source' || action === 'source') {
-    await setMode('source')
+    setProjectLkMode(root, 'source')
     const claudeUpdated = await updateClaudeHooks('source')
     const geminiUpdated = await updateGeminiHooks('source')
     console.log('Switched to: source')
@@ -293,7 +280,7 @@ export async function dev(action) {
       console.error(`✗ Failed to get binary: ${err.message}`)
       return
     }
-    await setMode('binary')
+    setProjectLkMode(root, 'binary')
     const claudeUpdated = await updateClaudeHooks('binary')
     const geminiUpdated = await updateGeminiHooks('binary')
     console.log('Switched to: binary')

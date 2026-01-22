@@ -6,7 +6,6 @@ dist/
 .env.local
 .DS_Store
 *.log
-.lk-mode
 
 # Sensitive data
 web/.sessions.json

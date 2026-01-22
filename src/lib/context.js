@@ -139,21 +139,31 @@ export function loadState(root) {
   try {
     const p = statePath(root)
     const raw = fs.readFileSync(p, 'utf8')
-    if (!raw.trim()) return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false }
+    if (!raw.trim()) return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false, lkMode: 'source' }
     const content = safeDecrypt(raw, p)
-    if (content === null) return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false }
+    if (content === null) return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false, lkMode: 'source' }
     return JSON.parse(content)
   } catch {
-    return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false }
+    return { syncCount: 0, pendingRegen: false, pendingChanges: 0, pureMode: false, lkMode: 'source' }
   }
 }
 export function getProjectPureMode(root) {
+  if(process.pkg)return false
   return loadState(root).pureMode || false
 }
 export function setProjectPureMode(root, enabled) {
   if(!exists(root))init(root)
   const s = loadState(root)
   s.pureMode = !!enabled
+  saveState(root, s)
+}
+export function getProjectLkMode(root) {
+  return loadState(root).lkMode || 'source'
+}
+export function setProjectLkMode(root, mode) {
+  if(!exists(root))init(root)
+  const s = loadState(root)
+  s.lkMode = mode === 'binary' ? 'binary' : 'source'
   saveState(root, s)
 }
 export function saveState(root, state) {
