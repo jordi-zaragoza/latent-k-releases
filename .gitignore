@@ -10,3 +10,4 @@ dist/
 # Sensitive data
 web/.sessions.json
 web/licenses.json
+.lk/

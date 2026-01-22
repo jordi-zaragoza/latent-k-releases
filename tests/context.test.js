@@ -5,6 +5,7 @@ import os from 'os'
 
 // Enable DEV mode for tests (bypasses license requirement)
 process.env.LK_DEV = '1'
+import { execSync } from 'child_process'
 import {
   lkPath, domainsPath, domainPath, syntaxPath, projectPath, projectHeaderPath, exists,
   init, getSyntax, setSyntax, getProject, getProjectHeader, setProject,
@@ -18,7 +19,8 @@ import {
   inferGroup, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS,
   getFileExtension, isCodeFile, getAllFiles, CODE_EXTENSIONS,
   loadState, saveState, getProjectPureMode, setProjectPureMode,
-  getProjectLkMode, setProjectLkMode
+  getProjectLkMode, setProjectLkMode,
+  getCurrentBranch, getGitChangedFiles, untrackLkIfNeeded
 } from '../src/lib/context.js'
 
 let tmpDir
@@ -1055,5 +1057,81 @@ describe('Project lkMode', () => {
     expect(getProjectLkMode(tmpDir)).toBe('binary')
     expect(getProjectLkMode(tmp2)).toBe('source')
     fs.rmSync(tmp2, { recursive: true, force: true })
+  })
+})
+
+describe('Git integration', () => {
+  let gitDir
+  beforeEach(() => {
+    gitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lk-git-test-'))
+    execSync('git init', { cwd: gitDir, stdio: 'pipe' })
+    execSync('git config user.email "test@test.com"', { cwd: gitDir, stdio: 'pipe' })
+    execSync('git config user.name "Test"', { cwd: gitDir, stdio: 'pipe' })
+    fs.writeFileSync(path.join(gitDir, 'file.js'), 'init')
+    execSync('git add . && git commit -m "init"', { cwd: gitDir, stdio: 'pipe' })
+  })
+  afterEach(() => fs.rmSync(gitDir, { recursive: true, force: true }))
+  describe('getCurrentBranch', () => {
+    it('returns branch name', () => {
+      const b = getCurrentBranch(gitDir)
+      expect(['main', 'master']).toContain(b)
+    })
+    it('returns null for detached HEAD', () => {
+      const hash = execSync('git rev-parse HEAD', { cwd: gitDir, encoding: 'utf8' }).trim()
+      execSync(`git checkout ${hash}`, { cwd: gitDir, stdio: 'pipe' })
+      expect(getCurrentBranch(gitDir)).toBeNull()
+    })
+    it('returns null for non-git dir', () => {
+      expect(getCurrentBranch(tmpDir)).toBeNull()
+    })
+  })
+  describe('getGitChangedFiles', () => {
+    it('returns changed files between branches', () => {
+      const main = getCurrentBranch(gitDir)
+      execSync('git checkout -b feature', { cwd: gitDir, stdio: 'pipe' })
+      fs.writeFileSync(path.join(gitDir, 'new.js'), 'new')
+      execSync('git add . && git commit -m "add new"', { cwd: gitDir, stdio: 'pipe' })
+      const changed = getGitChangedFiles(gitDir, main, 'feature')
+      expect(changed).toContain('new.js')
+    })
+    it('returns null for invalid branches', () => {
+      expect(getGitChangedFiles(gitDir, 'fake1', 'fake2')).toBeNull()
+    })
+  })
+  describe('untrackLkIfNeeded', () => {
+    it('untracks .lk/ if tracked', () => {
+      init(gitDir)
+      execSync('git add .lk/', { cwd: gitDir, stdio: 'pipe' })
+      execSync('git commit -m "add lk"', { cwd: gitDir, stdio: 'pipe' })
+      const result = untrackLkIfNeeded(gitDir)
+      expect(result).toBe(true)
+      const tracked = execSync('git ls-files .lk/', { cwd: gitDir, encoding: 'utf8' })
+      expect(tracked.trim()).toBe('')
+    })
+    it('returns false if .lk/ not tracked', () => {
+      init(gitDir)
+      expect(untrackLkIfNeeded(gitDir)).toBe(false)
+    })
+  })
+  describe('getUnsyncedFiles with branch change', () => {
+    it('filters files not changed between branches', () => {
+      init(gitDir)
+      const main = getCurrentBranch(gitDir)
+      fs.writeFileSync(path.join(gitDir, 'a.js'), 'a')
+      fs.writeFileSync(path.join(gitDir, 'b.js'), 'b')
+      execSync('git add . && git commit -m "add files"', { cwd: gitDir, stdio: 'pipe' })
+      execSync('git checkout -b feat', { cwd: gitDir, stdio: 'pipe' })
+      fs.writeFileSync(path.join(gitDir, 'a.js'), 'a-feat')
+      execSync('git add . && git commit -m "mod a in feat"', { cwd: gitDir, stdio: 'pipe' })
+      addEntry(gitDir, 'core', 'Files', 'λ', hashContent('a-feat'), 'a.js', '', [])
+      addEntry(gitDir, 'core', 'Files', 'λ', hashContent('b'), 'b.js', '', [])
+      saveState(gitDir, { branch: 'feat' })
+      execSync(`git checkout ${main}`, { cwd: gitDir, stdio: 'pipe' })
+      const unsynced = getUnsyncedFiles(gitDir, ['a.js', 'b.js'], {
+        branchChanged: true, oldBranch: 'feat', newBranch: main
+      })
+      expect(unsynced.find(f => f.file === 'a.js')).toBeDefined()
+      expect(unsynced.find(f => f.file === 'b.js')).toBeUndefined()
+    })
   })
 })

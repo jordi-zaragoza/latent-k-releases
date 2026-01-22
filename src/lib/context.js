@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { homedir } from 'os'
 import { createHash } from 'crypto'
+import { execSync } from 'child_process'
 import { log } from './config.js'
 import { encrypt, decrypt } from './crypto.js'
 const LK_DIR = '.lk'
@@ -168,6 +169,28 @@ export function setProjectLkMode(root, mode) {
 }
 export function saveState(root, state) {
   fs.writeFileSync(statePath(root), encrypt(JSON.stringify(state, null, 2)))
+}
+export function getCurrentBranch(root) {
+  try {
+    const b = execSync('git rev-parse --abbrev-ref HEAD', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    return b === 'HEAD' ? null : b
+  } catch { return null }
+}
+export function untrackLkIfNeeded(root) {
+  try {
+    const tracked = execSync('git ls-files .lk/', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    if (tracked) {
+      execSync('git rm --cached -r .lk/', { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+      log('CONTEXT', 'Untracked .lk/ from git')
+      return true
+    }
+  } catch { }
+  return false
+}
+export function getGitChangedFiles(root, fromBranch, toBranch) {
+  try {
+    return execSync(`git diff --name-only ${fromBranch} ${toBranch}`, { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim().split('\n').filter(f => f)
+  } catch { return null }
 }
 // Ignore file handling
 export function loadIgnore(root) {
@@ -679,18 +702,34 @@ export function buildVerboseContext(root) {
     throw e
   }
 }
-// Get files that need sync (new or modified)
-export function getUnsyncedFiles(root, allFiles) {
+function updateEntryHash(root, filePath, newHash) {
+  for (const d of listDomains(root)) {
+    const dom = loadDomain(root, d)
+    if (!dom) continue
+    for (const items of Object.values(dom.groups)) {
+      const e = items.find(x => x.path === filePath)
+      if (e) { e.hash = newHash; saveDomain(root, d, buildDomain(dom.id, dom.domain, dom.vibe, dom.groups, dom.invariants)); return true }
+    }
+  }
+  return false
+}
+export function getUnsyncedFiles(root, allFiles, opts = {}) {
+  const { branchChanged, oldBranch, newBranch } = opts
   const entries = getAllEntries(root)
+  let gitChanged = null
+  if (branchChanged && oldBranch && newBranch) {
+    gitChanged = getGitChangedFiles(root, oldBranch, newBranch)
+    if (gitChanged) log('CONTEXT', `Branch ${oldBranch}→${newBranch}, ${gitChanged.length} files differ`)
+  }
   const unsynced = []
   for (const file of allFiles) {
     const fullPath = path.join(root, file)
     if (!fs.existsSync(fullPath)) continue
     const currentHash = getFileHash(fullPath)
     const entry = entries[file]
-    if (!entry) {
-      unsynced.push({ file, status: 'new', hash: currentHash })
-    } else if (entry.hash !== currentHash) {
+    if (!entry) { unsynced.push({ file, status: 'new', hash: currentHash }) }
+    else if (entry.hash !== currentHash) {
+      if (gitChanged !== null && !gitChanged.includes(file)) { updateEntryHash(root, file, currentHash); continue }
       unsynced.push({ file, status: 'modified', hash: currentHash, oldHash: entry.hash })
     }
   }
