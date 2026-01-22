@@ -17,7 +17,8 @@ import {
   getProjectSummary, getProjectFlows, getDomainIndex,
   inferGroup, inferDomainFromPath, inferSymbolFromPath, VALID_SYMBOLS,
   getFileExtension, isCodeFile, getAllFiles, CODE_EXTENSIONS,
-  loadState, saveState, getProjectPureMode, setProjectPureMode
+  loadState, saveState, getProjectPureMode, setProjectPureMode,
+  getProjectLkMode, setProjectLkMode
 } from '../src/lib/context.js'
 
 let tmpDir
@@ -1016,6 +1017,43 @@ describe('Project state and pureMode', () => {
     setProjectPureMode(tmp2, false)
     expect(getProjectPureMode(tmpDir)).toBe(true)
     expect(getProjectPureMode(tmp2)).toBe(false)
+    fs.rmSync(tmp2, { recursive: true, force: true })
+  })
+})
+
+describe('Project lkMode', () => {
+  beforeEach(() => init(tmpDir))
+  it('getProjectLkMode returns source by default', () => {
+    expect(getProjectLkMode(tmpDir)).toBe('source')
+  })
+  it('setProjectLkMode sets binary mode', () => {
+    setProjectLkMode(tmpDir, 'binary')
+    expect(getProjectLkMode(tmpDir)).toBe('binary')
+  })
+  it('setProjectLkMode sets source mode', () => {
+    setProjectLkMode(tmpDir, 'binary')
+    setProjectLkMode(tmpDir, 'source')
+    expect(getProjectLkMode(tmpDir)).toBe('source')
+  })
+  it('setProjectLkMode defaults invalid to source', () => {
+    setProjectLkMode(tmpDir, 'invalid')
+    expect(getProjectLkMode(tmpDir)).toBe('source')
+  })
+  it('setProjectLkMode preserves other state fields', () => {
+    saveState(tmpDir, { syncCount: 5, pendingRegen: true, pendingChanges: 1, pureMode: true, lkMode: 'source' })
+    setProjectLkMode(tmpDir, 'binary')
+    const s = loadState(tmpDir)
+    expect(s.syncCount).toBe(5)
+    expect(s.pureMode).toBe(true)
+    expect(s.lkMode).toBe('binary')
+  })
+  it('lkMode is isolated per project', () => {
+    const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lk-lkmode-test-'))
+    init(tmp2)
+    setProjectLkMode(tmpDir, 'binary')
+    setProjectLkMode(tmp2, 'source')
+    expect(getProjectLkMode(tmpDir)).toBe('binary')
+    expect(getProjectLkMode(tmp2)).toBe('source')
     fs.rmSync(tmp2, { recursive: true, force: true })
   })
 })

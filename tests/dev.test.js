@@ -6,6 +6,25 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const srcDir = join(__dirname, '..', 'src')
 
+describe('dev.js mode storage', () => {
+  const devContent = readFileSync(join(srcDir, 'commands', 'dev.js'), 'utf8')
+  it('imports getProjectLkMode and setProjectLkMode from context', () => {
+    expect(devContent).toContain("import { getProjectLkMode, setProjectLkMode, statePath } from '../lib/context.js'")
+  })
+  it('uses getProjectLkMode instead of file read', () => {
+    expect(devContent).toContain('getProjectLkMode(root)')
+    expect(devContent).not.toContain('getModeFilePath')
+    expect(devContent).not.toContain('.lk-mode')
+  })
+  it('uses setProjectLkMode instead of file write', () => {
+    expect(devContent).toContain('setProjectLkMode(root,')
+    expect(devContent).not.toContain('setMode(')
+  })
+  it('shows statePath in status output', () => {
+    expect(devContent).toContain('statePath(root)')
+  })
+})
+
 describe('dev.js hook commands', () => {
   const devContent = readFileSync(join(srcDir, 'commands', 'dev.js'), 'utf8')
 
