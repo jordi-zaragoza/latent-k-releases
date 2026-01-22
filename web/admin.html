@@ -1,1 +1,995 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" href="data:,"><title>LATENT-K Admin</title><style>:root {--bg-primary: #0a0a0f;--bg-secondary: #12121a;--bg-tertiary: #1a1a24;--text-primary: #e0e0e8;--text-secondary: #8888a0;--accent-green: #00ff88;--accent-cyan: #00d4ff;--accent-purple: #a855f7;--accent-red: #ff4757;--border-color: #2a2a3a;}* {margin: 0;padding: 0;box-sizing: border-box;}body {font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;background: var(--bg-primary);color: var(--text-primary);line-height: 1.6;padding: 2rem;}.container {max-width: 1200px;margin: 0 auto;}header {display: flex;justify-content: space-between;align-items: center;margin-bottom: 2rem;padding-bottom: 1rem;border-bottom: 1px solid var(--border-color);}h1 {font-size: 1.5rem;}h1 .delim {background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));-webkit-background-clip: text;-webkit-text-fill-color: transparent;background-clip: text;}.stats {display: flex;gap: 2rem;margin-bottom: 2rem;}.stat-card {background: var(--bg-secondary);border: 1px solid var(--border-color);border-radius: 12px;padding: 1.5rem;min-width: 150px;}.stat-value {font-size: 2rem;font-weight: 700;background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));-webkit-background-clip: text;-webkit-text-fill-color: transparent;background-clip: text;}.stat-label {color: var(--text-secondary);font-size: 0.85rem;margin-top: 0.25rem;}.filters {display: flex;gap: 1rem;margin-bottom: 1.5rem;}.filter-btn {padding: 0.5rem 1rem;background: var(--bg-secondary);border: 1px solid var(--border-color);border-radius: 6px;color: var(--text-secondary);cursor: pointer;transition: all 0.2s;}.filter-btn:hover, .filter-btn.active {border-color: var(--accent-cyan);color: var(--accent-cyan);}.search-box {flex: 1;max-width: 300px;padding: 0.5rem 1rem;background: var(--bg-secondary);border: 1px solid var(--border-color);border-radius: 6px;color: var(--text-primary);font-size: 0.9rem;}.search-box:focus {outline: none;border-color: var(--accent-cyan);}table {width: 100%;border-collapse: collapse;background: var(--bg-secondary);border-radius: 12px;overflow: hidden;}th, td {padding: 1rem;text-align: left;border-bottom: 1px solid var(--border-color);}th {background: var(--bg-tertiary);color: var(--text-secondary);font-weight: 500;font-size: 0.85rem;text-transform: uppercase;}tr:last-child td {border-bottom: none;}tr:hover {background: var(--bg-tertiary);}.status {display: inline-block;padding: 0.25rem 0.75rem;border-radius: 100px;font-size: 0.8rem;font-weight: 500;}.status.active {background: rgba(0, 255, 136, 0.1);color: var(--accent-green);}.status.expired {background: rgba(136, 136, 160, 0.1);color: var(--text-secondary);}.status.revoked {background: rgba(255, 71, 87, 0.1);color: var(--accent-red);}.btn {padding: 0.4rem 0.75rem;border: none;border-radius: 6px;cursor: pointer;font-size: 0.8rem;transition: all 0.2s;}.btn-delete {background: rgba(255, 71, 87, 0.1);color: var(--accent-red);}.btn-delete:hover {background: var(--accent-red);color: white;}.btn-revoke {background: rgba(255, 165, 0, 0.1);color: #ffa500;margin-right: 0.25rem;}.btn-revoke:hover {background: #ffa500;color: white;}.btn-unrevoke {background: rgba(0, 255, 136, 0.1);color: var(--accent-green);margin-right: 0.25rem;}.btn-unrevoke:hover {background: var(--accent-green);color: var(--bg-primary);}.key-cell {font-family: 'JetBrains Mono', monospace;font-size: 0.75rem;color: var(--text-secondary);max-width: 200px;}.key-cell .key-preview {overflow: hidden;text-overflow: ellipsis;white-space: nowrap;display: inline-block;max-width: 120px;vertical-align: middle;}.btn-show-key {padding: 0.2rem 0.4rem;background: var(--bg-tertiary);border: 1px solid var(--border-color);border-radius: 4px;color: var(--text-secondary);font-size: 0.7rem;cursor: pointer;margin-left: 0.5rem;}.btn-show-key:hover {border-color: var(--accent-cyan);color: var(--accent-cyan);}.empty-state {text-align: center;padding: 4rem;color: var(--text-secondary);}.refresh-btn {padding: 0.5rem 1rem;background: var(--bg-tertiary);border: 1px solid var(--border-color);border-radius: 6px;color: var(--text-secondary);cursor: pointer;transition: all 0.2s;}.refresh-btn:hover {border-color: var(--accent-cyan);color: var(--accent-cyan);}/* Login */.login-overlay {position: fixed;top: 0;left: 0;right: 0;bottom: 0;background: var(--bg-primary);display: flex;align-items: center;justify-content: center;z-index: 1000;}.login-overlay.hidden {display: none;}.login-box {background: var(--bg-secondary);border: 1px solid var(--border-color);border-radius: 16px;padding: 2.5rem;width: 100%;max-width: 360px;}.login-box h2 {text-align: center;margin-bottom: 1.5rem;font-size: 1.25rem;}.login-box h2 .delim {background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));-webkit-background-clip: text;-webkit-text-fill-color: transparent;background-clip: text;}.form-group {margin-bottom: 1rem;}.form-group label {display: block;margin-bottom: 0.5rem;color: var(--text-secondary);font-size: 0.85rem;}.form-group input {width: 100%;padding: 0.75rem 1rem;background: var(--bg-primary);border: 1px solid var(--border-color);border-radius: 8px;color: var(--text-primary);font-size: 0.95rem;}.form-group input:focus {outline: none;border-color: var(--accent-cyan);}.password-wrapper {position: relative;}.password-wrapper input {padding-right: 2.5rem;}.toggle-password {position: absolute;right: 0.75rem;top: 50%;transform: translateY(-50%);cursor: pointer;opacity: 0.5;font-size: 1.1rem;user-select: none;}.toggle-password:hover {opacity: 1;}.login-btn {width: 100%;padding: 0.75rem;background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));border: none;border-radius: 8px;color: var(--bg-primary);font-weight: 600;font-size: 0.95rem;cursor: pointer;margin-top: 0.5rem;}.login-btn:hover {opacity: 0.9;}.login-error {color: var(--accent-red);font-size: 0.85rem;text-align: center;margin-top: 1rem;display: none;}.login-error.show {display: block;}.logout-btn {padding: 0.5rem 1rem;background: transparent;border: 1px solid var(--border-color);border-radius: 6px;color: var(--text-secondary);cursor: pointer;margin-left: 0.5rem;}.logout-btn:hover {border-color: var(--accent-red);color: var(--accent-red);}.new-license-btn {padding: 0.5rem 1rem;background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));border: none;border-radius: 6px;color: var(--bg-primary);font-weight: 600;cursor: pointer;margin-right: 0.5rem;}.new-license-btn:hover {opacity: 0.9;}/* Modal */.modal-overlay {position: fixed;top: 0;left: 0;right: 0;bottom: 0;background: rgba(0, 0, 0, 0.8);display: flex;align-items: center;justify-content: center;z-index: 1000;}.modal-overlay.hidden {display: none;}.modal {background: var(--bg-secondary);border: 1px solid var(--border-color);border-radius: 16px;padding: 2rem;width: 100%;max-width: 400px;}.modal h3 {margin-bottom: 1.5rem;font-size: 1.1rem;}.modal .form-group {margin-bottom: 1rem;}.modal .form-group label {display: block;margin-bottom: 0.5rem;color: var(--text-secondary);font-size: 0.85rem;}.modal .form-group input,.modal .form-group select {width: 100%;padding: 0.65rem 0.85rem;background: var(--bg-primary);border: 1px solid var(--border-color);border-radius: 6px;color: var(--text-primary);font-size: 0.9rem;}.modal .form-group input:focus,.modal .form-group select:focus {outline: none;border-color: var(--accent-cyan);}.modal-buttons {display: flex;gap: 0.75rem;margin-top: 1.5rem;}.modal-buttons button {flex: 1;padding: 0.65rem;border-radius: 6px;font-size: 0.9rem;cursor: pointer;}.btn-cancel {background: var(--bg-tertiary);border: 1px solid var(--border-color);color: var(--text-secondary);}.btn-cancel:hover {border-color: var(--text-secondary);}.btn-create {background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));border: none;color: var(--bg-primary);font-weight: 600;}.btn-create:hover {opacity: 0.9;}.generated-key {margin-top: 1rem;padding: 1rem;background: var(--bg-primary);border-radius: 6px;display: none;}.generated-key.show {display: block;}.generated-key label {display: block;color: var(--text-secondary);font-size: 0.8rem;margin-bottom: 0.5rem;}.generated-key code {display: block;font-family: 'JetBrains Mono', monospace;font-size: 0.7rem;color: var(--accent-green);word-break: break-all;margin-bottom: 0.5rem;}.copy-key-btn {padding: 0.35rem 0.75rem;background: var(--bg-tertiary);border: 1px solid var(--border-color);border-radius: 4px;color: var(--text-secondary);font-size: 0.8rem;cursor: pointer;}.copy-key-btn:hover {border-color: var(--accent-cyan);color: var(--accent-cyan);}/* Key Modal */.key-modal {background: var(--bg-secondary);border: 1px solid var(--border-color);border-radius: 12px;padding: 1.5rem;width: 100%;max-width: 600px;}.key-modal h3 {margin-bottom: 1rem;font-size: 1rem;}.key-modal .key-full {font-family: 'JetBrains Mono', monospace;font-size: 0.75rem;color: var(--accent-green);background: var(--bg-primary);padding: 1rem;border-radius: 6px;word-break: break-all;margin-bottom: 1rem;}.key-modal-buttons {display: flex;gap: 0.5rem;}</style></head><body><div class="login-overlay" id="login-overlay"><div class="login-box"><h2><span class="delim">&#10643;</span> Admin Login <span class="delim">&#10644;</span></h2><form id="login-form"><div class="form-group"><label>Username</label><input type="text" id="username" required autocomplete="username"></div><div class="form-group"><label>Password</label><div class="password-wrapper"><input type="password" id="password" required autocomplete="current-password"><span class="toggle-password" onclick="togglePassword()">&#128065;</span></div></div><button type="submit" class="login-btn">Login</button><div class="login-error" id="login-error">Invalid credentials</div></form></div></div><div class="modal-overlay hidden" id="show-key-modal" onclick="hideKeyModal(event)"><div class="key-modal"><h3>License Key</h3><div class="key-full" id="full-key-value"></div><div class="key-modal-buttons"><button class="copy-key-btn" onclick="copyFullKey()">Copy Key</button><button class="btn-cancel" onclick="hideKeyModal()">Close</button></div></div></div><div class="modal-overlay hidden" id="new-license-modal"><div class="modal"><h3>Generate New License</h3><form id="new-license-form"><div class="form-group"><label>Email *</label><input type="email" id="new-email" required></div><div class="form-group"><label>Name</label><input type="text" id="new-name"></div><div class="form-group"><label>Plan *</label><select id="new-plan" required><option value="trial1">Trial (1 day)</option><option value="trial7">Trial (7 days)</option><option value="trial14">Trial (14 days)</option><option value="monthly">Monthly (30 days)</option><option value="yearly">Yearly (365 days)</option></select></div><div class="generated-key" id="generated-key"><label>License Key:</label><code id="key-value"></code><button type="button" class="copy-key-btn" onclick="copyGeneratedKey()">Copy Key</button></div><div class="modal-buttons"><button type="button" class="btn-cancel" onclick="hideNewLicenseModal()">Close</button><button type="submit" class="btn-create" id="create-btn">Create</button></div></form></div></div><div class="container"><header><h1><span class="delim">&#10643;</span> LATENT-K <span class="delim">&#10644;</span> Admin</h1><div><button class="new-license-btn" onclick="showNewLicenseModal()">+ New License</button><button class="refresh-btn" onclick="loadLicenses()">Refresh</button><button class="logout-btn" onclick="logout()">Logout</button></div></header><div class="stats"><div class="stat-card"><div class="stat-value" id="total-count">0</div><div class="stat-label">Total Licenses</div></div><div class="stat-card"><div class="stat-value" id="active-count">0</div><div class="stat-label">Active</div></div><div class="stat-card"><div class="stat-value" id="expired-count">0</div><div class="stat-label">Expired</div></div><div class="stat-card"><div class="stat-value" id="revoked-count">0</div><div class="stat-label">Revoked</div></div><div class="stat-card"><div class="stat-value" id="monthly-count">0</div><div class="stat-label">Monthly</div></div><div class="stat-card"><div class="stat-value" id="yearly-count">0</div><div class="stat-label">Yearly</div></div></div><div class="filters"><button class="filter-btn active" data-filter="all">All</button><button class="filter-btn" data-filter="active">Active</button><button class="filter-btn" data-filter="expired">Expired</button><button class="filter-btn" data-filter="revoked">Revoked</button><input type="text" class="search-box" placeholder="Search by email..." id="search-input"></div><table><thead><tr><th>Email</th><th>Name</th><th>Plan</th><th>Created</th><th>Expires</th><th>Status</th><th>Key</th><th>Actions</th></tr></thead><tbody id="licenses-table"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody></table></div><script>const API_BASE = 'https://latent-k-payments.latent-k.workers.dev';let allLicenses = [];let currentFilter = 'all';let authToken = localStorage.getItem('adminToken');// Sanitize HTML to prevent XSSfunction escapeHtml(str) {if (!str) return '';const div = document.createElement('div');div.textContent = str;return div.innerHTML;}// Toggle password visibilityfunction togglePassword() {const input = document.getElementById('password');const toggle = document.querySelector('.toggle-password');if (input.type === 'password') {input.type = 'text';toggle.style.opacity = '1';} else {input.type = 'password';toggle.style.opacity = '0.5';}}// Check if logged infunction checkAuth() {if (authToken) {document.getElementById('login-overlay').classList.add('hidden');loadLicenses();} else {document.getElementById('login-overlay').classList.remove('hidden');}}// Logindocument.getElementById('login-form').addEventListener('submit', async (e) => {e.preventDefault();const username = document.getElementById('username').value;const password = document.getElementById('password').value;try {const res = await fetch(`${API_BASE}/api/login`, {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ username, password })});if (res.ok) {const data = await res.json();authToken = data.token;localStorage.setItem('adminToken', authToken);document.getElementById('login-error').classList.remove('show');checkAuth();} else {document.getElementById('login-error').classList.add('show');}} catch (err) {document.getElementById('login-error').classList.add('show');}});// Logoutasync function logout() {await fetch(`${API_BASE}/api/logout`, {method: 'POST',headers: { 'Authorization': `Bearer ${authToken}` }});authToken = null;localStorage.removeItem('adminToken');checkAuth();}// API helper with authasync function apiCall(url, options = {}) {const res = await fetch(`${API_BASE}${url}`, {...options,headers: {...options.headers,'Authorization': `Bearer ${authToken}`}});if (res.status === 401) {authToken = null;localStorage.removeItem('adminToken');checkAuth();throw new Error('Unauthorized');}return res;}async function loadLicenses() {try {const res = await apiCall('/api/licenses');allLicenses = await res.json();updateStats();renderTable();} catch (err) {console.error('Failed to load licenses:', err);}}function updateStats() {const now = new Date();const revoked = allLicenses.filter(l => l.revoked);const active = allLicenses.filter(l => !l.revoked && new Date(l.expires) > now);const expired = allLicenses.filter(l => !l.revoked && new Date(l.expires) <= now);const monthly = allLicenses.filter(l => l.plan === 'monthly');const yearly = allLicenses.filter(l => l.plan === 'yearly');document.getElementById('total-count').textContent = allLicenses.length;document.getElementById('active-count').textContent = active.length;document.getElementById('expired-count').textContent = expired.length;document.getElementById('revoked-count').textContent = revoked.length;document.getElementById('monthly-count').textContent = monthly.length;document.getElementById('yearly-count').textContent = yearly.length;}function getStatus(license) {if (license.revoked) return 'revoked';if (new Date(license.expires) < new Date()) return 'expired';return 'active';}function formatDate(dateStr) {return new Date(dateStr).toLocaleDateString('en-US', {year: 'numeric',month: 'short',day: 'numeric'});}function renderTable() {const searchTerm = document.getElementById('search-input').value.toLowerCase();let filtered = allLicenses;// Apply filterif (currentFilter === 'active') {filtered = filtered.filter(l => getStatus(l) === 'active');} else if (currentFilter === 'expired') {filtered = filtered.filter(l => getStatus(l) === 'expired');} else if (currentFilter === 'revoked') {filtered = filtered.filter(l => getStatus(l) === 'revoked');}// Apply searchif (searchTerm) {filtered = filtered.filter(l =>l.email.toLowerCase().includes(searchTerm) ||(l.name && l.name.toLowerCase().includes(searchTerm)));}const tbody = document.getElementById('licenses-table');if (filtered.length === 0) {tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No licenses found</td></tr>';return;}tbody.innerHTML = filtered.map(license => {const status = getStatus(license);const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);const safeKey = escapeHtml(license.key);const safeEmail = escapeHtml(license.email);const safeName = escapeHtml(license.name) || '-';const safePlan = escapeHtml(license.plan);const revokeBtn = license.revoked? `<button class="btn btn-unrevoke" data-email="${safeEmail}">Unrevoke</button>`: `<button class="btn btn-revoke" data-email="${safeEmail}">Revoke</button>`;return `<tr><td>${safeEmail}</td><td>${safeName}</td><td>${safePlan}</td><td>${formatDate(license.created)}</td><td>${formatDate(license.expires)}</td><td><span class="status ${status}">${statusLabel}</span></td><td class="key-cell"><span class="key-preview">${safeKey}</span><button class="btn-show-key" data-key="${safeKey}">Show</button></td><td>${revokeBtn}<button class="btn btn-delete" data-key="${safeKey}">Delete</button></td></tr>`;}).join('');}async function deleteLicense(key) {if (!confirm('Are you sure you want to delete this license?')) return;try {await apiCall('/api/delete', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ key })});loadLicenses();} catch (err) {alert('Failed to delete license');}}async function revokeLicense(email) {const reason = prompt('Reason for revocation (optional):');if (reason === null) return; // Cancelledtry {const res = await apiCall('/api/revoke', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ email, reason: reason || undefined })});if (res.ok) {loadLicenses();} else {const data = await res.json();alert(data.error || 'Failed to revoke license');}} catch (err) {alert('Failed to revoke license');}}async function unrevokeLicense(email) {if (!confirm('Restore access for this license?')) return;try {const res = await apiCall('/api/unrevoke', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ email })});if (res.ok) {loadLicenses();} else {const data = await res.json();alert(data.error || 'Failed to unrevoke license');}} catch (err) {alert('Failed to unrevoke license');}}// Filter buttonsdocument.querySelectorAll('.filter-btn').forEach(btn => {btn.addEventListener('click', function() {document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));this.classList.add('active');currentFilter = this.dataset.filter;renderTable();});});// Searchdocument.getElementById('search-input').addEventListener('input', renderTable);// Event delegation for table buttons (prevents XSS via onclick)document.getElementById('licenses-table').addEventListener('click', function(e) {const target = e.target;if (target.classList.contains('btn-delete')) {const key = target.dataset.key;if (key) deleteLicense(key);} else if (target.classList.contains('btn-show-key')) {const key = target.dataset.key;if (key) showKey(key);} else if (target.classList.contains('btn-revoke')) {const email = target.dataset.email;if (email) revokeLicense(email);} else if (target.classList.contains('btn-unrevoke')) {const email = target.dataset.email;if (email) unrevokeLicense(email);}});// New License Modalfunction showNewLicenseModal() {document.getElementById('new-license-modal').classList.remove('hidden');document.getElementById('new-license-form').reset();document.getElementById('generated-key').classList.remove('show');document.getElementById('create-btn').style.display = 'block';}function hideNewLicenseModal() {document.getElementById('new-license-modal').classList.add('hidden');loadLicenses();}document.getElementById('new-license-form').addEventListener('submit', async (e) => {e.preventDefault();const email = document.getElementById('new-email').value;const name = document.getElementById('new-name').value;const plan = document.getElementById('new-plan').value;try {const res = await apiCall('/api/generate', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ email, name, plan })});if (res.ok) {const data = await res.json();document.getElementById('key-value').textContent = data.key;document.getElementById('generated-key').classList.add('show');document.getElementById('create-btn').style.display = 'none';} else {alert('Failed to generate license');}} catch (err) {alert('Error generating license');}});function copyGeneratedKey() {const key = document.getElementById('key-value').textContent;navigator.clipboard.writeText(key);const btn = document.querySelector('.generated-key .copy-key-btn');btn.textContent = 'Copied!';setTimeout(() => btn.textContent = 'Copy Key', 2000);}// Show Key Modalfunction showKey(key) {// Use textContent to safely display the key (prevents XSS)document.getElementById('full-key-value').textContent = key;document.getElementById('show-key-modal').classList.remove('hidden');}function hideKeyModal(event) {if (!event || event.target === event.currentTarget) {document.getElementById('show-key-modal').classList.add('hidden');}}function copyFullKey() {const key = document.getElementById('full-key-value').textContent;navigator.clipboard.writeText(key);const btn = document.querySelector('#show-key-modal .copy-key-btn');btn.textContent = 'Copied!';setTimeout(() => btn.textContent = 'Copy Key', 2000);}// Initial auth checkcheckAuth();</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>LATENT-K Admin</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a24;
+            --text-primary: #e0e0e8;
+            --text-secondary: #8888a0;
+            --accent-green: #00ff88;
+            --accent-cyan: #00d4ff;
+            --accent-purple: #a855f7;
+            --accent-red: #ff4757;
+            --border-color: #2a2a3a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+        }
+
+        h1 .delim {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-width: 150px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
+        .filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 300px;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status.active {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--accent-green);
+        }
+
+
+        .status.expired {
+            background: rgba(136, 136, 160, 0.1);
+            color: var(--text-secondary);
+        }
+
+        .btn {
+            padding: 0.4rem 0.75rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .btn-delete {
+            background: rgba(255, 71, 87, 0.1);
+            color: var(--accent-red);
+        }
+
+        .btn-delete:hover {
+            background: var(--accent-red);
+            color: white;
+        }
+
+
+        .key-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            max-width: 200px;
+        }
+
+        .key-cell .key-preview {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+            max-width: 120px;
+            vertical-align: middle;
+        }
+
+        .btn-show-key {
+            padding: 0.2rem 0.4rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .btn-show-key:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem;
+            color: var(--text-secondary);
+        }
+
+        .refresh-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .refresh-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        /* Login */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .login-overlay.hidden {
+            display: none;
+        }
+
+        .login-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .login-box h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .login-box h2 .delim {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper input {
+            padding-right: 2.5rem;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            opacity: 0.5;
+            font-size: 1.1rem;
+            user-select: none;
+        }
+
+        .toggle-password:hover {
+            opacity: 1;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            border-radius: 8px;
+            color: var(--bg-primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+
+        .login-btn:hover {
+            opacity: 0.9;
+        }
+
+        .login-error {
+            color: var(--accent-red);
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .login-error.show {
+            display: block;
+        }
+
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .logout-btn:hover {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .new-license-btn {
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            border-radius: 6px;
+            color: var(--bg-primary);
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 0.5rem;
+        }
+
+        .new-license-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .modal h3 {
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+        }
+
+        .modal .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .modal .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .modal .form-group input,
+        .modal .form-group select {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .modal .form-group input:focus,
+        .modal .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 0.65rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .btn-cancel {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .btn-cancel:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .btn-create {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            color: var(--bg-primary);
+            font-weight: 600;
+        }
+
+        .btn-create:hover {
+            opacity: 0.9;
+        }
+
+        .generated-key {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            display: none;
+        }
+
+        .generated-key.show {
+            display: block;
+        }
+
+        .generated-key label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .generated-key code {
+            display: block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--accent-green);
+            word-break: break-all;
+            margin-bottom: 0.5rem;
+        }
+
+        .copy-key-btn {
+            padding: 0.35rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .copy-key-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        /* Key Modal */
+        .key-modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .key-modal h3 {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .key-modal .key-full {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+            background: var(--bg-primary);
+            padding: 1rem;
+            border-radius: 6px;
+            word-break: break-all;
+            margin-bottom: 1rem;
+        }
+
+        .key-modal-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Overlay -->
+    <div class="login-overlay" id="login-overlay">
+        <div class="login-box">
+            <h2><span class="delim">&#10643;</span> Admin Login <span class="delim">&#10644;</span></h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" required autocomplete="current-password">
+                        <span class="toggle-password" onclick="togglePassword()">&#128065;</span>
+                    </div>
+                </div>
+                <button type="submit" class="login-btn">Login</button>
+                <div class="login-error" id="login-error">Invalid credentials</div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Show Key Modal -->
+    <div class="modal-overlay hidden" id="show-key-modal" onclick="hideKeyModal(event)">
+        <div class="key-modal">
+            <h3>License Key</h3>
+            <div class="key-full" id="full-key-value"></div>
+            <div class="key-modal-buttons">
+                <button class="copy-key-btn" onclick="copyFullKey()">Copy Key</button>
+                <button class="btn-cancel" onclick="hideKeyModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New License Modal -->
+    <div class="modal-overlay hidden" id="new-license-modal">
+        <div class="modal">
+            <h3>Generate New License</h3>
+            <form id="new-license-form">
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" id="new-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="new-name">
+                </div>
+                <div class="form-group">
+                    <label>Plan *</label>
+                    <select id="new-plan" required>
+                        <option value="trial1">Trial (1 day)</option>
+                        <option value="trial7">Trial (7 days)</option>
+                        <option value="trial14">Trial (14 days)</option>
+                        <option value="monthly">Monthly (30 days)</option>
+                        <option value="yearly">Yearly (365 days)</option>
+                    </select>
+                </div>
+                <div class="generated-key" id="generated-key">
+                    <label>License Key:</label>
+                    <code id="key-value"></code>
+                    <button type="button" class="copy-key-btn" onclick="copyGeneratedKey()">Copy Key</button>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel" onclick="hideNewLicenseModal()">Close</button>
+                    <button type="submit" class="btn-create" id="create-btn">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1><span class="delim">&#10643;</span> LATENT-K <span class="delim">&#10644;</span> Admin</h1>
+            <div>
+                <button class="new-license-btn" onclick="showNewLicenseModal()">+ New License</button>
+                <button class="refresh-btn" onclick="loadLicenses()">Refresh</button>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-count">0</div>
+                <div class="stat-label">Total Licenses</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="active-count">0</div>
+                <div class="stat-label">Active</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="expired-count">0</div>
+                <div class="stat-label">Expired</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="monthly-count">0</div>
+                <div class="stat-label">Monthly</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="yearly-count">0</div>
+                <div class="stat-label">Yearly</div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="active">Active</button>
+            <button class="filter-btn" data-filter="expired">Expired</button>
+            <input type="text" class="search-box" placeholder="Search by email..." id="search-input">
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>Plan</th>
+                    <th>Created</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                    <th>Key</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="licenses-table">
+                <tr>
+                    <td colspan="8" class="empty-state">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_BASE = 'https://latent-k-payments.latent-k.workers.dev';
+        let allLicenses = [];
+        let currentFilter = 'all';
+        let authToken = localStorage.getItem('adminToken');
+
+        // Sanitize HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // Toggle password visibility
+        function togglePassword() {
+            const input = document.getElementById('password');
+            const toggle = document.querySelector('.toggle-password');
+            if (input.type === 'password') {
+                input.type = 'text';
+                toggle.style.opacity = '1';
+            } else {
+                input.type = 'password';
+                toggle.style.opacity = '0.5';
+            }
+        }
+
+        // Check if logged in
+        function checkAuth() {
+            if (authToken) {
+                document.getElementById('login-overlay').classList.add('hidden');
+                loadLicenses();
+            } else {
+                document.getElementById('login-overlay').classList.remove('hidden');
+            }
+        }
+
+        // Login
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    authToken = data.token;
+                    localStorage.setItem('adminToken', authToken);
+                    document.getElementById('login-error').classList.remove('show');
+                    checkAuth();
+                } else {
+                    document.getElementById('login-error').classList.add('show');
+                }
+            } catch (err) {
+                document.getElementById('login-error').classList.add('show');
+            }
+        });
+
+        // Logout
+        async function logout() {
+            await fetch(`${API_BASE}/api/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            authToken = null;
+            localStorage.removeItem('adminToken');
+            checkAuth();
+        }
+
+        // API helper with auth
+        async function apiCall(url, options = {}) {
+            const res = await fetch(`${API_BASE}${url}`, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+            if (res.status === 401) {
+                authToken = null;
+                localStorage.removeItem('adminToken');
+                checkAuth();
+                throw new Error('Unauthorized');
+            }
+            return res;
+        }
+
+        async function loadLicenses() {
+            try {
+                const res = await apiCall('/api/licenses');
+                allLicenses = await res.json();
+                updateStats();
+                renderTable();
+            } catch (err) {
+                console.error('Failed to load licenses:', err);
+            }
+        }
+
+        function updateStats() {
+            const now = new Date();
+            const active = allLicenses.filter(l => new Date(l.expires) > now);
+            const expired = allLicenses.filter(l => new Date(l.expires) <= now);
+            const monthly = allLicenses.filter(l => l.plan === 'monthly');
+            const yearly = allLicenses.filter(l => l.plan === 'yearly');
+
+            document.getElementById('total-count').textContent = allLicenses.length;
+            document.getElementById('active-count').textContent = active.length;
+            document.getElementById('expired-count').textContent = expired.length;
+            document.getElementById('monthly-count').textContent = monthly.length;
+            document.getElementById('yearly-count').textContent = yearly.length;
+        }
+
+        function getStatus(license) {
+            if (new Date(license.expires) < new Date()) return 'expired';
+            return 'active';
+        }
+
+        function formatDate(dateStr) {
+            return new Date(dateStr).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        function renderTable() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            let filtered = allLicenses;
+
+            // Apply filter
+            if (currentFilter === 'active') {
+                filtered = filtered.filter(l => getStatus(l) === 'active');
+            } else if (currentFilter === 'expired') {
+                filtered = filtered.filter(l => getStatus(l) === 'expired');
+            }
+
+            // Apply search
+            if (searchTerm) {
+                filtered = filtered.filter(l =>
+                    l.email.toLowerCase().includes(searchTerm) ||
+                    (l.name && l.name.toLowerCase().includes(searchTerm))
+                );
+            }
+
+            const tbody = document.getElementById('licenses-table');
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No licenses found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(license => {
+                const status = getStatus(license);
+                const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+                const safeKey = escapeHtml(license.key);
+                const safeEmail = escapeHtml(license.email);
+                const safeName = escapeHtml(license.name) || '-';
+                const safePlan = escapeHtml(license.plan);
+
+                return `
+                    <tr>
+                        <td>${safeEmail}</td>
+                        <td>${safeName}</td>
+                        <td>${safePlan}</td>
+                        <td>${formatDate(license.created)}</td>
+                        <td>${formatDate(license.expires)}</td>
+                        <td><span class="status ${status}">${statusLabel}</span></td>
+                        <td class="key-cell">
+                            <span class="key-preview">${safeKey}</span>
+                            <button class="btn-show-key" data-key="${safeKey}">Show</button>
+                        </td>
+                        <td><button class="btn btn-delete" data-key="${safeKey}">Delete</button></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function deleteLicense(key) {
+            if (!confirm('Are you sure you want to delete this license?')) return;
+
+            try {
+                await apiCall('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+                loadLicenses();
+            } catch (err) {
+                alert('Failed to delete license');
+            }
+        }
+
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                renderTable();
+            });
+        });
+
+        // Search
+        document.getElementById('search-input').addEventListener('input', renderTable);
+
+        // Event delegation for table buttons (prevents XSS via onclick)
+        document.getElementById('licenses-table').addEventListener('click', function(e) {
+            const target = e.target;
+            if (target.classList.contains('btn-delete')) {
+                const key = target.dataset.key;
+                if (key) deleteLicense(key);
+            } else if (target.classList.contains('btn-show-key')) {
+                const key = target.dataset.key;
+                if (key) showKey(key);
+            }
+        });
+
+        // New License Modal
+        function showNewLicenseModal() {
+            document.getElementById('new-license-modal').classList.remove('hidden');
+            document.getElementById('new-license-form').reset();
+            document.getElementById('generated-key').classList.remove('show');
+            document.getElementById('create-btn').style.display = 'block';
+        }
+
+        function hideNewLicenseModal() {
+            document.getElementById('new-license-modal').classList.add('hidden');
+            loadLicenses();
+        }
+
+        document.getElementById('new-license-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('new-email').value;
+            const name = document.getElementById('new-name').value;
+            const plan = document.getElementById('new-plan').value;
+
+            try {
+                const res = await apiCall('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name, plan })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('key-value').textContent = data.key;
+                    document.getElementById('generated-key').classList.add('show');
+                    document.getElementById('create-btn').style.display = 'none';
+                } else {
+                    alert('Failed to generate license');
+                }
+            } catch (err) {
+                alert('Error generating license');
+            }
+        });
+
+        function copyGeneratedKey() {
+            const key = document.getElementById('key-value').textContent;
+            navigator.clipboard.writeText(key);
+            const btn = document.querySelector('.generated-key .copy-key-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy Key', 2000);
+        }
+
+        // Show Key Modal
+        function showKey(key) {
+            // Use textContent to safely display the key (prevents XSS)
+            document.getElementById('full-key-value').textContent = key;
+            document.getElementById('show-key-modal').classList.remove('hidden');
+        }
+
+        function hideKeyModal(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('show-key-modal').classList.add('hidden');
+            }
+        }
+
+        function copyFullKey() {
+            const key = document.getElementById('full-key-value').textContent;
+            navigator.clipboard.writeText(key);
+            const btn = document.querySelector('#show-key-modal .copy-key-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy Key', 2000);
+        }
+
+        // Initial auth check
+        checkAuth();
+    </script>
+</body>
+</html>
