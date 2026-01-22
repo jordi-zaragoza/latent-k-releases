@@ -189,6 +189,11 @@ lk ignore "**/*.log"
 
 Or edit `.lk/ignore` directly in your project.
 
+## Benchmarks
+
+- [Small project benchmark (PDF)](https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download/benchmark_small.pdf) - 6,596 files, **1.38x faster**
+- [Large project benchmark (PDF)](https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download/benchmark_big.pdf) - 27,985 files, **1.61x faster**
+
 ## License
 
 Commercial software - license required. Free 14-day trial available at [www.latentk.org](https://www.latentk.org).
