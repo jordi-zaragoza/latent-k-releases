@@ -74,7 +74,7 @@ export async function savings(opts = {}) {
   console.log(ln(pName))
   console.log(`${cy}╠${'═'.repeat(W)}╣${rst}`)
   console.log(ln(''))
-  console.log(ln(`  ${g}${b}$${fC(costSaved)}${rst} saved vs Opus`))
+  console.log(ln(`  ${g}${b}$${fC(costSaved)}${rst} saved`))
   console.log(ln(`  ${y}${fT(tSaved)}${rst} of time saved`))
   console.log(ln(`  ${b}${eff.toFixed(2)}x${rst} faster`))
   console.log(ln(''))
