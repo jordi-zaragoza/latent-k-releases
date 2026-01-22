@@ -1,0 +1,308 @@
+{
+  "created": "2026-01-21T15:36:16.425Z",
+  "lastUpdated": "2026-01-21T16:01:43.389Z",
+  "totals": {
+    "sessions": 9,
+    "calls": 11,
+    "errors": 0,
+    "charsSent": 75760,
+    "charsReceived": 5145,
+    "tokensSentEstimate": 21651,
+    "tokensReceivedEstimate": 1475,
+    "totalDurationMs": 31139,
+    "costUsd": 0.0006894937499999999,
+    "parseSuccess": 9,
+    "parseFailed": 0
+  },
+  "byOperation": {
+    "Text API call": {
+      "calls": 2,
+      "charsSent": 3630,
+      "charsReceived": 2060,
+      "tokensSentEstimate": 1038,
+      "tokensReceivedEstimate": 589,
+      "totalDurationMs": 19421,
+      "costUsd": 0.00023655
+    },
+    "JSON API call": {
+      "calls": 9,
+      "charsSent": 72130,
+      "charsReceived": 3085,
+      "tokensSentEstimate": 20613,
+      "tokensReceivedEstimate": 886,
+      "totalDurationMs": 11718,
+      "costUsd": 0.00045294375
+    }
+  },
+  "byOperationType": {
+    "generateIgnore": {
+      "calls": 1,
+      "charsSent": 952,
+      "charsReceived": 42,
+      "tokensSentEstimate": 272,
+      "tokensReceivedEstimate": 12,
+      "totalDurationMs": 678,
+      "costUsd": 0.000005999999999999999
+    },
+    "analyzeFiles": {
+      "calls": 6,
+      "charsSent": 55023,
+      "charsReceived": 2799,
+      "tokensSentEstimate": 15724,
+      "tokensReceivedEstimate": 803,
+      "totalDurationMs": 8183,
+      "costUsd": 0.00035505
+    },
+    "generateProject": {
+      "calls": 1,
+      "charsSent": 2678,
+      "charsReceived": 2018,
+      "tokensSentEstimate": 766,
+      "tokensReceivedEstimate": 577,
+      "totalDurationMs": 18743,
+      "costUsd": 0.00023055
+    },
+    "analyzeFile": {
+      "calls": 3,
+      "charsSent": 17107,
+      "charsReceived": 286,
+      "tokensSentEstimate": 4889,
+      "tokensReceivedEstimate": 83,
+      "totalDurationMs": 3535,
+      "costUsd": 0.00009789375
+    }
+  },
+  "byModel": {
+    "gemini-2.5-flash-lite": {
+      "calls": 10,
+      "charsSent": 73082,
+      "charsReceived": 3127,
+      "tokensSentEstimate": 20885,
+      "tokensReceivedEstimate": 898,
+      "totalDurationMs": 12396,
+      "costUsd": 0.00045894375
+    },
+    "gemini-2.5-flash": {
+      "calls": 1,
+      "charsSent": 2678,
+      "charsReceived": 2018,
+      "tokensSentEstimate": 766,
+      "tokensReceivedEstimate": 577,
+      "totalDurationMs": 18743,
+      "costUsd": 0.00023055
+    }
+  },
+  "sessions": [
+    {
+      "id": "3faeebc3a0f1ad70",
+      "start": "2026-01-21T15:36:12.616Z",
+      "callCount": 3,
+      "lastCall": "2026-01-21T15:36:36.409Z"
+    },
+    {
+      "id": "55dbaf1f46718395",
+      "start": "2026-01-21T15:39:38.533Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T15:39:39.598Z"
+    },
+    {
+      "id": "8675bfcd6d4287f4",
+      "start": "2026-01-21T15:42:15.359Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T15:42:17.121Z"
+    },
+    {
+      "id": "d890ab980e142793",
+      "start": "2026-01-21T15:47:45.127Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T15:47:46.651Z"
+    },
+    {
+      "id": "7bf2b72cd28da03b",
+      "start": "2026-01-21T15:48:40.316Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T15:48:41.826Z"
+    },
+    {
+      "id": "7eafeb93638c4a62",
+      "start": "2026-01-21T15:52:30.781Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T15:52:32.220Z"
+    },
+    {
+      "id": "8b6761157587159a",
+      "start": "2026-01-21T15:57:12.455Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T15:57:14.058Z"
+    },
+    {
+      "id": "deb68b138aecef25",
+      "start": "2026-01-21T16:00:08.004Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T16:00:09.466Z"
+    },
+    {
+      "id": "b3b7542b2d50eaf6",
+      "start": "2026-01-21T16:01:41.863Z",
+      "callCount": 1,
+      "lastCall": "2026-01-21T16:01:43.388Z"
+    }
+  ],
+  "calls": [
+    {
+      "timestamp": "2026-01-21T15:36:16.425Z",
+      "sessionId": "3faeebc3a0f1ad70",
+      "provider": "GEMINI",
+      "operation": "Text API call",
+      "operationType": "generateIgnore",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 952,
+      "charsReceived": 42,
+      "tokensSentEstimate": 272,
+      "tokensReceivedEstimate": 12,
+      "costUsd": 0.000005999999999999999,
+      "durationMs": 678
+    },
+    {
+      "timestamp": "2026-01-21T15:36:17.616Z",
+      "sessionId": "3faeebc3a0f1ad70",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFiles",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 10207,
+      "charsReceived": 564,
+      "tokensSentEstimate": 2917,
+      "tokensReceivedEstimate": 162,
+      "costUsd": 0.00006684375,
+      "durationMs": 1169
+    },
+    {
+      "timestamp": "2026-01-21T15:36:36.409Z",
+      "sessionId": "3faeebc3a0f1ad70",
+      "provider": "GEMINI",
+      "operation": "Text API call",
+      "operationType": "generateProject",
+      "model": "gemini-2.5-flash",
+      "charsSent": 2678,
+      "charsReceived": 2018,
+      "tokensSentEstimate": 766,
+      "tokensReceivedEstimate": 577,
+      "costUsd": 0.00023055,
+      "durationMs": 18743
+    },
+    {
+      "timestamp": "2026-01-21T15:39:39.598Z",
+      "sessionId": "55dbaf1f46718395",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFile",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 5704,
+      "charsReceived": 91,
+      "tokensSentEstimate": 1630,
+      "tokensReceivedEstimate": 26,
+      "costUsd": 0.0000325125,
+      "durationMs": 917
+    },
+    {
+      "timestamp": "2026-01-21T15:42:17.121Z",
+      "sessionId": "8675bfcd6d4287f4",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFiles",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 8959,
+      "charsReceived": 450,
+      "tokensSentEstimate": 2560,
+      "tokensReceivedEstimate": 129,
+      "costUsd": 0.000057675,
+      "durationMs": 1634
+    },
+    {
+      "timestamp": "2026-01-21T15:47:46.651Z",
+      "sessionId": "d890ab980e142793",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFiles",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 8959,
+      "charsReceived": 445,
+      "tokensSentEstimate": 2560,
+      "tokensReceivedEstimate": 128,
+      "costUsd": 0.000057600000000000004,
+      "durationMs": 1360
+    },
+    {
+      "timestamp": "2026-01-21T15:48:41.826Z",
+      "sessionId": "7bf2b72cd28da03b",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFiles",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 8968,
+      "charsReceived": 455,
+      "tokensSentEstimate": 2563,
+      "tokensReceivedEstimate": 130,
+      "costUsd": 0.00005780625,
+      "durationMs": 1365
+    },
+    {
+      "timestamp": "2026-01-21T15:52:32.220Z",
+      "sessionId": "7eafeb93638c4a62",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFile",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 5704,
+      "charsReceived": 103,
+      "tokensSentEstimate": 1630,
+      "tokensReceivedEstimate": 30,
+      "costUsd": 0.0000328125,
+      "durationMs": 1270
+    },
+    {
+      "timestamp": "2026-01-21T15:57:14.058Z",
+      "sessionId": "8b6761157587159a",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFiles",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 8971,
+      "charsReceived": 435,
+      "tokensSentEstimate": 2564,
+      "tokensReceivedEstimate": 125,
+      "costUsd": 0.000057449999999999994,
+      "durationMs": 1329
+    },
+    {
+      "timestamp": "2026-01-21T16:00:09.466Z",
+      "sessionId": "deb68b138aecef25",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFiles",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 8959,
+      "charsReceived": 450,
+      "tokensSentEstimate": 2560,
+      "tokensReceivedEstimate": 129,
+      "costUsd": 0.000057675,
+      "durationMs": 1326
+    },
+    {
+      "timestamp": "2026-01-21T16:01:43.388Z",
+      "sessionId": "b3b7542b2d50eaf6",
+      "provider": "GEMINI",
+      "operation": "JSON API call",
+      "operationType": "analyzeFile",
+      "model": "gemini-2.5-flash-lite",
+      "charsSent": 5699,
+      "charsReceived": 92,
+      "tokensSentEstimate": 1629,
+      "tokensReceivedEstimate": 27,
+      "costUsd": 0.00003256875,
+      "durationMs": 1348
+    }
+  ],
+  "errors": []
+}
