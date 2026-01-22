@@ -21,14 +21,6 @@ Latent-K solves this by:
 - **Prompt expansion**: Analyzes what you're asking and includes the code context the AI needs
 - **Direct answers**: Simple questions get instant answers without file exploration
 
-## Features
-
-- **Prompt expansion**: AI analyzes your prompt and injects relevant code context
-- **Direct answers**: Simple questions get instant answers without file reads
-- Automatic context injection at session start
-- Auto-sync on session end
-- Multi-CLI support (Claude Code, Gemini CLI)
-
 ## Requirements
 
 - **Operating System**: Linux, macOS, or Windows (x64)
