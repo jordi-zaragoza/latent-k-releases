@@ -79,6 +79,8 @@ For each project, follow these steps to optimize your workflow.
 
 5. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
 
+6. **Aware sessions**: Latent-K automatically includes context about recent changes, current branch, and pending work. Your AI already knows what you've been working on. Make sure you have `git` installed to get the most out of this feature.
+
 ## Commands
 
 | Command | Description |
