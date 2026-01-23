@@ -73,8 +73,6 @@ For each project, follow these steps to optimize your workflow.
 
 3. **Full sync**: Once configured, run `lk sync --all` to sync all remaining files.
 
-> ⚠️ **Warning**: `lk sync --all` on large projects with a free Gemini API tier can quickly exhaust your token quota.
-
 4. **Inject context on demand**: Context is automatically injected at session start. Prefix any prompt with `lk` to refresh context mid-session (e.g., `lk how does auth work?`).
 
 5. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
