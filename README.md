@@ -21,6 +21,14 @@ Latent-K solves this by:
 - **Prompt expansion**: Analyzes what you're asking and includes the code context the AI needs
 - **Direct answers**: Simple questions get instant answers without file exploration
 
+## Features
+
+- **Prompt expansion**: AI analyzes your prompt and injects relevant code context
+- **Direct answers**: Simple questions get instant answers without file reads
+- Automatic context injection at session start
+- Auto-sync on session end
+- Multi-CLI support (Claude Code, Gemini CLI)
+
 ## Requirements
 
 - **Operating System**: Linux, macOS, or Windows (x64)
@@ -45,102 +53,61 @@ irm https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download
 
 Binary is installed to `/usr/local/bin/lk` (Linux/macOS) or `%LOCALAPPDATA%\lk.exe` (Windows).
 
-## Quick Start
+## Easy Start
 
 ```bash
-lk activate   # Enter license key (get free trial at www.latentk.org)
+lk activate   # Enter license key (get free trial at latent-k.com)
 lk setup      # Configure AI provider
 lk enable     # Enable hooks
 lk sync       # Sync project
 claude        # Start coding - context is injected automatically
 ```
 
+## Getting the Most Out of Latent-K
+
+For each project, follow these steps to optimize your workflow.
+
+1. **Initial sync**: Run `lk sync` in your project root. The output shows which files are synced and which are ignored. By default, only the most relevant files are synced to optimize token usage.
+
+2. **Adjust ignore patterns**: Use `lk ignore -l` to list ignored files, `lk ignore -a <pattern>` to add patterns, or `lk ignore -r <pattern>` to remove them.
+
+3. **Full sync**: Once configured, run `lk sync --all` to sync all remaining files.
+
+> ⚠️ **Warning**: `lk sync --all` on large projects with a free Gemini API tier can quickly exhaust your token quota.
+
+4. **Inject context on demand**: Context is automatically injected at session start. Prefix any prompt with `lk` to refresh context mid-session (e.g., `lk how does auth work?`).
+
+5. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
+
 ## Commands
 
-### License & Setup
-
 | Command | Description |
 |---------|-------------|
-| `lk activate` | Activate your license key. Get a free trial at [www.latentk.org](https://www.latentk.org) |
-| `lk setup` | Configure your AI provider (Gemini or Anthropic) and API key |
-
-### Sync & Context
-
-| Command | Description |
-|---------|-------------|
-| `lk sync` | Sync changed files with AI. Analyzes modified files and updates project context |
-| `lk sync --all` | Force sync all files, not just changed ones |
-| `lk sync <file>` | Force sync a specific file |
-| `lk status` | Show project sync status, pending files, and configuration |
-
-### Hooks (Auto-injection)
-
-| Command | Description |
-|---------|-------------|
-| `lk enable` | Enable hooks for all supported CLIs (Claude Code + Gemini CLI) |
-| `lk enable -t claude` | Enable hooks for Claude Code only |
-| `lk enable -t gemini` | Enable hooks for Gemini CLI only |
-| `lk disable` | Disable hooks for all CLIs |
-| `lk disable -t claude` | Disable hooks for Claude Code only |
-| `lk disable -t gemini` | Disable hooks for Gemini CLI only |
-
-### Statistics
-
-| Command | Description |
-|---------|-------------|
-| `lk stats` | Show LLM usage statistics (tokens used, API calls, etc.) |
-| `lk stats --reset` | Reset usage statistics |
-| `lk savings` | Show estimated time and token savings from using prompt expansion |
-| `lk savings --reset` | Reset savings statistics |
-
-### Configuration
-
-| Command | Description |
-|---------|-------------|
-| `lk ignore <pattern>` | Add a glob pattern to ignore files from sync (e.g., `lk ignore "**/*.log"`) |
-| `lk ignore --list` | List all current ignore patterns |
-| `lk ignore --remove <pattern>` | Remove an ignore pattern |
-| `lk pure` | Check current pure mode status |
-| `lk pure on` | Enable pure mode (minimal, machine-to-machine style responses) |
-| `lk pure off` | Disable pure mode |
-
-### Maintenance
-
-| Command | Description |
-|---------|-------------|
-| `lk update` | Update lk to the latest version |
-| `lk update --force` | Force update even if already on latest version |
-| `lk clean` | Remove all lk data from current project (.lk directory) |
-| `lk clean --all` | Remove all lk data including global config and license |
-| `lk pro-tips` | Show helpful tips for getting the most out of Latent-K |
-
-### Other
-
-| Command | Description |
-|---------|-------------|
-| `lk --version` | Show current version |
-| `lk --help` | Show help for all commands |
-| `lk help <command>` | Show detailed help for a specific command |
+| `lk activate` | Activate license |
+| `lk setup` | Configure AI provider |
+| `lk sync` | Manual sync |
+| `lk sync --all` | Sync all pending files |
+| `lk status` | Show project status |
+| `lk enable` | Enable hooks (both CLIs) |
+| `lk enable -t claude` | Enable for Claude Code only |
+| `lk enable -t gemini` | Enable for Gemini CLI only |
+| `lk disable` | Disable hooks |
+| `lk ignore -l` | List ignored files |
+| `lk ignore -a <pattern>` | Add ignore pattern |
+| `lk ignore -r <pattern>` | Remove ignore pattern |
+| `lk stats` | Show LLM usage statistics |
+| `lk savings` | Show estimated time/token savings |
+| `lk pro-tips` | Show all LK pro tips |
+| `lk update` | Update to latest version |
+| `lk clean` | Remove lk data |
 
 ## Ignore Patterns
 
-Latent-K uses glob patterns to exclude files from sync:
-
 ```bash
-# Ignore log files
-lk ignore "**/*.log"
-
-# Ignore generated files
-lk ignore "**/*.generated.js"
-
-# Ignore test fixtures
-lk ignore "**/fixtures/**"
-
-# Ignore specific directory
-lk ignore "**/node_modules/**"
+lk ignore -l                        # List ignored files
+lk ignore -a "**/*.generated.js"    # Add pattern
+lk ignore -r "**/fixtures/**"       # Remove pattern
 ```
-
-You can also edit `.lk/ignore` directly in your project.
 
 ## Supported CLIs
 
@@ -153,7 +120,7 @@ You can also edit `.lk/ignore` directly in your project.
 
 ### "License not activated" error
 
-Run `lk activate` and enter your license key. If you don't have one, get a free trial at [www.latentk.org](https://www.latentk.org).
+Run `lk activate` and enter your license key. If you don't have one, get a free trial at [latent-k.com](https://latent-k.com).
 
 ### Context not being injected
 
@@ -181,19 +148,22 @@ lk enable
 
 ### How to exclude files from sync
 
-Use `lk ignore` to add patterns:
 ```bash
-lk ignore "**/node_modules/**"
-lk ignore "**/*.log"
+lk ignore -a "**/node_modules/**"
+lk ignore -a "**/*.log"
 ```
 
-Or edit `.lk/ignore` directly in your project.
+Or edit `.lk/ignore` directly.
 
 ## Benchmarks
 
-- [Small project benchmark (PDF)](https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download/benchmark_small.pdf) - 6,596 files, **1.38x faster**
-- [Large project benchmark (PDF)](https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download/benchmark_big.pdf) - 27,985 files, **1.61x faster**
+- [Small project benchmark (PDF)](benchmarks/benchmark_small.pdf) - 6,596 files, **1.38x faster**
+- [Large project benchmark (PDF)](benchmarks/benchmark_big.pdf) - 27,985 files, **1.61x faster**
+
+## Support
+
+For questions or issues, contact us at [info@latentk.org](mailto:info@latentk.org).
 
 ## License
 
-Commercial software - license required. Free 14-day trial available at [www.latentk.org](https://www.latentk.org).
+Commercial software - license required. Free 14-day trial available.
