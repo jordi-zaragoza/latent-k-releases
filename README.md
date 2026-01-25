@@ -73,7 +73,7 @@ For each project, follow these steps to optimize your workflow.
 
 3. **Full sync**: Once configured, run `lk sync --all` to sync all remaining files.
 
-4. **Inject context on demand**: Context is automatically injected at session start. Prefix any prompt with `lk` to refresh context mid-session (e.g., `lk how does auth work?`).
+4. **MCP Integration**: Claude Code has access to the `lk_expand` tool via MCP. It automatically uses it when needed to get relevant file paths and navigation for your task.
 
 5. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
 
@@ -92,6 +92,9 @@ For each project, follow these steps to optimize your workflow.
 | `lk enable -t claude` | Enable for Claude Code only |
 | `lk enable -t gemini` | Enable for Gemini CLI only |
 | `lk disable` | Disable hooks |
+| `lk mcp` | Show MCP status |
+| `lk mcp on` | Enable MCP server for Claude Code |
+| `lk mcp off` | Disable MCP server |
 | `lk ignore -l` | List ignored files |
 | `lk ignore -a <pattern>` | Add ignore pattern |
 | `lk ignore -r <pattern>` | Remove ignore pattern |
