@@ -73,11 +73,9 @@ For each project, follow these steps to optimize your workflow.
 
 3. **Full sync**: Once configured, run `lk sync --all` to sync all remaining files.
 
-4. **MCP Integration**: Claude Code has access to the `lk_expand` tool via MCP. It automatically uses it when needed to get relevant file paths and navigation for your task.
+4. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
 
-5. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
-
-6. **Aware sessions**: Latent-K automatically includes context about recent changes, current branch, and pending work. Your AI already knows what you've been working on. Make sure you have `git` installed to get the most out of this feature.
+5. **Aware sessions**: Latent-K automatically includes context about recent changes, current branch, and pending work. Your AI already knows what you've been working on. Make sure you have `git` installed to get the most out of this feature.
 
 ## Commands
 
@@ -95,6 +93,10 @@ For each project, follow these steps to optimize your workflow.
 | `lk mcp` | Show MCP status |
 | `lk mcp on` | Enable MCP server for Claude Code |
 | `lk mcp off` | Disable MCP server |
+
+## MCP Integration (Claude Code)
+
+Latent-K provides an MCP server with the `lk_expand` tool. Claude Code can use it automatically to get relevant file paths and navigation for your tasks. MCP is enabled automatically when you run `lk enable`.
 | `lk ignore -l` | List ignored files |
 | `lk ignore -a <pattern>` | Add ignore pattern |
 | `lk ignore -r <pattern>` | Remove ignore pattern |
