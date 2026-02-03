@@ -1,7 +1,7 @@
 {
   "name": "latent-k",
   "description": "Auto-sync project context with persistent knowledge graph. Tracks file relationships, exports, and semantic notes across sessions.",
-  "version": "2.7.2",
+  "version": "2.7.3",
   "author": {
     "name": "Jordi Zaragoza",
     "email": "j.z.cuffi@gmail.com"
