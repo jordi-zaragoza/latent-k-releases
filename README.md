@@ -15,25 +15,26 @@ When working with AI coding assistants, you often face:
 
 ### The Solution
 
-Latent-K solves this by:
-- **Pre-analyzing your codebase**: Understands project structure, dependencies, and code patterns
-- **Smart context injection**: Automatically provides relevant files and context based on your prompts
-- **Prompt expansion**: Analyzes what you're asking and includes the code context the AI needs
-- **Direct answers**: Simple questions get instant answers without file exploration
+Latent-K solves this by mapping your codebase into a graph of file relationships. When you run `lk sync`, it analyzes your project and builds a map of how files connect to each other. This context is then automatically injected when you start a coding session, so the AI already understands your project structure before you ask anything.
+
+Key capabilities:
+- **File relation graph**: Maps how files in your project connect to each other
+- **Automatic context injection**: Injects project structure at session start via hooks
+- **MCP tools**: Claude Code gets tools to read files with context and query the project graph
 
 ## Features
 
-- **Prompt expansion**: AI analyzes your prompt and injects relevant code context
-- **Direct answers**: Simple questions get instant answers without file reads
-- Automatic context injection at session start
-- Auto-sync on session end
+- **Automatic context injection** at session start via hooks
+- **File relation graph** tracking connections between files
+- **MCP Server** with tools for reading files and exploring the codebase
+- **Git-aware sessions**: Includes recent changes, current branch, and pending work
 - Multi-CLI support (Claude Code, Gemini CLI)
 
 ## Requirements
 
 - **Operating System**: Linux, macOS, or Windows (x64)
-- **AI Provider**: Requires a Gemini API key (free tier available) or Anthropic API key
 - **Supported CLIs**: Claude Code and/or Gemini CLI installed
+- **Git**: Recommended for full context awareness
 
 ## Installation
 
@@ -53,13 +54,10 @@ irm https://github.com/jordi-zaragoza/latent-k-releases/releases/latest/download
 
 Binary is installed to `/usr/local/bin/lk` (Linux/macOS) or `%LOCALAPPDATA%\lk.exe` (Windows).
 
-## Easy Start
+## Quick Start
 
 ```bash
-lk activate   # Enter license key (get free trial at latent-k.com)
-lk setup      # Configure AI provider
-lk enable     # Enable hooks
-lk sync       # Sync project
+lk activate   # Enter license key (get free trial at latent-k.com) - hooks enabled automatically
 claude        # Start coding - context is injected automatically
 ```
 
@@ -69,22 +67,21 @@ For each project, follow these steps to optimize your workflow.
 
 1. **Initial sync**: Run `lk sync` in your project root. The output shows which files are synced and which are ignored. By default, only the most relevant files are synced to optimize token usage.
 
-2. **Adjust ignore patterns**: Use `lk ignore -l` to list ignored files, `lk ignore -a <pattern>` to add patterns, or `lk ignore -r <pattern>` to remove them.
+2. **Ignore patterns**: Latent-K respects your `.gitignore` file. Add patterns there to exclude files from context.
 
-3. **Full sync**: Once configured, run `lk sync --all` to sync all remaining files.
+3. **Full sync**: Run `lk sync --all` to rebuild the entire graph.
 
 4. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
 
-5. **Aware sessions**: Latent-K automatically includes context about recent changes, current branch, and pending work. Your AI already knows what you've been working on. Make sure you have `git` installed to get the most out of this feature.
+5. **Git-aware sessions**: Latent-K automatically includes context about recent changes, current branch, and pending work. Make sure you have `git` installed to get the most out of this feature.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `lk activate` | Activate license |
-| `lk setup` | Configure AI provider |
-| `lk sync` | Manual sync |
-| `lk sync --all` | Sync all pending files |
+| `lk sync` | Sync project graph |
+| `lk sync --all` | Rebuild entire graph |
 | `lk status` | Show project status |
 | `lk enable` | Enable hooks (both CLIs) |
 | `lk enable -t claude` | Enable for Claude Code only |
@@ -93,33 +90,43 @@ For each project, follow these steps to optimize your workflow.
 | `lk mcp` | Show MCP status |
 | `lk mcp on` | Enable MCP server for Claude Code |
 | `lk mcp off` | Disable MCP server |
+| `lk ignore` | Show ignore patterns summary |
+| `lk ignore -l` | List all ignored files |
+| `lk graph` | Show file relation graph |
+| `lk pro-tips` | Show all LK pro tips |
+| `lk update` | Update to latest version |
+| `lk clean` | Remove lk data (context, license) |
 
 ## MCP Integration (Claude Code)
 
-Latent-K provides an MCP server with the `lk_expand` tool. Claude Code can use it automatically to get relevant file paths and navigation for your tasks. MCP is enabled automatically when you run `lk enable`.
-| `lk ignore -l` | List ignored files |
-| `lk ignore -a <pattern>` | Add ignore pattern |
-| `lk ignore -r <pattern>` | Remove ignore pattern |
-| `lk stats` | Show LLM usage statistics |
-| `lk savings` | Show estimated time/token savings |
-| `lk pro-tips` | Show all LK pro tips |
-| `lk update` | Update to latest version |
-| `lk clean` | Remove lk data |
+Latent-K provides an MCP server with tools that Claude Code can use automatically. MCP is enabled automatically when you run `lk activate`.
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_project_context` | Get relevant file paths and project structure overview |
+| `read_file` | Read file content with relation context |
+| `update_edge` | Add notes or relations between files |
+| `review` | Get next file needing notes or outdated relations |
+
+The MCP tools provide richer context than the built-in Read tool, showing file relationships and connections.
 
 ## Ignore Patterns
 
+Latent-K respects your project's `.gitignore` file. Any file matching a gitignore pattern will be excluded from the context graph.
+
 ```bash
-lk ignore -l                        # List ignored files
-lk ignore -a "**/*.generated.js"    # Add pattern
-lk ignore -r "**/fixtures/**"       # Remove pattern
+lk ignore        # Show summary of patterns
+lk ignore -l     # List all ignored files
 ```
 
 ## Supported CLIs
 
 | CLI | Status |
 |-----|--------|
-| Claude Code | Supported |
-| Gemini CLI | Supported |
+| Claude Code | Fully Supported |
+| Gemini CLI | Fully Supported |
 
 ## Troubleshooting
 
@@ -137,12 +144,6 @@ Run `lk activate` and enter your license key. If you don't have one, get a free 
 
 The first sync analyzes all files in your project. Subsequent syncs are incremental and much faster.
 
-### "API key not configured" error
-
-Run `lk setup` to configure your AI provider. You'll need either:
-- A Gemini API key (free tier available at [aistudio.google.com](https://aistudio.google.com))
-- An Anthropic API key
-
 ### Hooks not working after CLI update
 
 If you update Claude Code or Gemini CLI, re-enable hooks:
@@ -150,20 +151,6 @@ If you update Claude Code or Gemini CLI, re-enable hooks:
 lk disable
 lk enable
 ```
-
-### How to exclude files from sync
-
-```bash
-lk ignore -a "**/node_modules/**"
-lk ignore -a "**/*.log"
-```
-
-Or edit `.lk/ignore` directly.
-
-## Benchmarks
-
-- [Small project benchmark (PDF)](benchmarks/benchmark_small.pdf) - 6,596 files, **1.38x faster**
-- [Large project benchmark (PDF)](benchmarks/benchmark_big.pdf) - 27,985 files, **1.61x faster**
 
 ## Support
 
