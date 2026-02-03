@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "latent-k",
+  "version": "1.0.0",
+  "description": "Project context and knowledge graph for AI coding assistants",
+  "owner": {
+    "name": "Jordi Zaragoza",
+    "email": "j.z.cuffi@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "latent-k",
+      "description": "Auto-sync project context with persistent knowledge graph. Tracks file relationships, exports, and semantic notes across sessions. Requires license - get one at latentk.org",
+      "version": "2.7.2",
+      "author": {
+        "name": "Jordi Zaragoza",
+        "email": "j.z.cuffi@gmail.com"
+      },
+      "homepage": "https://www.latentk.org",
+      "repository": "https://github.com/jordi-zaragoza/latent-k-releases",
+      "license": "Commercial",
+      "category": "Development",
+      "source": "."
+    }
+  ]
+}
