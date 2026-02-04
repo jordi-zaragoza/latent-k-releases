@@ -68,20 +68,6 @@ On your first session, ask Claude to build the project graph:
 
 This creates the `.lk/graph.json` file that powers all context features. Claude will ask you to sync the graph when it detects outdated relations or dead code. You can also ask for a sync anytime for better performance.
 
-## Claude Code Plugin
-
-You can also install Latent-K as a Claude Code plugin:
-
-```bash
-# 1. Add the marketplace
-/plugin marketplace add jordi-zaragoza/latent-k-releases
-
-# 2. Install the plugin
-/plugin install latent-k@jordi-zaragoza-latent-k-releases
-```
-
-The plugin provides the same MCP tools and hooks. Note: You still need the `lk` binary installed and activated for the plugin to work.
-
 ## Getting the Most Out of Latent-K
 
 For each project, follow these steps to optimize your workflow.
