@@ -61,6 +61,27 @@ lk activate   # Enter license key (get free trial at latent-k.com) - hooks enabl
 claude        # Start coding - context is injected automatically
 ```
 
+On your first session, ask Claude to build the project graph:
+```
+> Generate project graph
+```
+
+This creates the `.lk/graph.json` file that powers all context features. Claude will ask you to sync the graph when it detects outdated relations or dead code. You can also ask for a sync anytime for better performance.
+
+## Claude Code Plugin
+
+You can also install Latent-K as a Claude Code plugin:
+
+```bash
+# 1. Add the marketplace
+/plugin marketplace add jordi-zaragoza/latent-k-releases
+
+# 2. Install the plugin
+/plugin install latent-k@jordi-zaragoza-latent-k-releases
+```
+
+The plugin provides the same MCP tools and hooks. Note: You still need the `lk` binary installed and activated for the plugin to work.
+
 ## Getting the Most Out of Latent-K
 
 For each project, follow these steps to optimize your workflow.
@@ -93,6 +114,7 @@ For each project, follow these steps to optimize your workflow.
 | `lk ignore` | Show ignore patterns summary |
 | `lk ignore -l` | List all ignored files |
 | `lk graph` | Show file relation graph |
+| `lk dead-code` | Find orphan files and unused exports |
 | `lk pro-tips` | Show all LK pro tips |
 | `lk update` | Update to latest version |
 | `lk clean` | Remove lk data (context, license) |
@@ -106,11 +128,43 @@ Latent-K provides an MCP server with tools that Claude Code can use automaticall
 | Tool | Description |
 |------|-------------|
 | `get_project_context` | Get relevant file paths and project structure overview |
-| `read_file` | Read file content with relation context |
+| `read_file` | Read file content with relation context and `//usedby:` annotations |
 | `update_edge` | Add notes or relations between files |
-| `review` | Get next file needing notes or outdated relations |
+| `review` | Get next maintenance task: dead code, outdated relations, missing notes |
 
 The MCP tools provide richer context than the built-in Read tool, showing file relationships and connections.
+
+### Understanding Function Usage
+
+When reading files, exported functions show who uses them via `//usedby:` comments:
+
+```
+loadGraph(root): 70-89 //usedby:expand.js,sync.js,index.js
+saveGraph(root, graph): 151-159 //usedby:graph.js,sync.js
+```
+
+## Language Support
+
+Latent-K supports multiple programming languages with varying levels of feature support:
+
+| Feature | JS/TS | Python | Go | Rust | Java/Kotlin | PHP | Ruby | C# | C/C++ |
+|---------|:-----:|:------:|:--:|:----:|:-----------:|:---:|:----:|:--:|:-----:|
+| **Extensions** | js, mjs, cjs, ts, tsx, jsx | py | go | rs | java, kt, kts | php | rb | cs | c, cpp, h, hpp |
+| **Extract Imports** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Extract Exports** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Extract Skeleton** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Extract Signatures** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Extract Function Body** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Strip Comments** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+### Feature Descriptions
+
+- **Extract Imports**: Builds dependency graph from import statements
+- **Extract Exports**: Detects public functions/classes for the project overview
+- **Extract Skeleton**: Condensed file view with signatures and line ranges
+- **Extract Signatures**: Parses function parameters with types/defaults
+- **Extract Function Body**: Extracts specific function code by name
+- **Strip Comments**: Removes comments for cleaner parsing
 
 ## Ignore Patterns
 
