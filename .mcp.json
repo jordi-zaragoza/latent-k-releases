@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "latent-k": {
-      "command": "/usr/local/bin/lk",
-      "args": ["mcp", "serve"]
-    }
-  }
-}
