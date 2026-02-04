@@ -57,7 +57,7 @@ Binary is installed to `/usr/local/bin/lk` (Linux/macOS) or `%LOCALAPPDATA%\lk.e
 ## Quick Start
 
 ```bash
-lk activate   # Enter license key (get free trial at latent-k.com) - hooks enabled automatically
+lk activate   # Enter license key (get free trial at latentk.org) - hooks enabled automatically
 claude        # Start coding - context is injected automatically
 ```
 
@@ -172,7 +172,7 @@ lk ignore -l     # List all ignored files
 
 ### "License not activated" error
 
-Run `lk activate` and enter your license key. If you don't have one, get a free trial at [latent-k.com](https://latent-k.com).
+Run `lk activate` and enter your license key. If you don't have one, get a free trial at [latentk.org](https://www.latentk.org).
 
 ### Context not being injected
 
