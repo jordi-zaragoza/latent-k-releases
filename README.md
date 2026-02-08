@@ -21,6 +21,7 @@ Key capabilities:
 - **File relations**: Maps how files in your project connect to each other
 - **Automatic context injection**: Injects project structure at session start via hooks
 - **MCP tools**: Claude Code gets tools to read files with context and query project structure
+- **Better control over generated code**: When the AI understands your project structure and dependencies between files, it makes more accurate decisions — it knows where to place new code, which modules to import, and how changes ripple through your codebase
 
 ## Features
 
@@ -68,19 +69,6 @@ On your first session, ask Claude to sync the project:
 
 This creates the `.lk/` directory that powers all context features. LK will automatically detect outdated relations and prompt for a sync when needed.
 
-## Getting the Most Out of Latent-K
-
-For each project, follow these steps to optimize your workflow.
-
-1. **Initial sync**: Run `lk sync` in your project root. The output shows which files are synced and which are ignored. By default, only the most relevant files are synced to optimize token usage.
-
-2. **Ignore patterns**: Latent-K respects your `.gitignore` file. Add patterns there to exclude files from context.
-
-3. **Full sync**: Run `lk sync --all` for a full rebuild.
-
-4. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
-
-5. **Git-aware sessions**: Latent-K automatically includes context about recent changes, current branch, and pending work. Make sure you have `git` installed to get the most out of this feature.
 
 ## Commands
 
@@ -114,20 +102,34 @@ Latent-K provides an MCP server with tools that Claude Code can use automaticall
 | Tool | Description |
 |------|-------------|
 | `get_project_context` | Get relevant file paths and project structure overview |
-| `read_file` | Read file content with relation context and `//usedby:` annotations |
+| `read_file` | Read file content with dependency context (see below) |
 | `update_relation` | Add notes or relations between files |
-| `review` | Get next maintenance task: dead code, outdated relations, missing notes |
+| `review` | Get next maintenance task: outdated relations, missing notes |
 
-The MCP tools provide richer context than the built-in Read tool, showing file relationships and connections.
+### `read_file` — Context-Aware File Reading
 
-### Understanding Function Usage
+The `read_file` tool is central to how Latent-K improves AI code generation. Instead of reading raw file content, it combines the file with project context so the AI understands how each file fits into the bigger picture.
 
-When reading files, exported functions show who uses them via `//usedby:` comments:
+When you read a file, the output includes:
+- **Exports**: Public functions and classes the file exposes
+- **Imported by**: Which files depend on this file
+- **Imports**: Which files this file depends on
+- **Notes**: Semantic annotations about the file's purpose and gotchas
+- **`//usedby:` annotations**: Each exported function shows which files call it
 
+Example output:
 ```
-getAllFiles(root): 45-67 //usedby:expand.js,sync.js,status.js
-isIgnored(file, patterns): 92-108 //usedby:sync.js,status.js
+=== src/lib/db.js (120 lines) ===
+Exports: query, connect, disconnect
+Imported by: api/users.js, api/orders.js, services/auth.js
+Imports: config.js
+Notes: Database connection pool with automatic reconnect.
+
+query(sql, params): 34-58 //usedby:users.js,orders.js,auth.js
+connect(): 12-25 //usedby:server.js
 ```
+
+This means the AI knows — before writing a single line — who calls each function and what would break if it changed. Large files (200+ lines) automatically show a skeleton view with function signatures and line ranges, so the AI can request specific sections with `offset`/`limit` instead of reading the entire file.
 
 ## Language Support
 
@@ -143,14 +145,6 @@ Latent-K supports multiple programming languages with varying levels of feature 
 | **Extract Function Body** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Strip Comments** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-### Feature Descriptions
-
-- **Extract Imports**: Detects dependencies from import statements
-- **Extract Exports**: Detects public functions/classes for the project overview
-- **Extract Skeleton**: Condensed file view with signatures and line ranges
-- **Extract Signatures**: Parses function parameters with types/defaults
-- **Extract Function Body**: Extracts specific function code by name
-- **Strip Comments**: Removes comments for cleaner parsing
 
 ## Ignore Patterns
 
@@ -183,6 +177,13 @@ Run `lk activate` and enter your license key. If you don't have one, get a free 
 ### Sync is slow on first run
 
 The first sync analyzes all files in your project. Subsequent syncs are incremental and much faster.
+
+### MCP tools not available in Claude Code
+
+If Claude Code doesn't have access to the Latent-K tools (`read_file`, `get_project_context`, etc.), enable the MCP server:
+```bash
+lk mcp on
+```
 
 ### Hooks not working after CLI update
 
