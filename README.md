@@ -15,17 +15,17 @@ When working with AI coding assistants, you often face:
 
 ### The Solution
 
-Latent-K solves this by mapping your codebase into a graph of file relationships. When you run `lk sync`, it analyzes your project and builds a map of how files connect to each other. This context is then automatically injected when you start a coding session, so the AI already understands your project structure before you ask anything.
+Latent-K solves this by mapping your codebase structure and file relationships. When you run `lk sync`, it analyzes your project and builds a map of how files connect to each other. This context is then automatically injected when you start a coding session, so the AI already understands your project structure before you ask anything.
 
 Key capabilities:
-- **File relation graph**: Maps how files in your project connect to each other
+- **File relations**: Maps how files in your project connect to each other
 - **Automatic context injection**: Injects project structure at session start via hooks
-- **MCP tools**: Claude Code gets tools to read files with context and query the project graph
+- **MCP tools**: Claude Code gets tools to read files with context and query project structure
 
 ## Features
 
 - **Automatic context injection** at session start via hooks
-- **File relation graph** tracking connections between files
+- **File relations** tracking connections between files
 - **MCP Server** with tools for reading files and exploring the codebase
 - **Git-aware sessions**: Includes recent changes, current branch, and pending work
 - Multi-CLI support (Claude Code, Gemini CLI)
@@ -61,12 +61,12 @@ lk activate   # Enter license key (get free trial at latentk.org) - hooks enable
 claude        # Start coding - context is injected automatically
 ```
 
-On your first session, ask Claude to build the project graph:
+On your first session, ask Claude to sync the project:
 ```
-> Generate project graph
+> Sync project context
 ```
 
-This creates the `.lk/graph.json` file that powers all context features. Claude will ask you to sync the graph when it detects outdated relations or dead code. You can also ask for a sync anytime for better performance.
+This creates the `.lk/` directory that powers all context features. LK will automatically detect outdated relations and prompt for a sync when needed.
 
 ## Getting the Most Out of Latent-K
 
@@ -76,7 +76,7 @@ For each project, follow these steps to optimize your workflow.
 
 2. **Ignore patterns**: Latent-K respects your `.gitignore` file. Add patterns there to exclude files from context.
 
-3. **Full sync**: Run `lk sync --all` to rebuild the entire graph.
+3. **Full sync**: Run `lk sync --all` for a full rebuild.
 
 4. **Manage long conversations**: Use `/clear` when switching topics, or `/compact` to compress context in long sessions.
 
@@ -87,8 +87,8 @@ For each project, follow these steps to optimize your workflow.
 | Command | Description |
 |---------|-------------|
 | `lk activate` | Activate license |
-| `lk sync` | Sync project graph |
-| `lk sync --all` | Rebuild entire graph |
+| `lk sync` | Sync project context |
+| `lk sync --all` | Full rebuild |
 | `lk status` | Show project status |
 | `lk enable` | Enable hooks (both CLIs) |
 | `lk enable -t claude` | Enable for Claude Code only |
@@ -99,7 +99,7 @@ For each project, follow these steps to optimize your workflow.
 | `lk mcp off` | Disable MCP server |
 | `lk ignore` | Show ignore patterns summary |
 | `lk ignore -l` | List all ignored files |
-| `lk graph` | Show file relation graph |
+
 | `lk dead-code` | Find orphan files and unused exports |
 | `lk pro-tips` | Show all LK pro tips |
 | `lk update` | Update to latest version |
@@ -115,7 +115,7 @@ Latent-K provides an MCP server with tools that Claude Code can use automaticall
 |------|-------------|
 | `get_project_context` | Get relevant file paths and project structure overview |
 | `read_file` | Read file content with relation context and `//usedby:` annotations |
-| `update_edge` | Add notes or relations between files |
+| `update_relation` | Add notes or relations between files |
 | `review` | Get next maintenance task: dead code, outdated relations, missing notes |
 
 The MCP tools provide richer context than the built-in Read tool, showing file relationships and connections.
@@ -125,8 +125,8 @@ The MCP tools provide richer context than the built-in Read tool, showing file r
 When reading files, exported functions show who uses them via `//usedby:` comments:
 
 ```
-loadGraph(root): 70-89 //usedby:expand.js,sync.js,index.js
-saveGraph(root, graph): 151-159 //usedby:graph.js,sync.js
+getAllFiles(root): 45-67 //usedby:expand.js,sync.js,status.js
+isIgnored(file, patterns): 92-108 //usedby:sync.js,status.js
 ```
 
 ## Language Support
@@ -145,7 +145,7 @@ Latent-K supports multiple programming languages with varying levels of feature 
 
 ### Feature Descriptions
 
-- **Extract Imports**: Builds dependency graph from import statements
+- **Extract Imports**: Detects dependencies from import statements
 - **Extract Exports**: Detects public functions/classes for the project overview
 - **Extract Skeleton**: Condensed file view with signatures and line ranges
 - **Extract Signatures**: Parses function parameters with types/defaults
@@ -154,7 +154,7 @@ Latent-K supports multiple programming languages with varying levels of feature 
 
 ## Ignore Patterns
 
-Latent-K respects your project's `.gitignore` file. Any file matching a gitignore pattern will be excluded from the context graph.
+Latent-K respects your project's `.gitignore` file. Any file matching a gitignore pattern will be excluded from context.
 
 ```bash
 lk ignore        # Show summary of patterns
