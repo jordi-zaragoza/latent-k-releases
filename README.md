@@ -103,8 +103,8 @@ Latent-K provides an MCP server with tools that Claude Code can use automaticall
 |------|-------------|
 | `get_project_context` | Get relevant file paths and project structure overview |
 | `read_file` | Read file content with dependency context (see below) |
-| `update_relation` | Add notes or relations between files |
-| `review` | Get next maintenance task: outdated relations, missing notes |
+| `relation` | Add notes, relations, or review maintenance tasks |
+| `invariant` | Manage business rules (add, remove, list, discover) |
 
 ### `read_file` — Context-Aware File Reading
 
@@ -130,6 +130,36 @@ connect(): 12-25 //usedby:server.js
 ```
 
 This means the AI knows — before writing a single line — who calls each function and what would break if it changed. Large files (200+ lines) automatically show a skeleton view with function signatures and line ranges, so the AI can request specific sections with `offset`/`limit` instead of reading the entire file.
+
+## Invariants
+
+Invariants are business rules that span multiple files. They capture cross-file contracts that can't be enforced by imports alone — things like "the API response schema must match the frontend parser" or "all event handlers must call `trackAnalytics` before returning."
+
+When you read a file with `read_file`, any invariants attached to it are shown at the top of the output. The AI must ask for user approval before making changes that would violate an invariant.
+
+### When to use invariants
+
+- **API contracts**: Request/response schemas shared between client and server
+- **Shared formats**: File formats, serialization protocols, or data structures used across boundaries
+- **Cross-boundary rules**: Conventions that span modules (e.g., "every new route must be registered in the router and the OpenAPI spec")
+
+### When NOT to use invariants
+
+- **Single-file rules**: Just use code comments instead
+- **Design flaws**: If a rule exists because of poor coupling, fix the architecture instead
+
+### CLI usage
+
+```bash
+lk invariant add "rule text" file1.js file2.js   # Add a rule spanning files
+lk invariant remove <id>                          # Remove a rule by ID
+lk invariant list                                 # List all rules
+lk invariant list src/api.js                      # List rules for a specific file
+```
+
+### MCP usage
+
+The `invariant` MCP tool supports a `discover` action that analyzes your codebase and suggests invariants you might want to add. Use it periodically to find implicit contracts between files.
 
 ## Language Support
 
