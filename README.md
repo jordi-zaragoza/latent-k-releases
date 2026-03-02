@@ -101,7 +101,7 @@ Latent-K provides an MCP server with tools that Claude Code can use automaticall
 
 | Tool | Description |
 |------|-------------|
-| `get_project_context` | Get relevant file paths and project structure overview |
+| `get_context` | Get relevant file paths and project structure overview |
 | `read_file` | Read file content with dependency context (see below) |
 | `relation` | Add notes, relations, or review maintenance tasks |
 | `invariant` | Manage business rules (add, remove, list, discover) |
@@ -210,7 +210,7 @@ The first sync analyzes all files in your project. Subsequent syncs are incremen
 
 ### MCP tools not available in Claude Code
 
-If Claude Code doesn't have access to the Latent-K tools (`read_file`, `get_project_context`, etc.), enable the MCP server:
+If Claude Code doesn't have access to the Latent-K tools (`read_file`, `get_context`, etc.), enable the MCP server:
 ```bash
 lk mcp on
 ```
