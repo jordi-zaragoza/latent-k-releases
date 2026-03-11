@@ -88,6 +88,8 @@ This creates the `.lk/` directory that powers all context features. LK will auto
 | `lk ignore` | Show ignore patterns summary |
 | `lk ignore -l` | List all ignored files |
 
+| `lk audit run` | Run audit tests |
+| `lk audit list` | List all audits |
 | `lk dead-code` | Find orphan files and unused exports |
 | `lk pro-tips` | Show all LK pro tips |
 | `lk update` | Update to latest version |
@@ -161,6 +163,41 @@ lk invariant list src/api.js                      # List rules for a specific fi
 
 The `invariant` MCP tool supports a `discover` action that analyzes your codebase and suggests invariants you might want to add. Use it periodically to find implicit contracts between files.
 
+## ADD Audit Testing
+
+Audit-Driven Development (ADD) lets you define cross-file rules as YAML audits and validate them against your actual codebase using AI. You declare what should be true across multiple source files, and Latent-K reads the real code to verify it — no mocks, no stubs.
+
+This catches what unit and integration tests can't: **cross-cutting drift**. A pricing change that updates the backend but not the frontend. An API contract that silently diverges between client and server. A business rule hardcoded in 6 files that gets updated in only 5. These bugs survive every test suite because no single test owns the full picture.
+
+Examples of what audits catch:
+- **Pricing consistency**: The price shown on the website matches the Stripe config, the chatbot prompt, and the CLI output
+- **Client-server contracts**: The API response shape matches what the frontend parses
+- **License lifecycle**: Plan names in the database match the ones the activation flow accepts
+- **Feature gating**: File limits and audit limits match across client, server, and documentation
+
+### How it works
+
+1. Define audits in `.lk/audits/` as YAML files with checks and referenced files
+2. Run `lk audit run` — AI reads the referenced code and validates each check
+3. Get a pass/fail report with explanations for any failures
+
+### CLI usage
+
+```bash
+lk audit run                          # Run all audits
+lk audit run --filter pricing         # Run audits matching a name
+lk audit list                         # List all audits
+lk audit results                      # Show latest results
+```
+
+### Audit limits by plan
+
+| Plan | Audits |
+|------|--------|
+| Trial | 1 |
+| Pro | 15 |
+| Enterprise | Unlimited |
+
 ## Language Support
 
 Latent-K supports multiple programming languages with varying levels of feature support:
@@ -229,4 +266,4 @@ For questions or issues, contact us at [info@latentk.org](mailto:info@latentk.or
 
 ## License
 
-Commercial software - license required. Free 14-day trial available.
+Commercial software - license required. Free 14-day trial available at [latentk.org](https://www.latentk.org).
