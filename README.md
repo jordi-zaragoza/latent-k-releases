@@ -181,13 +181,62 @@ Examples of what audits catch:
 2. Run `lk audit run` — AI reads the referenced code and validates each check
 3. Get a pass/fail report with explanations for any failures
 
+### Two verification modes
+
+Audits support two complementary modes that can be used independently or together:
+
+**Checkpoints** — Atomic, scoped checks. Each checkpoint targets 1-2 files and gets an individual pass/fail. Best for independent properties like "function X must call Y before Z" or "catch blocks must not leak error messages."
+
+**Assert** — Narrative cross-file verification. A single prose block that traces data flow or contracts across 3+ files, producing one pass/fail with detailed violation reports. Best for end-to-end flows like "payment data from checkout through webhook to license delivery."
+
+The two modes are **not mutually exclusive**. A single audit can have both checkpoints and an assert block. When combined, all run in a single AI call — the audit passes only if every checkpoint passes AND the assert passes.
+
+### Staleness and re-runs
+
+Audits only re-run when something changes:
+
+- **Checkpoints** re-run only when their specific referenced files are modified. Unchanged checkpoints keep their previous results.
+- **Assert** re-runs whenever any file in the audit scope changes, since it traces cross-file flows where any modification could affect the conclusion.
+- **Combined mode**: If a checkpoint's files changed, the stale checkpoints and the assert re-run together. If only non-checkpoint files changed, only the assert re-runs and previous checkpoint results are preserved.
+
+### YAML format
+
+```yaml
+name: payment-flow-integrity
+audit: "End-to-end payment flow: checkout through webhook to license delivery"
+files:
+  - src/stripe.js
+  - src/license.js
+  - src/email.js
+severity: critical
+checkpoints:
+  - id: idempotency-check
+    check: "handleWebhook checks KV for duplicate session before processing"
+    files: [src/stripe.js]
+  - id: email-after-kv
+    check: "sendEmail is called AFTER writing KV records, not before"
+    files: [src/license.js]
+assert: >
+  Trace checkout metadata through webhook to KV write to polling response.
+  Field names must match exactly between writer and reader at each boundary.
+tags: [payment, integrity]
+context: >
+  Optional background for the AI about how the system works.
+max_turns: 10
+```
+
+Use `lk audit example` to see complete examples of checkpoints-only, assert-only, and combined formats.
+
 ### CLI usage
 
 ```bash
 lk audit run                          # Run all audits
 lk audit run --filter pricing         # Run audits matching a name
+lk audit run --rebuild                # Force rebuild the Docker image
 lk audit list                         # List all audits
 lk audit results                      # Show latest results
+lk audit example                      # Show YAML format examples
+lk audit add <name>                   # Scaffold a new audit
 ```
 
 ### Audit limits by plan
