@@ -90,6 +90,7 @@ This creates the `.lk/` directory that powers all context features. LK will auto
 
 | `lk audit run` | Run audit tests |
 | `lk audit list` | List all audits |
+| `lk audit browse` | Interactive TUI to browse audits and results |
 | `lk dead-code` | Find orphan files and unused exports |
 | `lk pro-tips` | Show all LK pro tips |
 | `lk update` | Update to latest version |
@@ -234,6 +235,7 @@ lk audit run                          # Run all audits
 lk audit run --filter pricing         # Run audits matching a name
 lk audit run --rebuild                # Force rebuild the Docker image
 lk audit list                         # List all audits
+lk audit browse                       # Interactive TUI to browse audits
 lk audit results                      # Show latest results
 lk audit example                      # Show YAML format examples
 lk audit add <name>                   # Scaffold a new audit
